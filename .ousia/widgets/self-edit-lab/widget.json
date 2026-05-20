@@ -1,0 +1,6 @@
+{
+  "id": "self-edit-lab",
+  "title": "Self Edit Lab",
+  "slot": "workspace.tab",
+  "entry": "Widget.tsx"
+}
