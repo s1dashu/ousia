@@ -47,6 +47,6 @@ import "streamdown/styles.css"
 Keep assistant message styling in the surrounding chat layout unless a Streamdown-specific override is required.
 
 Ousia overrides Streamdown's root `space-y-4` rhythm in chat with `space-y-0`
-and keeps prose-like Markdown nodes on the same `text-sm leading-5` cadence as
-plain chat paragraphs. Block spacing is handled by `.ousia-chat-markdown` in
-`src/index.css`.
+and keeps prose-like Markdown nodes close to the compact `text-sm` chat cadence.
+Block spacing and slightly roomier heading line-height are handled by
+`.ousia-chat-markdown` in `src/index.css`.

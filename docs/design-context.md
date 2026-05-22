@@ -9,7 +9,7 @@ The app uses a shadcn preset as the visual base. The user explicitly asked not t
 Light mode should not use pure white for every surface. `background`, `card`,
 `popover`, `muted`, and sidebar tokens intentionally use slightly different
 neutral lightness values so light mode mirrors the dark-mode surface hierarchy
-instead of flattening inputs and widget blocks into white rectangles.
+instead of flattening inputs and extension surfaces into white rectangles.
 
 Generated shadcn/ui reference files live under `ref/`; see `docs/shadcn-reference.md`. Before changing shared UI primitives in `src/components/ui/`, compare against the reference component so state styles, menu padding, focus rings, and radius choices stay intentional.
 
@@ -22,8 +22,8 @@ Ousia intentionally uses two primary icon families:
   settings, attach/send controls, collapse controls, search, delete, rename, and
   similar tool actions.
 - Solar icons: use for areas that need stronger expression or heavier visual
-  identity, especially workspace widget/tab signals such as Browser, Editor,
-  Terminal, Widgets, and other major navigation-level icons.
+  identity, especially workspace extension/tab signals such as Browser, Editor,
+  Terminal, Extensions, and other major navigation-level icons.
 
 Avoid adding new icon families for routine UI. If an icon currently comes from
 another set, prefer replacing it with Hugeicons unless it is intentionally acting
@@ -35,7 +35,7 @@ The shell has three primary sections:
 
 - Sidebar: projects and sessions.
 - Chat area: conversation with the agent.
-- Workspace: open widget surface.
+- Workspace: open extension surface.
 
 The three sections support horizontal resize. The sidebar and workspace can be
 collapsed; when the workspace is collapsed, the chat header shows an expand
@@ -92,14 +92,15 @@ Chat requirements:
 Workspace requirements:
 
 - No separate "Workspace" title row.
-- Top row is open widget tabs directly.
+- Top row is open extension tabs directly.
 - The tab row supports multiple open tab instances. Hovering a tab swaps the
   tab icon to a close icon, and clicking it closes that tab.
-- A new-tab button is always visible at the right edge of the tab row, before
-  the runtime widget refresh button. When tab overflow scrolls horizontally, the
-  new-tab button stays fixed in the visible header controls.
-- A new workspace tab opens a widget picker page with a four-column grid of all
-  available workspace widgets. Choosing a widget turns that tab into the
-  selected widget page.
+- A new-tab button is always visible at the right edge of the tab row. When tab
+  overflow scrolls horizontally, the new-tab button stays fixed in the visible
+  header controls.
+- A new workspace tab opens an extension picker page with an app-launcher-style
+  adaptive grid of all available workspace extensions: large rounded-square icon
+  above, centered extension name below. Choosing an extension turns that tab into
+  the selected extension page.
 - Horizontal tab overflow must not consume header height.
-- The workspace is not a fixed review/code surface. It stays open/free for browser, editor, terminal, custom widgets, and future surfaces.
+- The workspace is not a fixed review/code surface. It stays open/free for browser, editor, terminal, runtime extensions, and future surfaces.

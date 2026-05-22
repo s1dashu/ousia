@@ -63,23 +63,34 @@ Implemented:
   `steer` instead of waiting for the current run to finish.
 - Streamdown Markdown rendering for assistant messages, with Streamdown link safety disabled.
 - Thinking block weak quote style, collapsed after completion.
-- Runtime custom widgets loaded from project-local `.ousia/widgets` and global app `userData/widgets`, with automatic refresh from Electron main file watching.
-- Browser widget WebAuthn account selection, with macOS Touch ID / Secure
+- Runtime extension packages loaded globally from `~/.ousia/extensions`, with
+  frontend apps declared in `package.json#ousia.app` and automatic refresh from
+  Electron main file watching.
+- Renderer project/session/settings/selection persistence is routed through
+  `src/app/app-state.ts`, with `localStorage` as the current adapter.
+- pi chat session caching, history hydration, stream event translation, and
+  interruption are routed through `src/electron/agent-conversations.ts`.
+- Browser extension WebAuthn account selection, with macOS Touch ID / Secure
   Enclave WebAuthn enabled when a matching keychain access group is configured.
-- Workspace supports multiple open widget tab instances, close-on-hover tab
-  icons, and a persistent new-tab button that opens a four-column widget picker.
-- Open workspace widget tabs and the active tab are restored per project/session.
-- The legacy `Widgets` overview widget is available as a widget, but is no
-  longer opened as a default workspace tab.
+- Workspace supports multiple open tab instances, close-on-hover tab icons, and
+  a persistent new-tab button that opens an app-launcher-style extension picker.
+- Open workspace tabs and the active tab are restored globally across projects.
+- New-tab extension management can bulk-delete runtime extensions.
+- The legacy extension overview surface has been removed from the picker.
 
 ## Known Gaps
 
-- Project/session data is stored in renderer localStorage.
-- Session message history in renderer is in-memory only for current app lifetime.
-- Existing pi conversation history is persisted by pi, but not yet hydrated back into renderer UI.
+- App State still uses renderer `localStorage` as its storage adapter.
+- Session message history in renderer is in-memory after hydration, with pi
+  history loaded on session selection.
 - Rename/delete use local metadata only; deeper pi session file management is not implemented.
-- Runtime widget file watching uses Node `fs.watch`.
-- Runtime widgets are not sandboxed and currently expose only `react` as a runtime import.
+- Runtime extension file watching uses Node `fs.watch`.
+- Runtime extension frontend apps loaded from `~/.ousia/extensions` are
+  `user-local` distribution extensions with `local-user` trust. They are not
+  sandboxed third-party code, and currently expose only `react` as a runtime
+  package import.
+- Runtime extension backend manifests are documented, but the Node extension
+  host and `window.ousia.extensions.invoke(...)` bridge are not implemented yet.
 - Forge packaging works; DMG/signing/notarization are not configured yet.
 
 ## Verification Notes
