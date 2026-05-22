@@ -8,38 +8,25 @@ import {
   type WebAuthnAccount,
 } from "electron"
 import { existsSync, mkdirSync, watch, type FSWatcher } from "node:fs"
-import { readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
 import { env, platform } from "node:process"
 import {
   basename,
+  dirname,
   extname,
   isAbsolute,
   join,
   relative,
   resolve,
 } from "node:path"
-import { transform } from "esbuild"
+import { build } from "esbuild"
 import * as pty from "node-pty"
-import {
-  AuthStorage,
-  createAgentSession,
-  DefaultResourceLoader,
-  ModelRegistry,
-  SessionManager,
-  SettingsManager,
-  type AgentSession,
-  type AgentSessionEvent,
-  type SessionMessageEntry,
-} from "@mariozechner/pi-coding-agent"
+import { createAgentConversationModule } from "./agent-conversations.js"
 import type {
   OusiaChatContext,
   OusiaChatEvent,
-  OusiaChatHistoryItem,
-  OusiaChatHistoryResult,
-  OusiaChatInterruptResult,
   OusiaChatSendPayload,
-  OusiaChatSendResult,
   OusiaEditorFileEntry,
   OusiaEditorListFilesPayload,
   OusiaEditorListFilesResult,
@@ -47,20 +34,19 @@ import type {
   OusiaEditorReadFileResult,
   OusiaEditorSaveFilePayload,
   OusiaEditorSaveFileResult,
-  OusiaModelSettings,
-  OusiaRuntimeWidget,
-  OusiaRuntimeWidgetsChangedEvent,
-  OusiaRuntimeWidgetError,
-  OusiaRuntimeWidgetSlot,
-  OusiaRuntimeWidgetsPayload,
-  OusiaRuntimeWidgetsResult,
+  OusiaRuntimeExtension,
+  OusiaRuntimeExtensionDeletePayload,
+  OusiaRuntimeExtensionDeleteResult,
+  OusiaRuntimeExtensionsChangedEvent,
+  OusiaRuntimeExtensionError,
+  OusiaRuntimeExtensionSlot,
+  OusiaRuntimeExtensionsResult,
   OusiaTerminalCreatePayload,
   OusiaTerminalCreateResult,
   OusiaTerminalDisposePayload,
   OusiaTerminalOperationResult,
   OusiaTerminalResizePayload,
   OusiaTerminalWritePayload,
-  OusiaThinkingLevel,
 } from "./chat-types.js"
 
 const enabledTools = ["read", "write", "edit", "bash", "grep", "find", "ls"]
@@ -108,31 +94,13 @@ const editorFileExtensions = new Set([
   ".yml",
 ])
 
-type AgentSessionBundle = {
-  authStorage: AuthStorage
-  modelRegistry: ModelRegistry
-  runtimeApiKeyProvider?: string
-  session: AgentSession
-}
-
 let mainWindow: BrowserWindow | undefined
-const sessionPromises = new Map<string, Promise<AgentSessionBundle>>()
-const streamState = new Map<string, { textId: string; thinkingId: string }>()
-const interruptGenerations = new Map<string, number>()
 const terminalSessions = new Map<string, pty.IPty>()
-let runtimeWidgetWatchers: FSWatcher[] = []
-let runtimeWidgetWatchDirs: string[] = []
-let runtimeWidgetWatchDebounce: ReturnType<typeof setTimeout> | undefined
-let runtimeWidgetWatchGeneration = 0
-const runtimeWidgetWatchDebounceMs = 1000
-
-function now() {
-  return new Date().toISOString()
-}
-
-function randomId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+let runtimeExtensionWatchers: FSWatcher[] = []
+let runtimeExtensionWatchDirs: string[] = []
+let runtimeExtensionWatchDebounce: ReturnType<typeof setTimeout> | undefined
+let runtimeExtensionWatchGeneration = 0
+const runtimeExtensionWatchDebounceMs = 1000
 
 function emitChatEvent(event: OusiaChatEvent, context?: OusiaChatContext) {
   mainWindow?.webContents.send(
@@ -147,25 +115,10 @@ function emitWindowFullscreenState() {
   })
 }
 
-function stringifyUnknown(value: unknown) {
-  if (value === undefined) {
-    return undefined
-  }
-  if (typeof value === "string") {
-    return value
-  }
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function safePathSegment(value: string) {
-  return (
-    value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "default"
-  )
-}
+const agentConversations = createAgentConversationModule({
+  enabledTools,
+  emitChatEvent,
+})
 
 function expandHomePath(path: string) {
   if (path === "~") {
@@ -177,14 +130,8 @@ function expandHomePath(path: string) {
   return path
 }
 
-function getRuntimeWidgetsDir() {
-  return join(app.getPath("userData"), "widgets")
-}
-
-function getProjectRuntimeWidgetsDir(projectPath?: string) {
-  return projectPath
-    ? join(expandHomePath(projectPath), ".ousia", "widgets")
-    : undefined
+function getRuntimeExtensionsDir() {
+  return join(homedir(), ".ousia", "extensions")
 }
 
 function isPathInside(parent: string, child: string) {
@@ -216,78 +163,8 @@ function shouldShowEditorFile(name: string) {
   return editorFileExtensions.has(extname(name).toLowerCase())
 }
 
-function isRuntimeWidgetSlot(value: unknown): value is OusiaRuntimeWidgetSlot {
+function isRuntimeExtensionSlot(value: unknown): value is OusiaRuntimeExtensionSlot {
   return value === "workspace.tab"
-}
-
-function sessionKey(context: OusiaChatContext) {
-  return `${context.projectPath}::${context.sessionId}`
-}
-
-function getConversationDir(context: OusiaChatContext) {
-  const cwd = expandHomePath(context.projectPath)
-  return join(
-    app.getPath("userData"),
-    "sessions",
-    safePathSegment(cwd),
-    safePathSegment(context.sessionId)
-  )
-}
-
-function normalizeModelSettings(model: OusiaModelSettings) {
-  return {
-    provider: model.provider.trim(),
-    modelId: model.modelId.trim(),
-    apiKey: model.apiKey?.trim(),
-  }
-}
-
-function applyRuntimeApiKey(
-  bundle: AgentSessionBundle,
-  model: OusiaModelSettings
-) {
-  const nextProvider = model.apiKey ? model.provider : undefined
-  if (
-    bundle.runtimeApiKeyProvider &&
-    bundle.runtimeApiKeyProvider !== nextProvider
-  ) {
-    bundle.authStorage.removeRuntimeApiKey(bundle.runtimeApiKeyProvider)
-  }
-  if (model.apiKey) {
-    bundle.authStorage.setRuntimeApiKey(model.provider, model.apiKey)
-  }
-  bundle.runtimeApiKeyProvider = nextProvider
-}
-
-function findConfiguredModel(
-  modelRegistry: ModelRegistry,
-  model: OusiaModelSettings
-) {
-  const selected = modelRegistry.find(model.provider, model.modelId)
-  if (!selected) {
-    throw new Error(`Unknown model: ${model.provider}/${model.modelId}`)
-  }
-  return selected
-}
-
-async function configureSessionBundle(
-  bundle: AgentSessionBundle,
-  modelSettings: OusiaModelSettings,
-  thinkingLevel: OusiaThinkingLevel
-) {
-  const model = normalizeModelSettings(modelSettings)
-  if (!model.provider || !model.modelId) {
-    throw new Error("Model provider and model ID are required.")
-  }
-  applyRuntimeApiKey(bundle, model)
-  const selectedModel = findConfiguredModel(bundle.modelRegistry, model)
-  if (
-    bundle.session.model?.provider !== selectedModel.provider ||
-    bundle.session.model?.id !== selectedModel.id
-  ) {
-    await bundle.session.setModel(selectedModel)
-  }
-  bundle.session.setThinkingLevel(thinkingLevel)
 }
 
 async function listEditorFiles(
@@ -505,778 +382,272 @@ async function disposeTerminal(
   return { ok: true }
 }
 
-async function getAgentSession(
-  context: OusiaChatContext,
-  model: OusiaModelSettings,
-  thinkingLevel: OusiaThinkingLevel
-) {
-  const key = sessionKey(context)
-  if (!sessionPromises.has(key)) {
-    const promise = createSession(context, key, model, thinkingLevel).catch(
-      (error) => {
-        if (sessionPromises.get(key) === promise) {
-          sessionPromises.delete(key)
-        }
-        throw error
-      }
-    )
-    sessionPromises.set(key, promise)
-  }
-  return sessionPromises.get(key)!
-}
-
-async function createSession(
-  context: OusiaChatContext,
-  key: string,
-  modelSettings: OusiaModelSettings,
-  thinkingLevel: OusiaThinkingLevel
-) {
-  const cwd = expandHomePath(context.projectPath)
-  const userData = app.getPath("userData")
-  const agentDir = join(userData, "pi-agent")
-  const conversationDir = getConversationDir(context)
-  mkdirSync(agentDir, { recursive: true })
-  mkdirSync(conversationDir, { recursive: true })
-
-  const authStorage = AuthStorage.create(join(agentDir, "auth.json"))
-  const modelRegistry = ModelRegistry.create(
-    authStorage,
-    join(agentDir, "models.json")
-  )
-  const settingsManager = SettingsManager.create(cwd, agentDir)
-  const resourceLoader = new DefaultResourceLoader({
-    cwd,
-    agentDir,
-    settingsManager,
-  })
-  await resourceLoader.reload()
-  const model = normalizeModelSettings(modelSettings)
-  if (model.apiKey) {
-    authStorage.setRuntimeApiKey(model.provider, model.apiKey)
-  }
-  const selectedModel =
-    model.provider && model.modelId
-      ? findConfiguredModel(modelRegistry, model)
-      : undefined
-
-  const { session, modelFallbackMessage } = await createAgentSession({
-    authStorage,
-    cwd,
-    agentDir,
-    modelRegistry,
-    resourceLoader,
-    sessionManager: SessionManager.continueRecent(cwd, conversationDir),
-    settingsManager,
-    model: selectedModel,
-    thinkingLevel,
-    tools: enabledTools,
-  })
-
-  if (modelFallbackMessage) {
-    emitChatEvent(
-      {
-        type: "run_status",
-        status: "running",
-        text: modelFallbackMessage,
-        timestamp: now(),
-      },
-      context
-    )
-  }
-
-  streamState.set(key, { textId: "", thinkingId: "" })
-  session.subscribe((event) => translateAgentEvent(event, context, key))
-  return {
-    authStorage,
-    modelRegistry,
-    runtimeApiKeyProvider: model.apiKey ? model.provider : undefined,
-    session,
-  }
-}
-
-function translateAgentEvent(
-  event: AgentSessionEvent,
-  context: OusiaChatContext,
-  key: string
-) {
-  const timestamp = now()
-  const state = streamState.get(key) ?? { textId: "", thinkingId: "" }
-  streamState.set(key, state)
-
-  if (event.type === "agent_start") {
-    emitChatEvent(
-      { type: "run_status", status: "starting", timestamp },
-      context
-    )
-    return
-  }
-  if (event.type === "turn_start") {
-    emitChatEvent({ type: "run_status", status: "running", timestamp }, context)
-    return
-  }
-  if (event.type === "agent_end") {
-    emitChatEvent(
-      { type: "run_status", status: "finished", timestamp },
-      context
-    )
-    state.textId = ""
-    state.thinkingId = ""
-    return
-  }
-  if (event.type === "message_end") {
-    const message = event.message as unknown as Record<string, unknown>
-    if (message.role === "assistant" && message.stopReason === "error") {
-      emitChatEvent(
-        {
-          type: "error",
-          id: randomId("error"),
-          text:
-            typeof message.errorMessage === "string"
-              ? message.errorMessage
-              : "Agent response failed.",
-          timestamp,
-        },
-        context
-      )
-    }
-    return
-  }
-  if (event.type === "tool_execution_start") {
-    const source = event as unknown as {
-      toolCallId?: string
-      toolName?: string
-      args?: unknown
-    }
-    emitChatEvent(
-      {
-        type: "tool_start",
-        id: source.toolCallId ?? randomId("tool"),
-        name: source.toolName ?? "tool",
-        args: source.args,
-        timestamp,
-      },
-      context
-    )
-    return
-  }
-  if (event.type === "tool_execution_update") {
-    const source = event as unknown as {
-      toolCallId?: string
-      partialResult?: unknown
-    }
-    emitChatEvent(
-      {
-        type: "tool_update",
-        id: source.toolCallId ?? randomId("tool"),
-        value: source.partialResult,
-        timestamp,
-      },
-      context
-    )
-    return
-  }
-  if (event.type === "tool_execution_end") {
-    const source = event as unknown as {
-      toolCallId?: string
-      toolName?: string
-      result?: unknown
-      isError?: boolean
-    }
-    emitChatEvent(
-      {
-        type: "tool_end",
-        id: source.toolCallId ?? randomId("tool"),
-        name: source.toolName,
-        result: source.result,
-        isError: source.isError,
-        timestamp,
-      },
-      context
-    )
-    return
-  }
-  if (event.type !== "message_update") {
-    return
-  }
-
-  const messageEvent = (
-    event as unknown as {
-      assistantMessageEvent?: {
-        type?: string
-        contentIndex?: number
-        delta?: string
-        content?: string
-        error?: {
-          errorMessage?: string
-        }
-      }
-    }
-  ).assistantMessageEvent
-
-  if (!messageEvent) {
-    return
-  }
-
-  if (messageEvent.type === "text_start") {
-    state.textId = `text-${messageEvent.contentIndex ?? 0}-${Date.now()}`
-    emitChatEvent(
-      { type: "assistant_text_start", id: state.textId, timestamp },
-      context
-    )
-    return
-  }
-  if (messageEvent.type === "text_delta") {
-    state.textId ||= `text-${messageEvent.contentIndex ?? 0}-${Date.now()}`
-    emitChatEvent(
-      {
-        type: "assistant_text_delta",
-        id: state.textId,
-        delta: messageEvent.delta ?? "",
-        timestamp,
-      },
-      context
-    )
-    return
-  }
-  if (messageEvent.type === "text_end") {
-    const id =
-      state.textId || `text-${messageEvent.contentIndex ?? 0}-${Date.now()}`
-    emitChatEvent(
-      {
-        type: "assistant_text_end",
-        id,
-        text: messageEvent.content,
-        timestamp,
-      },
-      context
-    )
-    state.textId = ""
-    return
-  }
-  if (messageEvent.type === "thinking_start") {
-    state.thinkingId = `thinking-${messageEvent.contentIndex ?? 0}-${Date.now()}`
-    emitChatEvent(
-      { type: "thinking_start", id: state.thinkingId, timestamp },
-      context
-    )
-    return
-  }
-  if (messageEvent.type === "thinking_delta") {
-    state.thinkingId ||= `thinking-${messageEvent.contentIndex ?? 0}-${Date.now()}`
-    emitChatEvent(
-      {
-        type: "thinking_delta",
-        id: state.thinkingId,
-        delta: messageEvent.delta ?? "",
-        timestamp,
-      },
-      context
-    )
-    return
-  }
-  if (messageEvent.type === "thinking_end") {
-    const id =
-      state.thinkingId ||
-      `thinking-${messageEvent.contentIndex ?? 0}-${Date.now()}`
-    emitChatEvent(
-      { type: "thinking_end", id, text: messageEvent.content, timestamp },
-      context
-    )
-    state.thinkingId = ""
-    return
-  }
-  if (messageEvent.type === "error") {
-    emitChatEvent(
-      {
-        type: "error",
-        id: randomId("error"),
-        text: messageEvent.error?.errorMessage ?? "Agent response failed.",
-        timestamp,
-      },
-      context
-    )
-  }
-}
-
-function textFromContent(content: unknown) {
-  if (typeof content === "string") {
-    return content
-  }
-  if (!Array.isArray(content)) {
-    return ""
-  }
-  return content
-    .map((part) => {
-      if (!part || typeof part !== "object") {
-        return ""
-      }
-      const block = part as Record<string, unknown>
-      if (block.type === "text") {
-        return typeof block.text === "string" ? block.text : ""
-      }
-      if (block.type === "image") {
-        return "[image]"
-      }
-      return ""
-    })
-    .filter(Boolean)
-    .join("\n")
-}
-
-function messageEntryToHistoryItems(
-  entry: SessionMessageEntry,
-  items: OusiaChatHistoryItem[]
-) {
-  const message = entry.message as unknown as Record<string, unknown>
-  const role = message.role
-  if (role === "user") {
-    items.push({
-      id: entry.id,
-      role: "user",
-      text: textFromContent(message.content),
-      status: "finished",
-    })
-    return
-  }
-  if (role === "assistant") {
-    const content = Array.isArray(message.content) ? message.content : []
-    content.forEach((part, index) => {
-      if (!part || typeof part !== "object") {
-        return
-      }
-      const block = part as Record<string, unknown>
-      if (block.type === "thinking") {
-        const text = typeof block.thinking === "string" ? block.thinking : ""
-        if (text) {
-          items.push({
-            id: `${entry.id}-thinking-${index}`,
-            role: "thinking",
-            text,
-            status: "finished",
-          })
-        }
-      } else if (block.type === "text") {
-        const text = typeof block.text === "string" ? block.text : ""
-        if (text) {
-          items.push({
-            id: `${entry.id}-text-${index}`,
-            role: "assistant",
-            text,
-            status: "finished",
-          })
-        }
-      } else if (block.type === "toolCall") {
-        items.push({
-          id:
-            typeof block.id === "string"
-              ? block.id
-              : `${entry.id}-tool-${index}`,
-          role: "tool",
-          name: typeof block.name === "string" ? block.name : "tool",
-          text: stringifyUnknown(block.arguments) ?? "",
-          status: "running",
-        })
-      }
-    })
-    return
-  }
-  if (role === "toolResult") {
-    const toolCallId =
-      typeof message.toolCallId === "string" ? message.toolCallId : entry.id
-    const index = items.findIndex(
-      (item) => item.role === "tool" && item.id === toolCallId
-    )
-    const item: OusiaChatHistoryItem = {
-      id: toolCallId,
-      role: "tool",
-      name: typeof message.toolName === "string" ? message.toolName : "tool",
-      text: textFromContent(message.content),
-      status: message.isError ? "failed" : "finished",
-    }
-    if (index >= 0) {
-      items[index] = item
-    } else {
-      items.push(item)
-    }
-    return
-  }
-  if (role === "bashExecution") {
-    const command = typeof message.command === "string" ? message.command : ""
-    const output = typeof message.output === "string" ? message.output : ""
-    items.push({
-      id: entry.id,
-      role: "tool",
-      name: "bash",
-      text: [command ? `$ ${command}` : "", output].filter(Boolean).join("\n"),
-      status: message.exitCode === 0 ? "finished" : "failed",
-    })
-    return
-  }
-  if (role === "custom" && message.display !== false) {
-    const text = textFromContent(message.content)
-    if (text) {
-      items.push({
-        id: entry.id,
-        role: "system",
-        text,
-        status: "finished",
-      })
-    }
-  }
-}
-
-async function findRecentPiSessionFile(cwd: string, conversationDir: string) {
-  if (!existsSync(conversationDir)) {
-    return undefined
-  }
-  const sessions = await SessionManager.list(cwd, conversationDir)
-  return sessions.sort(
-    (left, right) => right.modified.getTime() - left.modified.getTime()
-  )[0]?.path
-}
-
-async function getChatHistory(
-  context: OusiaChatContext
-): Promise<OusiaChatHistoryResult> {
-  const cwd = expandHomePath(context.projectPath)
-  const conversationDir = getConversationDir(context)
-  const sessionFile = await findRecentPiSessionFile(cwd, conversationDir)
-  if (!sessionFile) {
-    return { items: [] }
-  }
-
-  try {
-    const sessionManager = SessionManager.open(
-      sessionFile,
-      conversationDir,
-      cwd
-    )
-    const items: OusiaChatHistoryItem[] = []
-    sessionManager.getBranch().forEach((entry) => {
-      if (entry.type === "message") {
-        messageEntryToHistoryItems(entry, items)
-      }
-    })
-    return { items }
-  } catch (error) {
-    return {
-      items: [
-        {
-          id: randomId("history-error"),
-          role: "error",
-          text:
-            error instanceof Error
-              ? `Failed to load session history: ${error.message}`
-              : "Failed to load session history.",
-        },
-      ],
-    }
-  }
-}
-
-type RuntimeWidgetManifest = {
+type RuntimeExtensionAppManifest = {
   id?: unknown
   title?: unknown
   slot?: unknown
   entry?: unknown
 }
 
-function normalizeRuntimeWidgetManifest(
-  scope: string,
-  dirname: string,
-  manifest: RuntimeWidgetManifest
+type RuntimeExtensionPackage = {
+  name?: unknown
+  version?: unknown
+  ousia?: {
+    app?: unknown
+    backend?: unknown
+    permissions?: unknown
+  }
+}
+
+function normalizeRuntimeExtensionId(
+  packageDirname: string,
+  packageJson: RuntimeExtensionPackage
 ) {
-  const id = typeof manifest.id === "string" ? manifest.id.trim() : dirname
+  const id =
+    typeof packageJson.name === "string" && packageJson.name.trim()
+      ? packageJson.name.trim()
+      : packageDirname
+
+  if (!id || !/^[a-zA-Z0-9._-]+$/.test(id)) {
+    throw new Error(
+      "Extension package name must contain only letters, numbers, dots, underscores, and dashes."
+    )
+  }
+
+  return id
+}
+
+function normalizeRuntimeExtensionAppManifest(
+  extensionId: string,
+  manifest: RuntimeExtensionAppManifest
+) {
   const title =
     typeof manifest.title === "string" && manifest.title.trim()
       ? manifest.title.trim()
-      : id
+      : extensionId
   const slot = manifest.slot ?? "workspace.tab"
   const entry =
     typeof manifest.entry === "string" && manifest.entry.trim()
       ? manifest.entry.trim()
-      : "Widget.tsx"
+      : "App.tsx"
 
-  if (!id || !/^[a-zA-Z0-9._-]+$/.test(id)) {
-    throw new Error(
-      "Widget id must contain only letters, numbers, dots, underscores, and dashes."
-    )
-  }
-  if (!isRuntimeWidgetSlot(slot)) {
-    throw new Error("Only the workspace.tab runtime widget slot is supported.")
+  if (!isRuntimeExtensionSlot(slot)) {
+    throw new Error("Only the workspace.tab runtime extension slot is supported.")
   }
   if (entry.includes("\0") || entry.startsWith("/")) {
-    throw new Error("Widget entry must be a relative path.")
+    throw new Error("Runtime extension app entry must be a relative path.")
   }
 
-  return { id: `runtime.${scope}.${id}`, title, slot, entry }
+  return {
+    id: `runtime.extension.${extensionId}`,
+    title,
+    slot,
+    entry,
+  }
 }
 
-async function compileRuntimeWidget(sourcePath: string) {
-  const loader = extname(sourcePath) === ".ts" ? "ts" : "tsx"
-  const source = await readFile(sourcePath, "utf8")
-  const result = await transform(source, {
-    loader,
+async function compileRuntimeExtensionApp(sourcePath: string) {
+  const result = await build({
+    entryPoints: [sourcePath],
+    absWorkingDir: dirname(sourcePath),
+    bundle: true,
+    platform: "browser",
+    external: ["react"],
     format: "cjs",
     target: "es2022",
     jsx: "transform",
     jsxFactory: "React.createElement",
     jsxFragment: "React.Fragment",
     sourcemap: "inline",
+    write: false,
   })
-  return result.code
+  const output = result.outputFiles[0]?.text
+  if (!output) {
+    throw new Error("Extension compilation produced no output.")
+  }
+  return output
 }
 
-async function loadRuntimeWidget(
-  widgetsDir: string,
-  scope: string,
-  dirname: string
+async function loadRuntimeExtension(
+  extensionsDir: string,
+  packageDirname: string
 ): Promise<
-  | { widget: OusiaRuntimeWidget; error?: never }
-  | { widget?: never; error: OusiaRuntimeWidgetError }
+  Array<
+    | { extension: OusiaRuntimeExtension; error?: never }
+    | { extension?: never; error: OusiaRuntimeExtensionError }
+  >
 > {
-  const widgetDir = resolve(widgetsDir, dirname)
-  const manifestPath = join(widgetDir, "widget.json")
+  const extensionDir = resolve(extensionsDir, packageDirname)
+  const packagePath = join(extensionDir, "package.json")
   try {
-    const manifest = JSON.parse(
-      await readFile(manifestPath, "utf8")
-    ) as RuntimeWidgetManifest
-    const normalized = normalizeRuntimeWidgetManifest(scope, dirname, manifest)
-    const sourcePath = resolve(widgetDir, normalized.entry)
-    if (!isPathInside(widgetDir, sourcePath)) {
-      throw new Error("Widget entry must stay inside its widget directory.")
+    const packageJson = JSON.parse(
+      await readFile(packagePath, "utf8")
+    ) as RuntimeExtensionPackage
+    const extensionId = normalizeRuntimeExtensionId(packageDirname, packageJson)
+    const normalized = normalizeRuntimeExtensionAppManifest(
+      extensionId,
+      (packageJson.ousia?.app ?? {}) as RuntimeExtensionAppManifest
+    )
+    const sourcePath = resolve(extensionDir, normalized.entry)
+    if (!isPathInside(extensionDir, sourcePath)) {
+      throw new Error(
+        "Runtime extension app entry must stay inside its extension directory."
+      )
     }
-    const code = await compileRuntimeWidget(sourcePath)
-    return {
-      widget: {
-        id: normalized.id,
-        title: normalized.title,
-        slot: normalized.slot,
-        sourcePath,
-        code,
+    const code = await compileRuntimeExtensionApp(sourcePath)
+    return [
+      {
+        extension: {
+          id: normalized.id,
+          title: normalized.title,
+          slot: normalized.slot,
+          distribution: "user-local",
+          trust: "local-user",
+          extensionDir,
+          sourcePath,
+          code,
+        },
       },
-    }
+    ]
   } catch (error) {
-    return {
-      error: {
-        id: `runtime.${scope}.${dirname}`,
-        title: dirname,
-        sourcePath: existsSync(manifestPath) ? manifestPath : undefined,
-        message: error instanceof Error ? error.message : String(error),
+    return [
+      {
+        error: {
+          id: `runtime.extension.${packageDirname}`,
+          title: packageDirname,
+          distribution: "user-local",
+          trust: "local-user",
+          extensionDir,
+          sourcePath: existsSync(packagePath) ? packagePath : undefined,
+          message: error instanceof Error ? error.message : String(error),
+        },
       },
-    }
+    ]
   }
 }
 
-async function loadRuntimeWidgetRoot(widgetsDir: string, scope: string) {
-  mkdirSync(widgetsDir, { recursive: true })
-  const entries = await readdir(widgetsDir, { withFileTypes: true })
-  return Promise.all(
-    entries
-      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-      .map((entry) => loadRuntimeWidget(widgetsDir, scope, entry.name))
-  )
-}
-
-async function listRuntimeWidgets(
-  payload?: OusiaRuntimeWidgetsPayload
-): Promise<OusiaRuntimeWidgetsResult> {
-  const globalWidgetsDir = getRuntimeWidgetsDir()
-  const projectWidgetsDir = getProjectRuntimeWidgetsDir(payload?.projectPath)
-  const roots = [
-    { dir: globalWidgetsDir, scope: "global" },
-    ...(projectWidgetsDir
-      ? [{ dir: projectWidgetsDir, scope: "project" }]
-      : []),
-  ]
-  const loaded = (
+async function loadRuntimeExtensionRoot(extensionsDir: string) {
+  mkdirSync(extensionsDir, { recursive: true })
+  const entries = await readdir(extensionsDir, { withFileTypes: true })
+  return (
     await Promise.all(
-      roots.map((root) => loadRuntimeWidgetRoot(root.dir, root.scope))
+      entries
+        .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+        .map((entry) => loadRuntimeExtension(extensionsDir, entry.name))
     )
   ).flat()
+}
+
+function dedupeRuntimeExtensionResults(
+  loaded: Array<
+    | { extension: OusiaRuntimeExtension; error?: never }
+    | { extension?: never; error: OusiaRuntimeExtensionError }
+  >
+) {
+  const seenIds = new Set<string>()
+  return loaded.filter((result) => {
+    const id = result.extension?.id ?? result.error?.id
+    if (!id || seenIds.has(id)) {
+      return false
+    }
+    seenIds.add(id)
+    return true
+  })
+}
+
+async function listRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult> {
+  const extensionsDir = getRuntimeExtensionsDir()
+  const loaded = await loadRuntimeExtensionRoot(extensionsDir)
+  const deduped = dedupeRuntimeExtensionResults(loaded)
   return {
-    widgetsDir: projectWidgetsDir ?? globalWidgetsDir,
-    widgetsDirs: roots.map((root) => root.dir),
-    widgets: loaded.flatMap((result) => (result.widget ? [result.widget] : [])),
-    errors: loaded.flatMap((result) => (result.error ? [result.error] : [])),
+    extensionsDir,
+    extensionDirs: [extensionsDir],
+    extensions: deduped.flatMap((result) =>
+      result.extension ? [result.extension] : []
+    ),
+    errors: deduped.flatMap((result) => (result.error ? [result.error] : [])),
   }
 }
 
-function closeRuntimeWidgetWatchers(invalidate = true) {
-  if (invalidate) {
-    runtimeWidgetWatchGeneration += 1
+async function deleteRuntimeExtension(
+  payload: OusiaRuntimeExtensionDeletePayload
+): Promise<OusiaRuntimeExtensionDeleteResult> {
+  const extensionDir = resolve(payload.extensionDir)
+  const extensionsDir = getRuntimeExtensionsDir()
+  if (!isPathInside(extensionsDir, extensionDir)) {
+    throw new Error(
+      "Runtime extension directory is outside the global extension root."
+    )
   }
-  for (const watcher of runtimeWidgetWatchers) {
+  await rm(extensionDir, { recursive: true, force: true })
+  emitRuntimeExtensionsChanged()
+  return { ok: true }
+}
+
+function closeRuntimeExtensionWatchers(invalidate = true) {
+  if (invalidate) {
+    runtimeExtensionWatchGeneration += 1
+  }
+  for (const watcher of runtimeExtensionWatchers) {
     watcher.close()
   }
-  runtimeWidgetWatchers = []
-  runtimeWidgetWatchDirs = []
-  if (runtimeWidgetWatchDebounce) {
-    clearTimeout(runtimeWidgetWatchDebounce)
-    runtimeWidgetWatchDebounce = undefined
+  runtimeExtensionWatchers = []
+  runtimeExtensionWatchDirs = []
+  if (runtimeExtensionWatchDebounce) {
+    clearTimeout(runtimeExtensionWatchDebounce)
+    runtimeExtensionWatchDebounce = undefined
   }
 }
 
-function emitRuntimeWidgetsChanged() {
-  if (runtimeWidgetWatchDebounce) {
-    clearTimeout(runtimeWidgetWatchDebounce)
+function emitRuntimeExtensionsChanged() {
+  if (runtimeExtensionWatchDebounce) {
+    clearTimeout(runtimeExtensionWatchDebounce)
   }
-  runtimeWidgetWatchDebounce = setTimeout(() => {
-    runtimeWidgetWatchDebounce = undefined
-    const event: OusiaRuntimeWidgetsChangedEvent = {
-      widgetsDirs: runtimeWidgetWatchDirs,
+  runtimeExtensionWatchDebounce = setTimeout(() => {
+    runtimeExtensionWatchDebounce = undefined
+    const event: OusiaRuntimeExtensionsChangedEvent = {
+      extensionDirs: runtimeExtensionWatchDirs,
     }
-    mainWindow?.webContents.send("ousia:widgets:changed", event)
-  }, runtimeWidgetWatchDebounceMs)
+    mainWindow?.webContents.send("ousia:extensions:changed", event)
+  }, runtimeExtensionWatchDebounceMs)
 }
 
-async function watchRuntimeWidgets(
-  payload?: OusiaRuntimeWidgetsPayload
-): Promise<OusiaRuntimeWidgetsResult> {
-  const watchGeneration = runtimeWidgetWatchGeneration + 1
-  runtimeWidgetWatchGeneration = watchGeneration
-  closeRuntimeWidgetWatchers(false)
+async function watchRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult> {
+  const watchGeneration = runtimeExtensionWatchGeneration + 1
+  runtimeExtensionWatchGeneration = watchGeneration
+  closeRuntimeExtensionWatchers(false)
 
-  const result = await listRuntimeWidgets(payload)
-  if (watchGeneration !== runtimeWidgetWatchGeneration) {
+  const result = await listRuntimeExtensions()
+  if (watchGeneration !== runtimeExtensionWatchGeneration) {
     return result
   }
-  runtimeWidgetWatchDirs = result.widgetsDirs
+  runtimeExtensionWatchDirs = result.extensionDirs
 
-  for (const dir of runtimeWidgetWatchDirs) {
-    if (watchGeneration !== runtimeWidgetWatchGeneration) {
+  for (const dir of runtimeExtensionWatchDirs) {
+    if (watchGeneration !== runtimeExtensionWatchGeneration) {
       break
     }
     mkdirSync(dir, { recursive: true })
     try {
-      const watcher = watch(dir, { recursive: true }, emitRuntimeWidgetsChanged)
+      const watcher = watch(dir, { recursive: true }, emitRuntimeExtensionsChanged)
       watcher.on("error", () => {
         watcher.close()
       })
-      runtimeWidgetWatchers.push(watcher)
+      runtimeExtensionWatchers.push(watcher)
     } catch {
       try {
-        const watcher = watch(dir, emitRuntimeWidgetsChanged)
+        const watcher = watch(dir, emitRuntimeExtensionsChanged)
         watcher.on("error", () => {
           watcher.close()
         })
-        runtimeWidgetWatchers.push(watcher)
+        runtimeExtensionWatchers.push(watcher)
       } catch {
-        // Runtime widget refresh stays available through the manual button.
+        // Runtime extension refresh stays available through the manual button.
       }
     }
   }
 
   return result
-}
-
-async function sendChatMessage(
-  payload: OusiaChatSendPayload
-): Promise<OusiaChatSendResult> {
-  const text = payload.prompt.trim()
-  const context = {
-    projectPath: payload.projectPath,
-    sessionId: payload.sessionId,
-  }
-  const key = sessionKey(context)
-  const interruptGeneration = interruptGenerations.get(key) ?? 0
-  if (!text) {
-    return { ok: true }
-  }
-  emitChatEvent(
-    {
-      type: "user_message",
-      id: randomId("user"),
-      text,
-      timestamp: now(),
-    },
-    context
-  )
-  try {
-    const bundle = await getAgentSession(
-      context,
-      payload.model,
-      payload.thinkingLevel
-    )
-    await configureSessionBundle(bundle, payload.model, payload.thinkingLevel)
-    const { session } = bundle
-    if ((interruptGenerations.get(key) ?? 0) !== interruptGeneration) {
-      return { ok: true }
-    }
-    if (session.isStreaming) {
-      await session.prompt(text, {
-        source: "interactive",
-        streamingBehavior: "steer",
-      })
-    } else {
-      void session.prompt(text, { source: "interactive" }).catch((error) => {
-        emitChatEvent(
-          {
-            type: "error",
-            id: randomId("error"),
-            text: error instanceof Error ? error.message : String(error),
-            timestamp: now(),
-          },
-          context
-        )
-      })
-    }
-    return { ok: true }
-  } catch (error) {
-    emitChatEvent(
-      {
-        type: "error",
-        id: randomId("error"),
-        text: error instanceof Error ? error.message : String(error),
-        timestamp: now(),
-      },
-      context
-    )
-    return { ok: false }
-  }
-}
-
-async function interruptChat(
-  context: OusiaChatContext
-): Promise<OusiaChatInterruptResult> {
-  const key = sessionKey(context)
-  interruptGenerations.set(key, (interruptGenerations.get(key) ?? 0) + 1)
-  const promise = sessionPromises.get(key)
-  if (!promise) {
-    return { ok: true }
-  }
-  try {
-    const { session } = await promise
-    const hadActiveWork =
-      session.isStreaming ||
-      session.pendingMessageCount > 0 ||
-      session.isBashRunning
-    session.clearQueue()
-    await session.abort()
-    if (hadActiveWork) {
-      emitChatEvent(
-        {
-          type: "run_status",
-          status: "finished",
-          text: "Agent interrupted.",
-          timestamp: now(),
-        },
-        context
-      )
-    }
-    return { ok: true }
-  } catch (error) {
-    emitChatEvent(
-      {
-        type: "error",
-        id: randomId("error"),
-        text: error instanceof Error ? error.message : String(error),
-        timestamp: now(),
-      },
-      context
-    )
-    return { ok: false }
-  }
 }
 
 function isExternalUrl(url: string) {
@@ -1423,7 +794,7 @@ async function createWindow() {
   mainWindow.on("enter-full-screen", emitWindowFullscreenState)
   mainWindow.on("leave-full-screen", emitWindowFullscreenState)
   mainWindow.on("closed", () => {
-    closeRuntimeWidgetWatchers()
+    closeRuntimeExtensionWatchers()
     mainWindow = undefined
   })
 
@@ -1442,15 +813,15 @@ async function createWindow() {
 }
 
 ipcMain.handle("ousia:chat:send", (_event, payload: OusiaChatSendPayload) =>
-  sendChatMessage(payload)
+  agentConversations.sendChatMessage(payload)
 )
 
 ipcMain.handle("ousia:chat:history", (_event, payload: OusiaChatContext) =>
-  getChatHistory(payload)
+  agentConversations.getChatHistory(payload)
 )
 
 ipcMain.handle("ousia:chat:interrupt", (_event, payload: OusiaChatContext) =>
-  interruptChat(payload)
+  agentConversations.interruptChat(payload)
 )
 
 ipcMain.handle("ousia:project:open", async () => {
@@ -1484,18 +855,24 @@ ipcMain.handle(
 )
 
 ipcMain.handle(
-  "ousia:widgets:list",
-  (_event, payload?: OusiaRuntimeWidgetsPayload) => listRuntimeWidgets(payload)
+  "ousia:extensions:list",
+  () => listRuntimeExtensions()
 )
 
 ipcMain.handle(
-  "ousia:widgets:watch",
-  (_event, payload?: OusiaRuntimeWidgetsPayload) => watchRuntimeWidgets(payload)
+  "ousia:extensions:watch",
+  () => watchRuntimeExtensions()
 )
 
-ipcMain.handle("ousia:widgets:unwatch", () => {
-  closeRuntimeWidgetWatchers()
+ipcMain.handle("ousia:extensions:unwatch", () => {
+  closeRuntimeExtensionWatchers()
 })
+
+ipcMain.handle(
+  "ousia:extensions:delete",
+  (_event, payload: OusiaRuntimeExtensionDeletePayload) =>
+    deleteRuntimeExtension(payload)
+)
 
 ipcMain.handle(
   "ousia:terminal:create",

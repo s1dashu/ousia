@@ -1,6 +1,6 @@
-import type { WidgetContext } from "@/widgets/types"
+import type { ExtensionContext } from "@/extensions/types"
 
-export const widgetContext: WidgetContext = {
+export const extensionContext: ExtensionContext = {
   project: {
     id: "ousia-desktop",
     name: "ousia-desktop",

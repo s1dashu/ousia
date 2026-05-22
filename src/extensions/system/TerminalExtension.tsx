@@ -4,7 +4,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links"
 import { Terminal } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
 
-import type { WidgetProps } from "@/widgets/types"
+import type { ExtensionProps } from "@/extensions/types"
 
 function createTerminalId(projectPath: string, sessionId: string) {
   const scope =
@@ -17,7 +17,7 @@ function createTerminalId(projectPath: string, sessionId: string) {
     .slice(2, 8)}`
 }
 
-export function TerminalWidget({ context }: WidgetProps) {
+export function TerminalExtension({ context }: ExtensionProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)

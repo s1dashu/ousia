@@ -12,9 +12,10 @@ import type {
   OusiaEditorSaveFilePayload,
   OusiaEditorSaveFileResult,
   OusiaOpenProjectResult,
-  OusiaRuntimeWidgetsChangedEvent,
-  OusiaRuntimeWidgetsPayload,
-  OusiaRuntimeWidgetsResult,
+  OusiaRuntimeExtensionDeletePayload,
+  OusiaRuntimeExtensionDeleteResult,
+  OusiaRuntimeExtensionsChangedEvent,
+  OusiaRuntimeExtensionsResult,
   OusiaTerminalCreatePayload,
   OusiaTerminalCreateResult,
   OusiaTerminalDisposePayload,
@@ -55,29 +56,30 @@ const api = {
   ): Promise<OusiaEditorSaveFileResult> {
     return ipcRenderer.invoke("ousia:editor:save-file", payload)
   },
-  listRuntimeWidgets(
-    payload?: OusiaRuntimeWidgetsPayload
-  ): Promise<OusiaRuntimeWidgetsResult> {
-    return ipcRenderer.invoke("ousia:widgets:list", payload)
+  listRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult> {
+    return ipcRenderer.invoke("ousia:extensions:list")
   },
-  watchRuntimeWidgets(
-    payload?: OusiaRuntimeWidgetsPayload
-  ): Promise<OusiaRuntimeWidgetsResult> {
-    return ipcRenderer.invoke("ousia:widgets:watch", payload)
+  watchRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult> {
+    return ipcRenderer.invoke("ousia:extensions:watch")
   },
-  unwatchRuntimeWidgets(): Promise<void> {
-    return ipcRenderer.invoke("ousia:widgets:unwatch")
+  unwatchRuntimeExtensions(): Promise<void> {
+    return ipcRenderer.invoke("ousia:extensions:unwatch")
   },
-  onRuntimeWidgetsChanged(
-    callback: (event: OusiaRuntimeWidgetsChangedEvent) => void
+  deleteRuntimeExtension(
+    payload: OusiaRuntimeExtensionDeletePayload
+  ): Promise<OusiaRuntimeExtensionDeleteResult> {
+    return ipcRenderer.invoke("ousia:extensions:delete", payload)
+  },
+  onRuntimeExtensionsChanged(
+    callback: (event: OusiaRuntimeExtensionsChangedEvent) => void
   ): () => void {
     const listener = (
       _event: IpcRendererEvent,
-      payload: OusiaRuntimeWidgetsChangedEvent
+      payload: OusiaRuntimeExtensionsChangedEvent
     ) => callback(payload)
-    ipcRenderer.on("ousia:widgets:changed", listener)
+    ipcRenderer.on("ousia:extensions:changed", listener)
     return () => {
-      ipcRenderer.off("ousia:widgets:changed", listener)
+      ipcRenderer.off("ousia:extensions:changed", listener)
     }
   },
   createTerminal(

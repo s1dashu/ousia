@@ -1,23 +1,23 @@
 import { Component, type ReactNode } from "react"
 
-import type { WidgetContext, WidgetDefinition } from "@/widgets/types"
+import type { ExtensionContext, ExtensionDefinition } from "@/extensions/types"
 
-type WidgetSlotProps = {
-  widget: WidgetDefinition
-  context: WidgetContext
+type ExtensionSlotProps = {
+  extension: ExtensionDefinition
+  context: ExtensionContext
 }
 
-export function WidgetSlot({ widget, context }: WidgetSlotProps) {
-  const Component = widget.component
+export function ExtensionSlot({ extension, context }: ExtensionSlotProps) {
+  const Component = extension.component
 
   return (
-    <WidgetErrorBoundary title={widget.title}>
+    <ExtensionErrorBoundary title={extension.title}>
       <Component context={context} />
-    </WidgetErrorBoundary>
+    </ExtensionErrorBoundary>
   )
 }
 
-class WidgetErrorBoundary extends Component<
+class ExtensionErrorBoundary extends Component<
   { title: string; children: ReactNode },
   { error?: Error }
 > {

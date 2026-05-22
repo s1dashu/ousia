@@ -19,7 +19,7 @@ import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker"
 
 import { Button } from "@/components/ui/button"
 import type { OusiaEditorFileEntry } from "@/electron/chat-types"
-import type { WidgetProps } from "@/widgets/types"
+import type { ExtensionProps } from "@/extensions/types"
 
 const monacoEnvironment = {
   getWorker(_moduleId: string, label: string) {
@@ -223,7 +223,7 @@ function compactPath(path: string) {
   return `${parts[0]}/.../${parts.slice(-2).join("/")}`
 }
 
-export function EditorWidget({ context }: WidgetProps) {
+export function EditorExtension({ context }: ExtensionProps) {
   const editorElementRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const [files, setFiles] = useState<OusiaEditorFileEntry[]>([])

@@ -12,9 +12,9 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import type { WidgetProps } from "@/widgets/types"
+import type { ExtensionProps } from "@/extensions/types"
 
-const DEFAULT_URL = "https://www.electronjs.org"
+const DEFAULT_URL = "https://start.duckduckgo.com"
 const SEARCH_URL = "https://duckduckgo.com/?q="
 const BROWSER_PARTITION = "persist:ousia-browser"
 
@@ -57,7 +57,7 @@ function formatLoadError(errorCode?: number, errorDescription?: string) {
   return errorDescription || "Failed to load this page."
 }
 
-export function BrowserWidget(_props: WidgetProps) {
+export function BrowserExtension(_props: ExtensionProps) {
   void _props
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const [address, setAddress] = useState(DEFAULT_URL)

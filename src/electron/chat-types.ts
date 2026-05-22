@@ -221,36 +221,46 @@ export type OusiaTerminalEvent =
       message: string
     }
 
-export type OusiaRuntimeWidgetSlot = "workspace.tab"
+export type OusiaRuntimeExtensionSlot = "workspace.tab"
 
-export type OusiaRuntimeWidget = {
+export type OusiaRuntimeExtension = {
   id: string
   title: string
-  slot: OusiaRuntimeWidgetSlot
+  slot: OusiaRuntimeExtensionSlot
+  distribution: "user-local"
+  trust: "local-user"
+  extensionDir: string
   sourcePath: string
   code: string
 }
 
-export type OusiaRuntimeWidgetError = {
+export type OusiaRuntimeExtensionError = {
   id: string
   title: string
+  distribution: "user-local"
+  trust: "local-user"
+  extensionDir?: string
   sourcePath?: string
   message: string
 }
 
-export type OusiaRuntimeWidgetsPayload = {
-  projectPath?: string
+export type OusiaRuntimeExtensionDeletePayload = {
+  extensionDir: string
 }
 
-export type OusiaRuntimeWidgetsChangedEvent = {
-  widgetsDirs: string[]
+export type OusiaRuntimeExtensionDeleteResult = {
+  ok: boolean
 }
 
-export type OusiaRuntimeWidgetsResult = {
-  widgetsDir: string
-  widgetsDirs: string[]
-  widgets: OusiaRuntimeWidget[]
-  errors: OusiaRuntimeWidgetError[]
+export type OusiaRuntimeExtensionsChangedEvent = {
+  extensionDirs: string[]
+}
+
+export type OusiaRuntimeExtensionsResult = {
+  extensionsDir: string
+  extensionDirs: string[]
+  extensions: OusiaRuntimeExtension[]
+  errors: OusiaRuntimeExtensionError[]
 }
 
 export type OusiaWindowFullscreenEvent = {

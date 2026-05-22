@@ -26,9 +26,16 @@ import { ArrowDown, Plus, X } from "lucide-react"
 import { Streamdown } from "streamdown"
 import "streamdown/styles.css"
 import {
+  ChartSquareBoldDuotone,
+  ChecklistBoldDuotone,
   CodeSquareBoldDuotone,
+  CommandBoldDuotone,
+  GalleryBoldDuotone,
   GlobalBoldDuotone,
   MonitorBoldDuotone,
+  Shop2BoldDuotone,
+  Sun2BoldDuotone,
+  UserCircleBoldDuotone,
   Widget6BoldDuotone,
 } from "solar-icon-set"
 
@@ -41,78 +48,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  createId,
+  createSession,
+  loadInitialAppState,
+  projectNameFromPath,
+  saveProjects,
+  saveSelection,
+  saveSettings,
+  type AppSettings,
+  type InitialAppState,
+  type ProjectRecord,
+  type SessionRecord,
+} from "@/app/app-state"
 import type {
   OusiaChatEvent,
   OusiaChatHistoryItem,
-  OusiaRuntimeWidgetsResult,
+  OusiaRuntimeExtensionsResult,
   OusiaTextChatItem,
   OusiaThinkingLevel,
 } from "@/electron/chat-types"
-import { WidgetSlot } from "@/widgets/WidgetSlot"
-import { widgetsBySlot } from "@/widgets/registry"
-import { runtimeWidgetsToDefinitions } from "@/widgets/runtime"
-import type { WidgetContext } from "@/widgets/types"
-
-type SessionRecord = {
-  id: string
-  title: string
-  time: string
-}
-
-type ProjectRecord = {
-  id: string
-  name: string
-  path: string
-  sessions: SessionRecord[]
-}
-
-const PROJECTS_STORAGE_KEY = "ousia.projects.v1"
-const SETTINGS_STORAGE_KEY = "ousia.settings.v1"
-const SELECTION_STORAGE_KEY = "ousia.selection.v1"
-const DEFAULT_WORKSPACE_WIDGET_ID = "workspace.browser"
-const REMOVED_DEFAULT_WORKSPACE_WIDGET_IDS = new Set(["custom.widget-overview"])
-
-type AppSettings = {
-  defaultWorkDir: string
-  thinkingLevel: OusiaThinkingLevel
-  modelProvider: string
-  modelId: string
-  modelApiKey: string
-}
-
-type InitialAppState = {
-  settings: AppSettings
-  projects: ProjectRecord[]
-  selectedProjectId: string
-  selectedSessionId: string
-  selectedWorkspaceWidgetId: string
-  workspaceTabsBySession: Record<string, WorkspaceTabsState>
-}
-
-type WorkspaceTab = {
-  id: string
-  widgetId: string | null
-}
-
-type WorkspaceTabsState = {
-  activeTabId: string
-  tabs: WorkspaceTab[]
-}
-
-type StoredSelection = {
-  selectedProjectId?: string
-  selectedSessionId?: string
-  selectedWorkspaceWidgetId?: string
-  workspaceTabsBySession?: Record<string, WorkspaceTabsState>
-}
-
-const defaultSettings: AppSettings = {
-  defaultWorkDir: "~/Desktop",
-  thinkingLevel: "medium",
-  modelProvider: "deepseek",
-  modelId: "deepseek-v4-flash",
-  modelApiKey: "",
-}
+import { ExtensionSlot } from "@/extensions/ExtensionSlot"
+import { extensionsBySlot } from "@/extensions/registry"
+import { runtimeExtensionsToDefinitions } from "@/extensions/extensions"
+import type { ExtensionContext } from "@/extensions/types"
+import {
+  createWorkspaceTab,
+  normalizeWorkspaceTabsState,
+  type WorkspaceTab,
+  type WorkspaceTabsState,
+} from "@/extensions/workspace-tabs"
 
 const modelPresets: Array<{
   provider: string
@@ -203,100 +168,6 @@ const MIN_WORKSPACE_WIDTH = 360
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
-}
-
-function createId(prefix: string) {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function createSession(title = "新会话"): SessionRecord {
-  return {
-    id: createId("session"),
-    title,
-    time: "now",
-  }
-}
-
-function projectNameFromPath(path: string) {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
-}
-
-function createDefaultProject(settings: AppSettings): ProjectRecord {
-  return {
-    id: "default-workdir",
-    name: projectNameFromPath(settings.defaultWorkDir),
-    path: settings.defaultWorkDir,
-    sessions: [createSession()],
-  }
-}
-
-function loadSettings(): AppSettings {
-  try {
-    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (!raw) {
-      return defaultSettings
-    }
-    return { ...defaultSettings, ...JSON.parse(raw) }
-  } catch {
-    return defaultSettings
-  }
-}
-
-function loadProjects(settings: AppSettings) {
-  try {
-    const raw = window.localStorage.getItem(PROJECTS_STORAGE_KEY)
-    if (!raw) {
-      return [createDefaultProject(settings)]
-    }
-    const parsed = JSON.parse(raw) as ProjectRecord[]
-    return Array.isArray(parsed) ? parsed : [createDefaultProject(settings)]
-  } catch {
-    return [createDefaultProject(settings)]
-  }
-}
-
-function resolveSelection(
-  projects: ProjectRecord[],
-  selection?: StoredSelection
-) {
-  const selectedProject =
-    projects.find((project) => project.id === selection?.selectedProjectId) ??
-    projects[0]
-  const selectedSession =
-    selectedProject?.sessions.find(
-      (session) => session.id === selection?.selectedSessionId
-    ) ?? selectedProject?.sessions[0]
-
-  return {
-    selectedProjectId: selectedProject?.id ?? "",
-    selectedSessionId: selectedSession?.id ?? "",
-    selectedWorkspaceWidgetId:
-      selection?.selectedWorkspaceWidgetId ?? DEFAULT_WORKSPACE_WIDGET_ID,
-    workspaceTabsBySession: selection?.workspaceTabsBySession ?? {},
-  }
-}
-
-function loadSelection() {
-  try {
-    const raw = window.localStorage.getItem(SELECTION_STORAGE_KEY)
-    if (!raw) {
-      return undefined
-    }
-    return JSON.parse(raw) as StoredSelection
-  } catch {
-    return undefined
-  }
-}
-
-function loadInitialAppState(): InitialAppState {
-  const settings = loadSettings()
-  const projects = loadProjects(settings)
-  const selection = resolveSelection(projects, loadSelection())
-  return {
-    settings,
-    projects,
-    ...selection,
-  }
 }
 
 function chatKey(projectId: string, sessionId: string) {
@@ -906,7 +777,7 @@ function ChatArea({
               }
             }}
             className="min-h-14 w-full resize-none bg-transparent text-sm leading-6 outline-none placeholder:text-muted-foreground"
-            placeholder="Ask the agent to create or update a widget..."
+            placeholder="Ask the agent to create or update an extension..."
           />
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -1005,110 +876,58 @@ function ChatItemView({ item }: { item: ChatItem }) {
   )
 }
 
-const defaultWorkspaceTabWidgetIds = widgetsBySlot("workspace.tab").map(
-  (widget) => widget.id
-).filter(
-  (widgetId) => !REMOVED_DEFAULT_WORKSPACE_WIDGET_IDS.has(widgetId)
-)
-
-function createDefaultWorkspaceTabs(
-  selectedWorkspaceWidgetId = DEFAULT_WORKSPACE_WIDGET_ID
-): WorkspaceTabsState {
-  const tabs = defaultWorkspaceTabWidgetIds.map((widgetId) =>
-    createWorkspaceTab(widgetId, widgetId)
-  )
-  const defaultWidgetIds = new Set(defaultWorkspaceTabWidgetIds)
-  return {
-    tabs,
-    activeTabId: defaultWidgetIds.has(selectedWorkspaceWidgetId)
-      ? selectedWorkspaceWidgetId
-      : DEFAULT_WORKSPACE_WIDGET_ID,
-  }
-}
-
-function normalizeWorkspaceTabsState(
-  state: WorkspaceTabsState | undefined,
-  selectedWorkspaceWidgetId: string
-): WorkspaceTabsState {
-  if (!state?.tabs?.length) {
-    return createDefaultWorkspaceTabs(selectedWorkspaceWidgetId)
-  }
-  const tabs = state.tabs
-    .filter(
-      (tab) =>
-        !tab.widgetId ||
-        !REMOVED_DEFAULT_WORKSPACE_WIDGET_IDS.has(tab.widgetId)
-    )
-    .map((tab) => createWorkspaceTab(tab.widgetId ?? null, tab.id))
-  if (!tabs.length) {
-    return createDefaultWorkspaceTabs(selectedWorkspaceWidgetId)
-  }
-  const activeTabId = tabs.some((tab) => tab.id === state.activeTabId)
-    ? state.activeTabId
-    : tabs[0]?.id ?? ""
-  return { tabs, activeTabId }
-}
-
-function createWorkspaceTab(
-  widgetId: string | null,
-  id = createId("workspace-tab")
-): WorkspaceTab {
-  return {
-    id,
-    widgetId,
-  }
-}
-
 function Workspace({
   currentProject,
   currentSession,
   initialWorkspaceTabs,
   onCollapse,
-  selectedWorkspaceWidgetId,
-  workspaceKey,
+  selectedWorkspaceExtensionId,
   onWorkspaceTabsChange,
-  onSelectWorkspaceWidget,
+  onSelectWorkspaceExtension,
 }: {
   currentProject?: ProjectRecord
   currentSession?: SessionRecord
   initialWorkspaceTabs?: WorkspaceTabsState
   onCollapse: () => void
-  selectedWorkspaceWidgetId: string
-  workspaceKey: string
-  onWorkspaceTabsChange: (workspaceKey: string, state: WorkspaceTabsState) => void
-  onSelectWorkspaceWidget: (widgetId: string) => void
+  selectedWorkspaceExtensionId: string
+  onWorkspaceTabsChange: (state: WorkspaceTabsState) => void
+  onSelectWorkspaceExtension: (extensionId: string) => void
 }) {
   const [runtimeResult, setRuntimeResult] =
-    useState<OusiaRuntimeWidgetsResult | null>(null)
+    useState<OusiaRuntimeExtensionsResult | null>(null)
+  const [isManagingExtensions, setIsManagingExtensions] = useState(false)
+  const [selectedExtensionDirs, setSelectedExtensionDirs] = useState<Set<string>>(
+    () => new Set()
+  )
   const initialTabsState = normalizeWorkspaceTabsState(
     initialWorkspaceTabs,
-    selectedWorkspaceWidgetId
+    selectedWorkspaceExtensionId
   )
   const [tabs, setTabs] = useState<WorkspaceTab[]>(initialTabsState.tabs)
   const [activeTabId, setActiveTabId] = useState(initialTabsState.activeTabId)
-  const runtimeWidgets = useMemo(
+  const runtimeExtensions = useMemo(
     () =>
       runtimeResult
-        ? runtimeWidgetsToDefinitions(
-            runtimeResult.widgets,
+        ? runtimeExtensionsToDefinitions(
+            runtimeResult.extensions,
             runtimeResult.errors
           )
         : [],
     [runtimeResult]
   )
-  const workspaceWidgets = useMemo(
+  const workspaceExtensions = useMemo(
     () => [
-      ...widgetsBySlot("workspace.tab"),
-      ...runtimeWidgets.filter((widget) => widget.slot === "workspace.tab"),
+      ...extensionsBySlot("workspace.tab"),
+      ...runtimeExtensions.filter((extension) => extension.slot === "workspace.tab"),
     ],
-    [runtimeWidgets]
+    [runtimeExtensions]
   )
-  const widgetsById = useMemo(
-    () => new Map(workspaceWidgets.map((widget) => [widget.id, widget])),
-    [workspaceWidgets]
+  const extensionsById = useMemo(
+    () => new Map(workspaceExtensions.map((extension) => [extension.id, extension])),
+    [workspaceExtensions]
   )
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
-  const context: WidgetContext = {
+  const context: ExtensionContext = {
     project: {
       id: currentProject?.id ?? "",
       name: currentProject?.name ?? "No project",
@@ -1119,48 +938,127 @@ function Workspace({
       title: currentSession?.title ?? "No session",
     },
   }
-  const currentProjectPath = currentProject?.path
+  const manageableRuntimeExtensions = useMemo(
+    () => [
+      ...(runtimeResult?.extensions.map((extension) => ({
+        id: extension.id,
+        title: extension.title,
+        extensionDir: extension.extensionDir,
+        sourcePath: extension.sourcePath,
+        status: "ready" as const,
+      })) ?? []),
+      ...(runtimeResult?.errors.flatMap((error) =>
+        error.extensionDir
+          ? [
+              {
+                id: error.id,
+                title: error.title,
+                extensionDir: error.extensionDir,
+                sourcePath: error.sourcePath ?? error.extensionDir,
+                status: "error" as const,
+              },
+            ]
+          : []
+      ) ?? []),
+    ],
+    [runtimeResult]
+  )
 
   useEffect(() => {
-    if (!workspaceKey) {
-      return
-    }
-    onWorkspaceTabsChange(workspaceKey, { tabs, activeTabId })
-  }, [activeTabId, onWorkspaceTabsChange, tabs, workspaceKey])
-  const tabIcons = {
-    "custom.widget-overview": Widget6BoldDuotone,
+    onWorkspaceTabsChange({ tabs, activeTabId })
+  }, [activeTabId, onWorkspaceTabsChange, tabs])
+  const extensionIcons = {
+    "anime-grid": GalleryBoldDuotone,
+    dashboard: ChartSquareBoldDuotone,
+    "dashboard-2": ChartSquareBoldDuotone,
+    "ecom-dashboard": Shop2BoldDuotone,
+    profile: UserCircleBoldDuotone,
+    "skill-manager": CommandBoldDuotone,
+    todo: ChecklistBoldDuotone,
+    weather: Sun2BoldDuotone,
     "workspace.browser": GlobalBoldDuotone,
     "workspace.editor": CodeSquareBoldDuotone,
     "workspace.terminal": MonitorBoldDuotone,
   }
+  const extensionIconClasses = {
+    "anime-grid":
+      "bg-[linear-gradient(145deg,hsl(322_82%_67%),hsl(262_76%_55%))] text-white shadow-[0_10px_24px_hsl(282_74%_42%/0.24)]",
+    dashboard:
+      "bg-[linear-gradient(145deg,hsl(221_83%_60%),hsl(258_78%_52%))] text-white shadow-[0_10px_24px_hsl(238_74%_42%/0.24)]",
+    "dashboard-2":
+      "bg-[linear-gradient(145deg,hsl(221_83%_60%),hsl(258_78%_52%))] text-white shadow-[0_10px_24px_hsl(238_74%_42%/0.24)]",
+    "ecom-dashboard":
+      "bg-[linear-gradient(145deg,hsl(151_72%_48%),hsl(188_81%_40%))] text-white shadow-[0_10px_24px_hsl(169_72%_34%/0.24)]",
+    profile:
+      "bg-[linear-gradient(145deg,hsl(33_90%_58%),hsl(356_78%_58%))] text-white shadow-[0_10px_24px_hsl(12_76%_42%/0.24)]",
+    "skill-manager":
+      "bg-[linear-gradient(145deg,hsl(260_72%_62%),hsl(224_72%_48%))] text-white shadow-[0_10px_24px_hsl(242_74%_42%/0.24)]",
+    todo:
+      "bg-[linear-gradient(145deg,hsl(48_92%_58%),hsl(28_88%_52%))] text-white shadow-[0_10px_24px_hsl(34_86%_42%/0.24)]",
+    weather:
+      "bg-[linear-gradient(145deg,hsl(199_88%_58%),hsl(48_94%_58%))] text-white shadow-[0_10px_24px_hsl(196_78%_42%/0.22)]",
+    "workspace.browser":
+      "bg-[linear-gradient(145deg,hsl(202_90%_62%),hsl(219_82%_48%))] text-white shadow-[0_10px_24px_hsl(217_80%_36%/0.24)]",
+    "workspace.editor":
+      "bg-[linear-gradient(145deg,hsl(158_68%_55%),hsl(185_86%_39%))] text-white shadow-[0_10px_24px_hsl(182_72%_32%/0.22)]",
+    "workspace.terminal":
+      "bg-[linear-gradient(145deg,hsl(248_22%_22%),hsl(220_18%_10%))] text-white shadow-[0_10px_24px_hsl(220_18%_10%/0.28)]",
+  }
 
-  function getWidgetIcon(widgetId: string | null | undefined) {
-    if (!widgetId) {
+  function getExtensionIconKey(extensionId: string) {
+    if (extensionId.startsWith("runtime.extension.")) {
+      return extensionId.slice("runtime.extension.".length).split(".")[0]
+    }
+    if (extensionId.startsWith("runtime.global.")) {
+      return extensionId.slice("runtime.global.".length).split(".")[0]
+    }
+    return extensionId
+  }
+
+  function getExtensionIcon(extensionId: string | null | undefined) {
+    if (!extensionId) {
       return Plus
     }
-    return tabIcons[widgetId as keyof typeof tabIcons] ?? Widget6BoldDuotone
+    const iconKey = getExtensionIconKey(extensionId)
+    return (
+      extensionIcons[iconKey as keyof typeof extensionIcons] ??
+      Widget6BoldDuotone
+    )
   }
 
-  function getWidgetTitle(tab: WorkspaceTab) {
-    if (!tab.widgetId) {
+  function getLauncherIconClass(extensionId: string) {
+    const iconKey = getExtensionIconKey(extensionId)
+    const mappedClass =
+      extensionIconClasses[iconKey as keyof typeof extensionIconClasses]
+    if (mappedClass) {
+      return mappedClass
+    }
+    if (extensionId.startsWith("runtime.")) {
+      return "bg-[linear-gradient(145deg,hsl(var(--primary)),hsl(213_74%_45%))] text-primary-foreground shadow-[0_10px_24px_hsl(var(--primary)/0.22)]"
+    }
+    return "bg-[linear-gradient(145deg,hsl(var(--muted)),hsl(var(--card)))] text-muted-foreground shadow-[0_10px_24px_hsl(220_10%_10%/0.12)]"
+  }
+
+  function getExtensionTitle(tab: WorkspaceTab) {
+    if (!tab.extensionId) {
       return "New Tab"
     }
-    return widgetsById.get(tab.widgetId)?.title ?? "Missing widget"
+    return extensionsById.get(tab.extensionId)?.title ?? "Missing extension"
   }
 
-  function isEdgeToEdgeWidget(widgetId: string | null | undefined) {
+  function isEdgeToEdgeExtension(extensionId: string | null | undefined) {
     return (
-      widgetId === "workspace.browser" ||
-      widgetId === "workspace.editor" ||
-      widgetId === "workspace.terminal" ||
-      widgetId?.startsWith("runtime.") === true
+      extensionId === "workspace.browser" ||
+      extensionId === "workspace.editor" ||
+      extensionId === "workspace.terminal" ||
+      extensionId?.startsWith("runtime.") === true
     )
   }
 
   function handleSelectTab(tab: WorkspaceTab) {
     setActiveTabId(tab.id)
-    if (tab.widgetId) {
-      onSelectWorkspaceWidget(tab.widgetId)
+    if (tab.extensionId) {
+      onSelectWorkspaceExtension(tab.extensionId)
     }
   }
 
@@ -1168,6 +1066,7 @@ function Workspace({
     const tab = createWorkspaceTab(null)
     setTabs((current) => [...current, tab])
     setActiveTabId(tab.id)
+    setIsManagingExtensions(false)
   }
 
   function handleCloseTab(tabId: string) {
@@ -1178,72 +1077,110 @@ function Workspace({
         const nextActive =
           next[Math.min(closingIndex, next.length - 1)] ?? next.at(-1)
         setActiveTabId(nextActive?.id ?? "")
-        if (nextActive?.widgetId) {
-          onSelectWorkspaceWidget(nextActive.widgetId)
+        if (nextActive?.extensionId) {
+          onSelectWorkspaceExtension(nextActive.extensionId)
         }
       }
       return next
     })
   }
 
-  function handleChooseWidget(widgetId: string) {
+  function handleChooseExtension(extensionId: string) {
+    setIsManagingExtensions(false)
     if (!activeTab) {
-      const tab = createWorkspaceTab(widgetId)
+      const tab = createWorkspaceTab(extensionId)
       setTabs([tab])
       setActiveTabId(tab.id)
-      onSelectWorkspaceWidget(widgetId)
+      onSelectWorkspaceExtension(extensionId)
       return
     }
     setTabs((current) =>
       current.map((tab) =>
-        tab.id === activeTab.id ? { ...tab, widgetId } : tab
+        tab.id === activeTab.id ? { ...tab, extensionId } : tab
       )
     )
-    onSelectWorkspaceWidget(widgetId)
+    onSelectWorkspaceExtension(extensionId)
   }
 
-  const refreshRuntimeWidgets = useCallback(async () => {
+  function toggleManagedExtension(extensionDir: string) {
+    setSelectedExtensionDirs((current) => {
+      const next = new Set(current)
+      if (next.has(extensionDir)) {
+        next.delete(extensionDir)
+      } else {
+        next.add(extensionDir)
+      }
+      return next
+    })
+  }
+
+  async function deleteSelectedRuntimeExtensions() {
+    if (!window.ousia || !selectedExtensionDirs.size) {
+      return
+    }
+    const selectedDirs = new Set(selectedExtensionDirs)
+    const selectedIds = new Set(
+      manageableRuntimeExtensions
+        .filter((extension) => selectedDirs.has(extension.extensionDir))
+        .map((extension) => extension.id)
+    )
+    await Promise.all(
+      [...selectedDirs].map((extensionDir) =>
+        window.ousia!.deleteRuntimeExtension({ extensionDir })
+      )
+    )
+    setSelectedExtensionDirs(new Set())
+    setTabs((current) => {
+      const next = current.filter(
+        (tab) => !tab.extensionId || !selectedIds.has(tab.extensionId)
+      )
+      if (!next.length) {
+        return [createWorkspaceTab(null)]
+      }
+      if (next.every((tab) => tab.id !== activeTabId)) {
+        setActiveTabId(next[0].id)
+      }
+      return next
+    })
+    await refreshRuntimeExtensions()
+  }
+
+  const refreshRuntimeExtensions = useCallback(async () => {
     if (!window.ousia) {
       return
     }
     try {
-      setRuntimeResult(
-        await window.ousia.listRuntimeWidgets({
-          projectPath: currentProjectPath,
-        })
-      )
+      setRuntimeResult(await window.ousia.listRuntimeExtensions())
     } catch {
-      // Runtime widgets are optional; workspace system tabs still work.
+      // Runtime extensions are optional; workspace system tabs still work.
     }
-  }, [currentProjectPath])
+  }, [])
 
   useEffect(() => {
     if (!window.ousia) {
       return
     }
     let isCancelled = false
-    const removeRuntimeWidgetsChangedListener =
-      window.ousia.onRuntimeWidgetsChanged(() => {
-        void refreshRuntimeWidgets()
+    const removeRuntimeExtensionsChangedListener =
+      window.ousia.onRuntimeExtensionsChanged(() => {
+        void refreshRuntimeExtensions()
       })
     window.ousia
-      .watchRuntimeWidgets({
-        projectPath: currentProjectPath,
-      })
+      .watchRuntimeExtensions()
       .then((result) => {
         if (!isCancelled) {
           setRuntimeResult(result)
         }
       })
       .catch(() => {
-        // Runtime widgets are optional; workspace system tabs still work.
+        // Runtime extensions are optional; workspace system tabs still work.
       })
     return () => {
       isCancelled = true
-      removeRuntimeWidgetsChangedListener()
-      void window.ousia?.unwatchRuntimeWidgets()
+      removeRuntimeExtensionsChangedListener()
+      void window.ousia?.unwatchRuntimeExtensions()
     }
-  }, [currentProjectPath, refreshRuntimeWidgets])
+  }, [refreshRuntimeExtensions])
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-background">
@@ -1254,7 +1191,7 @@ function Workspace({
           aria-label="Workspace tabs"
         >
           {tabs.map((tab) => {
-            const Icon = getWidgetIcon(tab.widgetId)
+            const Icon = getExtensionIcon(tab.extensionId)
             const isActive = tab.id === activeTab?.id
             return (
               <Button
@@ -1266,7 +1203,7 @@ function Workspace({
                 size="sm"
                 className="group/tab min-w-0 max-w-44 shrink-0"
                 onClick={() => handleSelectTab(tab)}
-                title={getWidgetTitle(tab)}
+                title={getExtensionTitle(tab)}
               >
                 <span className="relative grid size-5 shrink-0 place-items-center">
                   <Icon className="size-5 transition-opacity group-hover/tab:opacity-0" />
@@ -1281,7 +1218,7 @@ function Workspace({
                     <X className="size-4" strokeWidth={2.2} />
                   </span>
                 </span>
-                <span className="min-w-0 truncate">{getWidgetTitle(tab)}</span>
+                <span className="min-w-0 truncate">{getExtensionTitle(tab)}</span>
               </Button>
             )
           })}
@@ -1307,14 +1244,14 @@ function Workspace({
         </Button>
       </div>
 
-      {activeTab?.widgetId ? (
+      {activeTab?.extensionId ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           {tabs.map((tab) => {
-            if (!tab.widgetId) {
+            if (!tab.extensionId) {
               return null
             }
-            const widget = widgetsById.get(tab.widgetId)
-            if (!widget) {
+            const extension = extensionsById.get(tab.extensionId)
+            if (!extension) {
               return null
             }
             return (
@@ -1323,36 +1260,140 @@ function Workspace({
                 hidden={tab.id !== activeTab.id}
                 className={[
                   "h-full min-h-0 overflow-auto",
-                  isEdgeToEdgeWidget(tab.widgetId) ? "p-0" : "p-4",
+                  isEdgeToEdgeExtension(tab.extensionId) ? "p-0" : "p-4",
                 ].join(" ")}
               >
-                <WidgetSlot widget={widget} context={context} />
+                <ExtensionSlot extension={extension} context={context} />
               </div>
             )
           })}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto p-4">
-          <div className="grid grid-cols-4 gap-3">
-            {workspaceWidgets.map((widget) => {
-              const Icon = getWidgetIcon(widget.id)
-              return (
-                <button
-                  key={widget.id}
+        <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+          <div className="mb-5 flex items-center justify-end gap-2">
+            {isManagingExtensions ? (
+              <>
+                <Button
                   type="button"
-                  className="group flex min-h-28 min-w-0 flex-col items-start justify-between rounded-lg border bg-card p-4 text-left text-card-foreground transition-colors hover:border-ring/60 hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                  onClick={() => handleChooseWidget(widget.id)}
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setIsManagingExtensions(false)
+                    setSelectedExtensionDirs(new Set())
+                  }}
                 >
-                  <span className="grid size-10 place-items-center rounded-lg bg-muted text-muted-foreground transition-colors group-hover:bg-background group-hover:text-foreground">
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="min-w-0 max-w-full truncate text-sm font-medium">
-                    {widget.title}
-                  </span>
-                </button>
-              )
-            })}
+                  Done
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={!selectedExtensionDirs.size}
+                  onClick={() => void deleteSelectedRuntimeExtensions()}
+                >
+                  <HugeiconsIcon
+                    icon={Delete02Icon}
+                    size={16}
+                    strokeWidth={1.8}
+                  />
+                  Delete
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsManagingExtensions(true)}
+              >
+                Manage extensions
+              </Button>
+            )}
           </div>
+
+          {isManagingExtensions ? (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-x-8 gap-y-8">
+              {manageableRuntimeExtensions.length ? (
+                manageableRuntimeExtensions.map((extension) => {
+                  const isSelected = selectedExtensionDirs.has(
+                    extension.extensionDir
+                  )
+                  const Icon = getExtensionIcon(extension.id)
+                  return (
+                    <button
+                      key={extension.extensionDir}
+                      type="button"
+                      className={[
+                        "group flex min-w-0 flex-col items-center gap-3 rounded-xl px-2 py-2 text-center text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                        isSelected ? "bg-accent" : "",
+                      ].join(" ")}
+                      onClick={() =>
+                        toggleManagedExtension(extension.extensionDir)
+                      }
+                    >
+                      <span
+                        className={[
+                          "relative grid size-20 shrink-0 place-items-center rounded-[22px] border border-white/20 ring-1 ring-black/5 transition-transform group-hover:-translate-y-0.5",
+                          getLauncherIconClass(extension.id),
+                        ].join(" ")}
+                      >
+                        <Icon className="size-10" />
+                        <span
+                          aria-hidden="true"
+                          className={[
+                            "absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full border shadow-sm",
+                            isSelected
+                              ? "border-background bg-ring"
+                              : "border-white/45 bg-background/80 opacity-0 group-hover:opacity-100",
+                          ].join(" ")}
+                        />
+                      </span>
+                      <span className="min-w-0 max-w-full px-1">
+                        <span className="block truncate text-sm font-medium leading-tight">
+                          {extension.title}
+                        </span>
+                        <span className="mt-1 block truncate text-xs leading-tight text-muted-foreground">
+                          {extension.status === "error"
+                            ? "Failed"
+                            : "User-local"}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })
+              ) : (
+                <div className="col-span-full rounded-lg border bg-card p-6 text-sm text-muted-foreground">
+                  No runtime extensions found.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-x-8 gap-y-8">
+              {workspaceExtensions.map((extension) => {
+                const Icon = getExtensionIcon(extension.id)
+                return (
+                  <button
+                    key={extension.id}
+                    type="button"
+                    className="group flex min-w-0 flex-col items-center gap-3 rounded-xl px-2 py-2 text-center text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    onClick={() => handleChooseExtension(extension.id)}
+                  >
+                    <span
+                      className={[
+                        "grid size-20 shrink-0 place-items-center rounded-[22px] border border-white/20 ring-1 ring-black/5 transition-transform group-hover:-translate-y-0.5",
+                        getLauncherIconClass(extension.id),
+                      ].join(" ")}
+                    >
+                      <Icon className="size-10" />
+                    </span>
+                    <span className="min-w-0 max-w-full truncate px-1 text-sm font-medium leading-tight">
+                      {extension.title}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </section>
@@ -1617,6 +1658,7 @@ export function App() {
   const [sidebarWidth, setSidebarWidth] = useState(256)
   const [chatWidth, setChatWidth] = useState(520)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isShellResizing, setIsShellResizing] = useState(false)
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false)
   const [isWorkspaceCollapsed, setIsWorkspaceCollapsed] = useState(false)
   const [settings, setSettings] = useState<AppSettings>(initialState.settings)
@@ -1630,12 +1672,12 @@ export function App() {
   const [selectedSessionId, setSelectedSessionId] = useState(
     initialState.selectedSessionId
   )
-  const [selectedWorkspaceWidgetId, setSelectedWorkspaceWidgetId] = useState(
-    initialState.selectedWorkspaceWidgetId
+  const [selectedWorkspaceExtensionId, setSelectedWorkspaceExtensionId] = useState(
+    initialState.selectedWorkspaceExtensionId
   )
-  const [workspaceTabsBySession, setWorkspaceTabsBySession] = useState<
-    Record<string, WorkspaceTabsState>
-  >(initialState.workspaceTabsBySession)
+  const [workspaceTabs, setWorkspaceTabs] = useState<WorkspaceTabsState>(
+    initialState.workspaceTabs
+  )
   const [itemsBySession, setItemsBySession] = useState<
     Record<string, ChatItem[]>
   >({})
@@ -1653,38 +1695,31 @@ export function App() {
   const selectedItems = selectedChatKey
     ? (itemsBySession[selectedChatKey] ?? [])
     : []
-
   useEffect(() => {
-    window.localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects))
+    saveProjects(projects)
   }, [projects])
 
   useEffect(() => {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+    saveSettings(settings)
   }, [settings])
 
   useEffect(() => {
-    window.localStorage.setItem(
-      SELECTION_STORAGE_KEY,
-      JSON.stringify({
-        selectedProjectId: selectedProject?.id ?? "",
-        selectedSessionId: selectedSession?.id ?? "",
-        selectedWorkspaceWidgetId,
-        workspaceTabsBySession,
-      })
-    )
+    saveSelection({
+      selectedProjectId: selectedProject?.id ?? "",
+      selectedSessionId: selectedSession?.id ?? "",
+      selectedWorkspaceExtensionId,
+      workspaceTabs,
+    })
   }, [
     selectedProject?.id,
     selectedSession?.id,
-    selectedWorkspaceWidgetId,
-    workspaceTabsBySession,
+    selectedWorkspaceExtensionId,
+    workspaceTabs,
   ])
 
   const handleWorkspaceTabsChange = useCallback(
-    (workspaceKey: string, state: WorkspaceTabsState) => {
-      setWorkspaceTabsBySession((current) => ({
-        ...current,
-        [workspaceKey]: state,
-      }))
+    (state: WorkspaceTabsState) => {
+      setWorkspaceTabs(state)
     },
     []
   )
@@ -1848,13 +1883,6 @@ export function App() {
       }
       return next
     })
-    setWorkspaceTabsBySession((current) => {
-      const next = { ...current }
-      for (const session of project.sessions) {
-        delete next[chatKey(project.id, session.id)]
-      }
-      return next
-    })
 
     if (selectedProjectId === projectId) {
       const nextProject =
@@ -1950,11 +1978,6 @@ export function App() {
       delete next[chatKey(projectId, sessionId)]
       return next
     })
-    setWorkspaceTabsBySession((current) => {
-      const next = { ...current }
-      delete next[chatKey(projectId, sessionId)]
-      return next
-    })
     if (selectedProjectId === projectId && selectedSessionId === sessionId) {
       setSelectedSessionId(remaining[0]?.id ?? "")
     }
@@ -1985,6 +2008,8 @@ export function App() {
 
   function beginSidebarResize(event: PointerEvent<HTMLDivElement>) {
     event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setIsShellResizing(true)
     const startX = event.clientX
     const startSidebarWidth = sidebarWidth
     const shellWidth = getShellWidth()
@@ -1992,6 +2017,9 @@ export function App() {
     function stopSidebarResize() {
       window.removeEventListener("pointermove", handlePointerMove)
       window.removeEventListener("pointerup", handlePointerUp)
+      window.removeEventListener("pointercancel", handlePointerUp)
+      window.removeEventListener("blur", handlePointerUp)
+      setIsShellResizing(false)
     }
 
     function handlePointerMove(moveEvent: globalThis.PointerEvent) {
@@ -2020,10 +2048,14 @@ export function App() {
 
     window.addEventListener("pointermove", handlePointerMove)
     window.addEventListener("pointerup", handlePointerUp, { once: true })
+    window.addEventListener("pointercancel", handlePointerUp, { once: true })
+    window.addEventListener("blur", handlePointerUp, { once: true })
   }
 
   function beginChatResize(event: PointerEvent<HTMLDivElement>) {
     event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    setIsShellResizing(true)
     const startX = event.clientX
     const startChatWidth = chatWidth
     const shellWidth = getShellWidth()
@@ -2043,15 +2075,21 @@ export function App() {
     function handlePointerUp() {
       window.removeEventListener("pointermove", handlePointerMove)
       window.removeEventListener("pointerup", handlePointerUp)
+      window.removeEventListener("pointercancel", handlePointerUp)
+      window.removeEventListener("blur", handlePointerUp)
+      setIsShellResizing(false)
     }
 
     window.addEventListener("pointermove", handlePointerMove)
     window.addEventListener("pointerup", handlePointerUp, { once: true })
+    window.addEventListener("pointercancel", handlePointerUp, { once: true })
+    window.addEventListener("blur", handlePointerUp, { once: true })
   }
 
   return (
     <main
       ref={shellRef}
+      data-shell-resizing={isShellResizing ? "true" : undefined}
       className="relative flex h-svh overflow-hidden bg-background text-foreground"
     >
       {isSidebarCollapsed ? null : (
@@ -2104,15 +2142,13 @@ export function App() {
                 onPointerDown={beginChatResize}
               />
               <Workspace
-                key={selectedChatKey}
                 currentProject={selectedProject}
                 currentSession={selectedSession}
-                initialWorkspaceTabs={workspaceTabsBySession[selectedChatKey]}
+                initialWorkspaceTabs={workspaceTabs}
                 onCollapse={() => setIsWorkspaceCollapsed(true)}
-                selectedWorkspaceWidgetId={selectedWorkspaceWidgetId}
-                workspaceKey={selectedChatKey}
+                selectedWorkspaceExtensionId={selectedWorkspaceExtensionId}
                 onWorkspaceTabsChange={handleWorkspaceTabsChange}
-                onSelectWorkspaceWidget={setSelectedWorkspaceWidgetId}
+                onSelectWorkspaceExtension={setSelectedWorkspaceExtensionId}
               />
             </>
           )}

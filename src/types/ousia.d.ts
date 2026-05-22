@@ -12,9 +12,10 @@ import type {
   OusiaEditorSaveFilePayload,
   OusiaEditorSaveFileResult,
   OusiaOpenProjectResult,
-  OusiaRuntimeWidgetsChangedEvent,
-  OusiaRuntimeWidgetsPayload,
-  OusiaRuntimeWidgetsResult,
+  OusiaRuntimeExtensionDeletePayload,
+  OusiaRuntimeExtensionDeleteResult,
+  OusiaRuntimeExtensionsChangedEvent,
+  OusiaRuntimeExtensionsResult,
   OusiaTerminalCreatePayload,
   OusiaTerminalCreateResult,
   OusiaTerminalDisposePayload,
@@ -45,15 +46,14 @@ declare global {
       saveEditorFile(
         payload: OusiaEditorSaveFilePayload
       ): Promise<OusiaEditorSaveFileResult>
-      listRuntimeWidgets(
-        payload?: OusiaRuntimeWidgetsPayload
-      ): Promise<OusiaRuntimeWidgetsResult>
-      watchRuntimeWidgets(
-        payload?: OusiaRuntimeWidgetsPayload
-      ): Promise<OusiaRuntimeWidgetsResult>
-      unwatchRuntimeWidgets(): Promise<void>
-      onRuntimeWidgetsChanged(
-        callback: (event: OusiaRuntimeWidgetsChangedEvent) => void
+      listRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult>
+      watchRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult>
+      unwatchRuntimeExtensions(): Promise<void>
+      deleteRuntimeExtension(
+        payload: OusiaRuntimeExtensionDeletePayload
+      ): Promise<OusiaRuntimeExtensionDeleteResult>
+      onRuntimeExtensionsChanged(
+        callback: (event: OusiaRuntimeExtensionsChangedEvent) => void
       ): () => void
       createTerminal(
         payload: OusiaTerminalCreatePayload
