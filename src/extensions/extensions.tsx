@@ -11,7 +11,7 @@ function requireRuntimeDependency(name: string) {
   if (name === "react") {
     return React
   }
-  throw new Error(`Runtime extension dependency is not available: ${name}`)
+  throw new Error(`运行时扩展依赖不可用：${name}`)
 }
 
 function createRuntimeComponent(extension: OusiaRuntimeExtension) {
@@ -34,7 +34,7 @@ return module.exports.default ?? module.exports.App ?? module.exports;`
 
   if (typeof component !== "function") {
     throw new Error(
-      `Runtime extension "${extension.title}" must export a component.`
+      `运行时扩展「${extension.title}」必须导出一个组件。`
     )
   }
 
@@ -49,23 +49,69 @@ function createRuntimeExtensionWrapper(extension: OusiaRuntimeExtension) {
   }
 }
 
+function formatDistribution(value: OusiaRuntimeExtensionError["distribution"]) {
+  if (value === "user-local") {
+    return "本地用户扩展"
+  }
+  return value
+}
+
+function formatTrust(value: OusiaRuntimeExtensionError["trust"]) {
+  if (value === "local-user") {
+    return "本地用户"
+  }
+  return value
+}
+
 function RuntimeExtensionErrorPanel({
   error,
 }: {
   error: OusiaRuntimeExtensionError
 }) {
   return (
-    <div className="rounded-xl border border-destructive/30 bg-card p-4 text-sm text-card-foreground shadow-sm">
-      <div className="font-medium">{error.title} failed to load</div>
-      <div className="mt-1 text-muted-foreground">{error.message}</div>
-      <div className="mt-2 text-xs text-muted-foreground">
-        User-local extension
-      </div>
-      {error.sourcePath ? (
-        <div className="mt-3 rounded-lg bg-muted px-3 py-2 font-mono text-xs break-all text-muted-foreground">
-          {error.sourcePath}
+    <div className="ousia-hover-scrollbar flex h-full min-h-0 flex-col overflow-auto bg-background p-6 text-card-foreground">
+      <div className="mx-auto w-full max-w-3xl">
+        <div className="text-xs font-medium text-destructive">
+          运行时扩展错误
         </div>
-      ) : null}
+        <h2 className="mt-2 text-xl font-semibold">{error.title}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Ousia 加载这个本地用户扩展的运行时包时失败。修复扩展文件后，
+          文件监听刷新时会自动重试。
+        </p>
+
+        <section className="mt-5 rounded-lg border border-destructive/30 bg-card p-4">
+          <div className="text-sm font-medium">加载错误</div>
+          <pre className="ousia-hover-scrollbar mt-3 max-h-64 overflow-auto rounded-md bg-muted p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-muted-foreground">
+            {error.message}
+          </pre>
+        </section>
+
+        <dl className="mt-5 grid gap-3 rounded-lg border bg-card p-4 text-sm sm:grid-cols-[140px_minmax(0,1fr)]">
+          <dt className="text-muted-foreground">ID</dt>
+          <dd className="min-w-0 break-all font-mono text-xs">{error.id}</dd>
+          <dt className="text-muted-foreground">分发类型</dt>
+          <dd>{formatDistribution(error.distribution)}</dd>
+          <dt className="text-muted-foreground">信任级别</dt>
+          <dd>{formatTrust(error.trust)}</dd>
+          {error.extensionDir ? (
+            <>
+              <dt className="text-muted-foreground">扩展目录</dt>
+              <dd className="min-w-0 break-all font-mono text-xs">
+                {error.extensionDir}
+              </dd>
+            </>
+          ) : null}
+          {error.sourcePath ? (
+            <>
+              <dt className="text-muted-foreground">来源</dt>
+              <dd className="min-w-0 break-all font-mono text-xs">
+                {error.sourcePath}
+              </dd>
+            </>
+          ) : null}
+        </dl>
+      </div>
     </div>
   )
 }

@@ -31,7 +31,7 @@ class ExtensionErrorBoundary extends Component<
     if (this.state.error) {
       return (
         <div className="rounded-xl border bg-card p-4 text-sm text-card-foreground">
-          <div className="font-medium">{this.props.title} failed</div>
+          <div className="font-medium">{this.props.title} 运行失败</div>
           <div className="mt-1 text-muted-foreground">
             {this.state.error.message}
           </div>
