@@ -11,6 +11,203 @@ export type OusiaThinkingLevel =
   | "high"
   | "xhigh"
 
+export type OusiaAppearanceColorScale =
+  | "tea"
+  | "cloudTea"
+  | "sand"
+  | "gray"
+  | "slate"
+  | "mauve"
+  | "sage"
+  | "olive"
+
+export type OusiaWorkspaceTab = {
+  id: string
+  extensionId: string | null
+  resource?: OusiaWorkspaceTabResource
+}
+
+export type OusiaWorkspaceTabResource = {
+  kind: "file"
+  path: string
+  name?: string
+  projectPath?: string
+}
+
+export type OusiaWorkspaceTabsState = {
+  activeTabId: string
+  tabs: OusiaWorkspaceTab[]
+}
+
+export type OusiaAppStateSchemaVersion = 2
+
+export type OusiaSessionRecord = {
+  id: string
+  projectId?: string
+  title: string
+  time: string
+}
+
+export type OusiaProjectRecord = {
+  id: string
+  name: string
+  path: string
+}
+
+export type OusiaAppSettings = {
+  appearanceColorScale: OusiaAppearanceColorScale
+  defaultWorkDir: string
+  thinkingLevel: OusiaThinkingLevel
+  modelProvider: string
+  modelId: string
+  modelApiKey: string
+}
+
+export type OusiaAppSelectionState = {
+  expandedProjectIds: string[]
+  selectedProjectId: string
+  selectedSessionId: string
+  selectedWorkspaceExtensionId: string
+  workspaceTabs: OusiaWorkspaceTabsState
+}
+
+export type OusiaAppState = {
+  schemaVersion: OusiaAppStateSchemaVersion
+  settings: OusiaAppSettings
+  sessions: OusiaSessionRecord[]
+  projects: OusiaProjectRecord[]
+} & OusiaAppSelectionState
+
+export type OusiaAppStateSaveResult = {
+  ok: boolean
+}
+
+export type OusiaExtensionStateScope =
+  | "global"
+  | "project"
+  | "tab"
+  | "resource"
+
+export type OusiaExtensionStatePayload = {
+  extensionId: string
+  scope: OusiaExtensionStateScope
+  key: string
+}
+
+export type OusiaExtensionStateGetPayload = OusiaExtensionStatePayload
+
+export type OusiaExtensionStateSetPayload = OusiaExtensionStatePayload & {
+  value: unknown
+}
+
+export type OusiaExtensionStateDeletePayload = OusiaExtensionStatePayload
+
+export type OusiaExtensionStateResult = {
+  value: unknown
+}
+
+export type OusiaExtensionStateSaveResult = {
+  ok: boolean
+}
+
+export type OusiaWindowResizeAnchor = "left" | "right"
+
+export type OusiaEnsureWindowWidthPayload = {
+  anchor: OusiaWindowResizeAnchor
+  minWidth: number
+}
+
+export type OusiaEnsureWindowWidthResult = {
+  ok: boolean
+  width: number
+}
+
+export const OUSIA_APP_STATE_SCHEMA_VERSION = 2
+export const OUSIA_DEFAULT_WORKSPACE_EXTENSION_ID =
+  "extension.firstParty.browser"
+
+export const defaultOusiaAppSettings: OusiaAppSettings = {
+  appearanceColorScale: "tea",
+  defaultWorkDir: "~/Ousia",
+  thinkingLevel: "medium",
+  modelProvider: "deepseek",
+  modelId: "deepseek-v4-flash",
+  modelApiKey: "",
+}
+
+export function createOusiaId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+export function createOusiaSession(title = "新会话"): OusiaSessionRecord {
+  return {
+    id: createOusiaId("session"),
+    title,
+    time: "now",
+  }
+}
+
+export function createOusiaProject(
+  path: string,
+  name = ousiaProjectNameFromPath(path)
+): OusiaProjectRecord {
+  return {
+    id: createOusiaId("project"),
+    name,
+    path,
+  }
+}
+
+export function ousiaProjectNameFromPath(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
+}
+
+export function createDefaultOusiaWorkspaceTabs(): OusiaWorkspaceTabsState {
+  return {
+    activeTabId: OUSIA_DEFAULT_WORKSPACE_EXTENSION_ID,
+    tabs: [
+      {
+        id: "extension.firstParty.browser",
+        extensionId: "extension.firstParty.browser",
+      },
+      {
+        id: "extension.firstParty.editor",
+        extensionId: "extension.firstParty.editor",
+      },
+      {
+        id: "extension.firstParty.terminal",
+        extensionId: "extension.firstParty.terminal",
+      },
+    ],
+  }
+}
+
+export function createDefaultOusiaProject(
+  settings = defaultOusiaAppSettings
+): OusiaProjectRecord {
+  return {
+    id: "default-workdir",
+    name: ousiaProjectNameFromPath(settings.defaultWorkDir),
+    path: settings.defaultWorkDir,
+  }
+}
+
+export function createDefaultOusiaAppState(): OusiaAppState {
+  const sessions = [createOusiaSession()]
+
+  return {
+    schemaVersion: OUSIA_APP_STATE_SCHEMA_VERSION,
+    settings: defaultOusiaAppSettings,
+    sessions,
+    projects: [],
+    expandedProjectIds: [],
+    selectedProjectId: "",
+    selectedSessionId: sessions[0].id,
+    selectedWorkspaceExtensionId: OUSIA_DEFAULT_WORKSPACE_EXTENSION_ID,
+    workspaceTabs: createDefaultOusiaWorkspaceTabs(),
+  }
+}
+
 export type OusiaModelSettings = {
   provider: string
   modelId: string
@@ -31,6 +228,9 @@ export type OusiaChatHistoryItem =
       role: "tool"
       name: string
       text: string
+      input?: string
+      output?: string
+      errorText?: string
       status: "running" | "finished" | "failed"
     }
 
@@ -116,6 +316,21 @@ export type OusiaChatSendResult = {
   ok: boolean
 }
 
+export type OusiaChatGenerateTitlePayload = {
+  prompt: string
+  model: OusiaModelSettings
+}
+
+export type OusiaChatGenerateTitleResult =
+  | {
+      ok: true
+      title: string
+    }
+  | {
+      ok: false
+      error: string
+    }
+
 export type OusiaChatInterruptResult = {
   ok: boolean
 }
@@ -145,6 +360,7 @@ export type OusiaEditorFileEntry = {
   name: string
   depth: number
   extension: string
+  kind: "directory" | "file"
 }
 
 export type OusiaEditorListFilesPayload = {
@@ -173,6 +389,58 @@ export type OusiaEditorSaveFilePayload = {
 
 export type OusiaEditorSaveFileResult = {
   ok: boolean
+}
+
+export type OusiaPdfFileEntry = {
+  path: string
+  name: string
+  depth: number
+  extension: "pdf"
+  size: number
+  mtimeMs: number
+}
+
+export type OusiaPdfListFilesPayload = {
+  projectPath: string
+}
+
+export type OusiaPdfListFilesResult = {
+  files: OusiaPdfFileEntry[]
+}
+
+export type OusiaPdfReadFilePayload = {
+  projectPath: string
+  path: string
+}
+
+export type OusiaPdfReadFileResult = {
+  contentBase64: string
+  path: string
+  size: number
+  mtimeMs: number
+}
+
+export type OusiaPdfSaveFilePayload = {
+  projectPath: string
+  path: string
+  contentBase64: string
+}
+
+export type OusiaPdfSaveFileResult = {
+  ok: boolean
+  path: string
+  size: number
+  mtimeMs: number
+}
+
+export type OusiaExtensionActionName = "openAndFocus" | "openFile" | string
+
+export type OusiaWorkspaceAction = {
+  type: "extension.invoke"
+  extensionId: string
+  action: OusiaExtensionActionName
+  args?: unknown
+  requestId: string
 }
 
 export type OusiaTerminalContext = OusiaChatContext & {
@@ -266,3 +534,5 @@ export type OusiaRuntimeExtensionsResult = {
 export type OusiaWindowFullscreenEvent = {
   isFullscreen: boolean
 }
+
+export type OusiaWindowFullscreenResult = OusiaWindowFullscreenEvent

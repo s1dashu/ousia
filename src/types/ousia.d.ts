@@ -1,6 +1,10 @@
 import type {
+  OusiaAppState,
+  OusiaAppStateSaveResult,
   OusiaChatContext,
   OusiaChatEvent,
+  OusiaChatGenerateTitlePayload,
+  OusiaChatGenerateTitleResult,
   OusiaChatHistoryResult,
   OusiaChatInterruptResult,
   OusiaChatSendPayload,
@@ -11,7 +15,20 @@ import type {
   OusiaEditorReadFileResult,
   OusiaEditorSaveFilePayload,
   OusiaEditorSaveFileResult,
+  OusiaEnsureWindowWidthPayload,
+  OusiaEnsureWindowWidthResult,
+  OusiaExtensionStateDeletePayload,
+  OusiaExtensionStateGetPayload,
+  OusiaExtensionStateResult,
+  OusiaExtensionStateSaveResult,
+  OusiaExtensionStateSetPayload,
   OusiaOpenProjectResult,
+  OusiaPdfListFilesPayload,
+  OusiaPdfListFilesResult,
+  OusiaPdfReadFilePayload,
+  OusiaPdfReadFileResult,
+  OusiaPdfSaveFilePayload,
+  OusiaPdfSaveFileResult,
   OusiaRuntimeExtensionDeletePayload,
   OusiaRuntimeExtensionDeleteResult,
   OusiaRuntimeExtensionsChangedEvent,
@@ -23,20 +40,39 @@ import type {
   OusiaTerminalOperationResult,
   OusiaTerminalResizePayload,
   OusiaTerminalWritePayload,
+  OusiaWorkspaceAction,
   OusiaWindowFullscreenEvent,
 } from "../electron/chat-types"
 
 declare global {
   interface Window {
     ousia?: {
+      loadAppState(): Promise<OusiaAppState>
+      saveAppState(payload: OusiaAppState): Promise<OusiaAppStateSaveResult>
+      getExtensionState(
+        payload: OusiaExtensionStateGetPayload
+      ): Promise<OusiaExtensionStateResult>
+      setExtensionState(
+        payload: OusiaExtensionStateSetPayload
+      ): Promise<OusiaExtensionStateSaveResult>
+      deleteExtensionState(
+        payload: OusiaExtensionStateDeletePayload
+      ): Promise<OusiaExtensionStateSaveResult>
       sendChatMessage(
         payload: OusiaChatSendPayload
       ): Promise<OusiaChatSendResult>
+      generateChatTitle(
+        payload: OusiaChatGenerateTitlePayload
+      ): Promise<OusiaChatGenerateTitleResult>
       getChatHistory(payload: OusiaChatContext): Promise<OusiaChatHistoryResult>
       interruptChat(
         payload: OusiaChatContext
       ): Promise<OusiaChatInterruptResult>
       openProjectDirectory(): Promise<OusiaOpenProjectResult>
+      ensureWindowWidth(
+        payload: OusiaEnsureWindowWidthPayload
+      ): Promise<OusiaEnsureWindowWidthResult>
+      getWindowFullscreenState(): Promise<OusiaWindowFullscreenEvent>
       listEditorFiles(
         payload: OusiaEditorListFilesPayload
       ): Promise<OusiaEditorListFilesResult>
@@ -46,6 +82,15 @@ declare global {
       saveEditorFile(
         payload: OusiaEditorSaveFilePayload
       ): Promise<OusiaEditorSaveFileResult>
+      listPdfFiles(
+        payload: OusiaPdfListFilesPayload
+      ): Promise<OusiaPdfListFilesResult>
+      readPdfFile(
+        payload: OusiaPdfReadFilePayload
+      ): Promise<OusiaPdfReadFileResult>
+      savePdfFile(
+        payload: OusiaPdfSaveFilePayload
+      ): Promise<OusiaPdfSaveFileResult>
       listRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult>
       watchRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult>
       unwatchRuntimeExtensions(): Promise<void>
@@ -55,6 +100,7 @@ declare global {
       onRuntimeExtensionsChanged(
         callback: (event: OusiaRuntimeExtensionsChangedEvent) => void
       ): () => void
+      onWorkspaceAction(callback: (event: OusiaWorkspaceAction) => void): () => void
       createTerminal(
         payload: OusiaTerminalCreatePayload
       ): Promise<OusiaTerminalCreateResult>
