@@ -1,11 +1,13 @@
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { app } from "electron"
+import type { ImageContent } from "@mariozechner/pi-ai"
 import {
   AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
+  getAgentDir,
   ModelRegistry,
   SessionManager,
   SettingsManager,
@@ -20,6 +22,7 @@ import type {
   OusiaChatHistoryItem,
   OusiaChatHistoryResult,
   OusiaChatInterruptResult,
+  OusiaChatAttachment,
   OusiaChatSendPayload,
   OusiaChatSendResult,
   OusiaModelSettings,
@@ -38,8 +41,210 @@ type AgentConversationModuleOptions = {
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
 }
 
-function getPiExtraSystemPromptPath() {
-  return join(app.getAppPath(), "prompts", "pi-extra-system-prompt.md")
+const OUSIA_SKILL_NAME = "ousia"
+
+const OUSIA_USAGE_SKILL = `---
+name: ousia
+description: "Use for Ousia Desktop itself: operating existing Ousia workspace extensions, opening/viewing/editing local files or artifacts inside Ousia, using the local ousia CLI, or creating/updating/removing Ousia runtime extensions. Prefer this over macOS open/Preview/Finder when the user asks to open a PDF, document, file, artifact, editor, workspace surface, extension, plugin, addon, dashboard, inspector, or tool panel in Ousia."
+---
+
+# Ousia Usage
+
+Use this skill for Ousia Desktop itself. It covers both operating existing
+workspace extensions and authoring local runtime extensions.
+
+## Operate Workspace Extensions
+
+Ousia exposes a local CLI named \`ousia\` for controlling visible workspace
+extensions from the bash tool. Use this path when the user asks to open, view,
+preview, inspect, or edit a local file or artifact and an Ousia workspace
+extension may be the right visible surface.
+
+Do not satisfy an Ousia extension request by running macOS commands such as
+\`open <file>\`, \`open -a Preview <file>\`, Finder reveal commands, or other
+system-default app launches. Those commands open files outside Ousia and do not
+focus the requested workspace extension. Use them only if the user explicitly
+asks for a system/default app, or if the \`ousia\` CLI is unavailable and you
+explain that fallback.
+
+Core facts:
+
+- Ousia workspace extensions are visible tabs in the workspace area. Opening or
+  focusing one changes what the user can see in the app.
+- The agent can discover registered extensions with \`ousia extension list\`.
+  The list includes extension ids, aliases, titles, and supported file types.
+- \`openAndFocus\` is a generic action for every registered Ousia workspace
+  extension. It opens that extension's workspace tab if needed, then focuses it.
+- File-type actions are extension-specific. For example, the PDF Editor can open
+  an existing PDF with its documented \`openFile\` action; other extensions may
+  expose different actions.
+- Always call an extension's \`help\` action before using extension-specific
+  actions. Trust the returned action names, JSON arguments, examples, and
+  limitations over guesses.
+- When the user names an Ousia extension or asks to open something inside Ousia,
+  use the Ousia CLI path first. Do not use \`open\`, Preview, Finder, or another
+  external macOS app for that request.
+
+Workflow:
+
+1. If the user gives only a loose file name, search for the requested file path
+   from the current project.
+2. Run \`ousia extension list\` to see registered workspace extension ids,
+   aliases, and titles.
+3. Choose the matching extension by title, id, alias, or supported file type.
+4. Before operating the extension, inspect its supported actions:
+
+   \`\`\`bash
+   ousia extension invoke --extension <extensionId-or-alias> --action help
+   \`\`\`
+
+5. Use only actions, arguments, examples, and limitations returned by \`help\`.
+   Do not invent extension actions or extension-specific arguments.
+6. Invoke the documented action with structured JSON when required.
+
+## Common Commands
+
+\`\`\`bash
+ousia extension list
+ousia extension invoke --extension extension.firstParty.pdfEditor --action help
+ousia extension invoke --extension extension.firstParty.pdfEditor --action openFile --json '{"path":"relative-or-absolute.pdf"}'
+ousia extension invoke --extension extension.firstParty.pdfEditor --action openAndFocus
+\`\`\`
+
+For PDF files, use the PDF editor if it is available: inspect its \`help\`
+action, then open the file with its documented \`openFile\` action.
+
+For Excalidraw files, use the Excalidraw extension if it is available: inspect
+its \`help\` action, then open the file with its documented \`openFile\` action.
+When creating, updating, or repairing a \`.excalidraw\` file before opening it,
+write valid Excalidraw scene JSON. Do not quote numeric geometry values:
+element \`x\`, \`y\`, \`width\`, \`height\`, \`angle\`, \`strokeWidth\`,
+\`roughness\`, \`opacity\`, \`seed\`, \`version\`, \`versionNonce\`,
+\`fontSize\`, \`fontFamily\`, \`baseline\`, \`lineHeight\`, and all numeric
+point coordinates must be JSON numbers, not strings. \`appState.scrollX\`,
+\`appState.scrollY\`, and \`appState.zoom.value\` must also be numbers when
+present. Before invoking \`openFile\` for an agent-authored or agent-repaired
+\`.excalidraw\` file, validate that \`type\` is \`"excalidraw"\`, \`elements\`
+is an array, and these numeric fields are actually numbers. If validation finds
+string geometry in an existing file, repair the file first instead of reporting
+that Ousia or the Excalidraw extension opened it successfully.
+
+## Author Runtime Extensions
+
+Use this section when creating, updating, debugging, or removing Ousia runtime
+extensions. Trigger this for user wording such as extension, plugin, addon,
+add-on, component, dashboard, inspector, tool panel, workspace app, custom UI, or
+an agent-authored Ousia surface.
+
+Hard boundary: runtime extension authoring writes only under
+\`~/.ousia/extensions/<extension-id>/\`. Do not modify Ousia app source code from
+this workflow.
+
+Allowed write targets:
+
+- \`~/.ousia/extensions/<extension-id>/package.json\`
+- \`~/.ousia/extensions/<extension-id>/App.tsx\`
+- Other files inside \`~/.ousia/extensions/<extension-id>/\` only when directly
+  used by that extension
+
+Forbidden write targets for runtime extension authoring:
+
+- \`src/\`
+- \`src/electron/\`
+- Ousia app \`package.json\`, lockfiles, Vite/Forge/TypeScript/ESLint config, or
+  other build/runtime config
+- \`docs/\`, \`agents.md\`, \`ref/\`, or other project documentation/reference
+  files
+- Any Ousia compiled app registry, runtime loader, preload API, IPC handler, or
+  host-side permission surface
+
+If the requested extension appears to need new host APIs, IPC APIs, package
+dependencies, runtime imports, backend execution, or changes to Ousia itself,
+stop and explain the missing host API. Ask the user for a separate explicit
+source-code task if they want to change Ousia itself.
+
+Runtime extension package shape:
+
+\`\`\`text
+~/.ousia/extensions/<extension-id>/
+  package.json
+  App.tsx
+\`\`\`
+
+\`package.json\` declares Ousia metadata under \`ousia.app\`:
+
+\`\`\`json
+{
+  "name": "project-health",
+  "version": "0.1.0",
+  "ousia": {
+    "app": {
+      "title": "Project Health",
+      "slot": "workspace.tab",
+      "entry": "App.tsx"
+    }
+  }
+}
+\`\`\`
+
+Current runtime contract:
+
+- Supported slot: \`workspace.tab\`.
+- \`ousia.app.distribution\` may be omitted or set to \`user-local\`.
+- Frontend entries can be \`.tsx\` or \`.ts\`.
+- Export a React component as default or named \`App\`.
+- Runtime import allowlist: \`react\`.
+- Relative imports inside the extension directory are bundled by Ousia.
+- Runtime extensions receive \`context.project\`, \`context.conversation\`, and
+  theme context.
+- Use plain CSS in a scoped \`<style>\` tag. Do not rely on Tailwind utilities
+  for runtime extension layout or visual styling.
+- The root element must fill the workspace tab with \`width: 100%\` and
+  \`min-height: 100%\`.
+
+Validation:
+
+1. Validate only the extension files you changed.
+2. Do not run Ousia source-code fixes, dependency installs, or build-system
+   changes from this runtime-extension workflow.
+3. Tell the user the extension will appear automatically in Ousia while the app
+   is running.
+`
+
+function ensureOusiaUsageSkill(agentDir: string) {
+  const userData = app.getPath("userData")
+  mkdirSync(userData, { recursive: true })
+  const installMarkerPath = join(
+    userData,
+    "ousia-usage-skill-installed"
+  )
+  const skillDir = join(agentDir, "skills", "ousia")
+  const skillPath = join(skillDir, "SKILL.md")
+  if (existsSync(installMarkerPath)) {
+    return
+  }
+  if (existsSync(skillPath)) {
+    writeFileSync(installMarkerPath, "installed\n")
+    return
+  }
+  mkdirSync(skillDir, { recursive: true })
+  writeFileSync(skillPath, OUSIA_USAGE_SKILL)
+  writeFileSync(installMarkerPath, "installed\n")
+}
+
+function getAdditionalPiSkillPaths() {
+  const skillsDir = join(getAgentDir(), "skills")
+  if (!existsSync(skillsDir)) {
+    return []
+  }
+  return readdirSync(skillsDir, { withFileTypes: true })
+    .filter((entry) => {
+      if (entry.name === OUSIA_SKILL_NAME) {
+        return false
+      }
+      return entry.isDirectory() || entry.name.endsWith(".md")
+    })
+    .map((entry) => join(skillsDir, entry.name))
 }
 
 function now() {
@@ -174,6 +379,82 @@ function textFromContent(content: unknown) {
     })
     .filter(Boolean)
     .join("\n")
+}
+
+function attachmentSummary(attachments: OusiaChatAttachment[] | undefined) {
+  if (!attachments?.length) {
+    return []
+  }
+  return attachments.map((attachment) => ({
+    id: attachment.id,
+    kind: attachment.kind,
+    mediaType: attachment.mediaType,
+    name: attachment.name,
+    size: attachment.size,
+  }))
+}
+
+function formatBytes(size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return "0 B"
+  }
+  const units = ["B", "KB", "MB", "GB"]
+  let value = size
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
+}
+
+function buildPromptWithTextAttachments(
+  text: string,
+  attachments: OusiaChatAttachment[] | undefined
+) {
+  const blocks = [text.trim()]
+  const textAttachments = attachments?.filter(
+    (attachment) => attachment.kind === "text"
+  )
+  const fileAttachments = attachments?.filter(
+    (attachment) => attachment.kind === "file"
+  )
+
+  for (const attachment of textAttachments ?? []) {
+    blocks.push(
+      [
+        `<attached_file name="${attachment.name}" mediaType="${attachment.mediaType}" size="${attachment.size}">`,
+        attachment.text,
+        "</attached_file>",
+      ].join("\n")
+    )
+  }
+
+  if (fileAttachments?.length) {
+    blocks.push(
+      [
+        "用户还附加了以下非文本文件，当前只能看到文件元信息：",
+        ...fileAttachments.map(
+          (attachment) =>
+            `- ${attachment.name} (${attachment.mediaType || "application/octet-stream"}, ${formatBytes(attachment.size)})`
+        ),
+      ].join("\n")
+    )
+  }
+
+  return blocks.filter(Boolean).join("\n\n")
+}
+
+function imageContentFromAttachments(
+  attachments: OusiaChatAttachment[] | undefined
+): ImageContent[] {
+  return (attachments ?? [])
+    .filter((attachment) => attachment.kind === "image")
+    .map((attachment) => ({
+      type: "image",
+      data: attachment.dataBase64,
+      mimeType: attachment.mediaType || "image/png",
+    }))
 }
 
 function messageEntryToHistoryItems(
@@ -358,6 +639,10 @@ export function createAgentConversationModule({
           },
           context
         )
+        emitChatEvent(
+          { type: "run_status", status: "error", timestamp },
+          context
+        )
       }
       return
     }
@@ -516,6 +801,7 @@ export function createAgentConversationModule({
         },
         context
       )
+      emitChatEvent({ type: "run_status", status: "error", timestamp }, context)
     }
   }
 
@@ -539,11 +825,12 @@ export function createAgentConversationModule({
       join(agentDir, "models.json")
     )
     const settingsManager = SettingsManager.create(cwd, agentDir)
+    ensureOusiaUsageSkill(agentDir)
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
+      additionalSkillPaths: getAdditionalPiSkillPaths(),
       settingsManager,
-      appendSystemPrompt: [getPiExtraSystemPromptPath()],
     })
     await resourceLoader.reload()
     const model = normalizeModelSettings(modelSettings)
@@ -652,21 +939,24 @@ export function createAgentConversationModule({
   async function sendChatMessage(
     payload: OusiaChatSendPayload
   ): Promise<OusiaChatSendResult> {
-    const text = payload.prompt.trim()
+    const attachments = payload.attachments ?? []
+    const text = buildPromptWithTextAttachments(payload.prompt, attachments).trim()
+    const images = imageContentFromAttachments(attachments)
     const context = {
       projectPath: payload.projectPath,
       sessionId: payload.sessionId,
     }
     const key = sessionKey(context)
     const interruptGeneration = interruptGenerations.get(key) ?? 0
-    if (!text) {
+    if (!text && images.length === 0) {
       return { ok: true }
     }
     emitChatEvent(
       {
         type: "user_message",
         id: randomId("user"),
-        text,
+        text: payload.prompt.trim(),
+        attachments: attachmentSummary(attachments),
         timestamp: now(),
       },
       context
@@ -679,36 +969,52 @@ export function createAgentConversationModule({
       )
       await configureSessionBundle(bundle, payload.model, payload.thinkingLevel)
       const { session } = bundle
+      if (images.length && !session.model?.input.includes("image")) {
+        throw new Error("当前模型不支持图片输入，请切换到支持识图的模型后重试。")
+      }
       if ((interruptGenerations.get(key) ?? 0) !== interruptGeneration) {
         return { ok: true }
       }
       if (session.isStreaming) {
-        await session.prompt(text, {
+        await session.prompt(text || "请查看附件图片。", {
+          images,
           source: "interactive",
           streamingBehavior: "steer",
         })
       } else {
-        void session.prompt(text, { source: "interactive" }).catch((error) => {
-          emitChatEvent(
-            {
-              type: "error",
-              id: randomId("error"),
-              text: error instanceof Error ? error.message : String(error),
-              timestamp: now(),
-            },
-            context
-          )
-        })
+        void session
+          .prompt(text || "请查看附件图片。", { images, source: "interactive" })
+          .catch((error) => {
+            const timestamp = now()
+            emitChatEvent(
+              {
+                type: "error",
+                id: randomId("error"),
+                text: error instanceof Error ? error.message : String(error),
+                timestamp,
+              },
+              context
+            )
+            emitChatEvent(
+              { type: "run_status", status: "error", timestamp },
+              context
+            )
+          })
       }
       return { ok: true }
     } catch (error) {
+      const timestamp = now()
       emitChatEvent(
         {
           type: "error",
           id: randomId("error"),
           text: error instanceof Error ? error.message : String(error),
-          timestamp: now(),
+          timestamp,
         },
+        context
+      )
+      emitChatEvent(
+        { type: "run_status", status: "error", timestamp },
         context
       )
       return { ok: false }

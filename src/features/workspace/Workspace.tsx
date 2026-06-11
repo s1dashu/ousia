@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
-import { Delete02Icon, LayoutRightIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Plus, X } from "lucide-react"
+import { PanelLeft, Plus, Trash2, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useTheme } from "@/components/theme-provider"
@@ -15,7 +13,10 @@ import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { ExtensionSlot } from "@/extensions/ExtensionSlot"
 import { runtimeExtensionsToDefinitions } from "@/extensions/extensions"
 import { extensionsBySlot } from "@/extensions/registry"
-import type { ExtensionContext } from "@/extensions/types"
+import type {
+  ExtensionAgentQuoteToInputPayload,
+  ExtensionContext,
+} from "@/extensions/types"
 import {
   getWorkspaceExtensionIcon,
   getWorkspaceExtensionIconClass,
@@ -24,6 +25,7 @@ import {
 } from "@/extensions/workspace-extension-ui"
 import {
   createWorkspaceTab,
+  defaultWorkspaceExtensionId,
   normalizeWorkspaceTabsState,
   type WorkspaceTab,
   type WorkspaceTabResource,
@@ -37,6 +39,8 @@ type WorkspaceProps = {
   agentThinkingLevel: OusiaThinkingLevel
   initialWorkspaceTabs?: WorkspaceTabsState
   onCollapse: () => void
+  onOpenProjectDirectory?: () => Promise<void>
+  onQuoteToInput?: (payload: ExtensionAgentQuoteToInputPayload) => void
   pendingWorkspaceAction?: OusiaWorkspaceAction | null
   selectedWorkspaceExtensionId: string
   onWorkspaceTabsChange: (state: WorkspaceTabsState) => void
@@ -51,6 +55,8 @@ export function Workspace({
   agentThinkingLevel,
   initialWorkspaceTabs,
   onCollapse,
+  onOpenProjectDirectory,
+  onQuoteToInput,
   pendingWorkspaceAction,
   selectedWorkspaceExtensionId,
   onWorkspaceTabsChange,
@@ -97,6 +103,19 @@ export function Workspace({
     [workspaceExtensions]
   )
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0]
+  const openBrowserTab = useCallback(
+    async (url: string) => {
+      const tab = createWorkspaceTab(defaultWorkspaceExtensionId)
+      await createExtensionStateApi(defaultWorkspaceExtensionId).set("tab", tab.id, {
+        url,
+      })
+      setIsManagingExtensions(false)
+      setTabs((current) => [...current, tab])
+      setActiveTabId(tab.id)
+      onSelectWorkspaceExtension(defaultWorkspaceExtensionId)
+    },
+    [onSelectWorkspaceExtension]
+  )
   const baseContext: ExtensionContext = {
     extensionId: "",
     project: {
@@ -111,6 +130,11 @@ export function Workspace({
     agent: {
       thinkingLevel: agentThinkingLevel,
       model: agentModel,
+      quoteToInput: onQuoteToInput,
+    },
+    app: {
+      openBrowserTab,
+      openProjectDirectory: onOpenProjectDirectory,
     },
     theme: {
       preference: theme,
@@ -419,7 +443,7 @@ export function Workspace({
           aria-label="收起工作区"
           onClick={onCollapse}
         >
-          <HugeiconsIcon icon={LayoutRightIcon} size={19} strokeWidth={1.8} />
+          <PanelLeft size={19} />
         </Button>
       </div>
 
@@ -451,6 +475,7 @@ export function Workspace({
                     extensionId: extension.id,
                     tabId: tab.id,
                     action: tabActions[tab.id],
+                    isActive: tab.id === activeTab.id,
                     resource: tab.resource,
                     state: createExtensionStateApi(extension.id),
                   }}
@@ -468,7 +493,7 @@ export function Workspace({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="pointer-events-auto bg-background/90 shadow-sm backdrop-blur"
+                  className="pointer-events-auto border bg-white dark:bg-background"
                   onClick={() => {
                     setIsManagingExtensions(false)
                     setSelectedExtensionDirs(new Set())
@@ -480,15 +505,11 @@ export function Workspace({
                   type="button"
                   variant="destructive"
                   size="sm"
-                  className="pointer-events-auto shadow-sm"
+                  className="pointer-events-auto border"
                   disabled={!selectedExtensionDirs.size}
                   onClick={() => void deleteSelectedRuntimeExtensions()}
                 >
-                  <HugeiconsIcon
-                    icon={Delete02Icon}
-                    size={16}
-                    strokeWidth={1.8}
-                  />
+                  <Trash2 size={16} />
                   删除
                 </Button>
               </>
@@ -497,7 +518,7 @@ export function Workspace({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="pointer-events-auto bg-background/90 shadow-sm backdrop-blur"
+                className="pointer-events-auto border bg-white dark:bg-background"
                 onClick={() => setIsManagingExtensions(true)}
               >
                 管理扩展
@@ -520,7 +541,7 @@ export function Workspace({
                         key={extension.extensionDir}
                         type="button"
                         className={[
-                          "group flex w-[136px] min-w-0 flex-col items-center gap-4 rounded-xl px-2 py-3 text-center text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                          "group flex w-[136px] min-w-0 flex-col items-center gap-4 rounded-xl px-2 py-3 text-center text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                           isSelected ? "bg-accent" : "",
                         ].join(" ")}
                         onClick={() =>
@@ -593,7 +614,7 @@ export function Workspace({
                     <button
                       key={extension.id}
                       type="button"
-                      className="group flex w-[136px] min-w-0 flex-col items-center gap-4 rounded-xl px-2 py-3 text-center text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      className="group flex w-[136px] min-w-0 flex-col items-center gap-4 rounded-xl px-2 py-3 text-center text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                       onClick={() => handleChooseExtension(extension.id)}
                     >
                       <span

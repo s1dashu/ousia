@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { FileTree, useFileTree } from "@pierre/trees/react"
-import { FolderTree, Loader2, Save } from "lucide-react"
+import { FileCode, Folder, FolderOpen, Loader2, Save } from "lucide-react"
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js"
+import "monaco-editor/esm/vs/basic-languages/css/css.contribution.js"
+import "monaco-editor/esm/vs/basic-languages/html/html.contribution.js"
+import "monaco-editor/esm/vs/basic-languages/javascript/javascript.contribution.js"
 import "monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution.js"
 import "monaco-editor/esm/vs/basic-languages/shell/shell.contribution.js"
 import "monaco-editor/esm/vs/basic-languages/sql/sql.contribution.js"
+import "monaco-editor/esm/vs/basic-languages/typescript/typescript.contribution.js"
 import "monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution.js"
 import "monaco-editor/esm/vs/language/css/monaco.contribution.js"
 import "monaco-editor/esm/vs/language/html/monaco.contribution.js"
@@ -44,22 +48,24 @@ type TreeStyle = CSSProperties & Record<`--${string}`, string | number>
 function createTreeStyle(theme: ResolvedTheme): TreeStyle {
   return {
     "--trees-bg-override": theme === "dark" ? "#181818" : "#ffffff",
-    "--trees-bg-muted-override": theme === "dark" ? "#2a2d2e" : "#f6f8fa",
-    "--trees-selected-bg-override": theme === "dark" ? "#37373d" : "#dbeafe",
-    "--trees-selected-fg-override": theme === "dark" ? "#ffffff" : "#111827",
+    "--trees-bg-muted-override":
+      theme === "dark" ? "#2a2d2e" : "var(--sidebar-accent)",
+    "--trees-selected-bg-override": "var(--sidebar-accent)",
+    "--trees-selected-fg-override": "var(--sidebar-accent-foreground)",
     "--trees-fg-override": theme === "dark" ? "#cccccc" : "#24292f",
     "--trees-fg-muted-override": theme === "dark" ? "#858585" : "#6e7781",
     "--trees-border-color-override": theme === "dark" ? "#2b2b2b" : "#d8dee4",
-    "--trees-focus-ring-color-override": theme === "dark" ? "#0078d4" : "#0969da",
+    "--trees-focus-ring-color-override": "var(--sidebar-accent)",
+    "--trees-focus-ring-width-override": "0px",
     "--trees-input-bg-override": theme === "dark" ? "#202020" : "#ffffff",
     "--trees-font-family-override":
-      "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     "--trees-font-size-override": "12px",
     "--trees-item-height": "28px",
     "--trees-padding-inline-override": "6px",
-    "--trees-item-margin-x-override": "0px",
+    "--trees-item-margin-x-override": "6px",
     "--trees-item-padding-x-override": "6px",
-    "--trees-border-radius-override": "0px",
+    "--trees-border-radius-override": "8px",
     height: "100%",
     minHeight: 0,
     width: "100%",
@@ -103,9 +109,9 @@ monaco.editor.defineTheme("ousia-vscode-dark", {
     "editorIndentGuide.background1": "#404040",
     "editorIndentGuide.activeBackground1": "#707070",
     "editorWhitespace.foreground": "#404040",
-    "scrollbarSlider.background": "#79797966",
-    "scrollbarSlider.hoverBackground": "#646464b3",
-    "scrollbarSlider.activeBackground": "#bfbfbf66",
+    "scrollbarSlider.background": "#00000000",
+    "scrollbarSlider.hoverBackground": "#cccccc3d",
+    "scrollbarSlider.activeBackground": "#cccccc5c",
   },
 })
 
@@ -121,6 +127,9 @@ monaco.editor.defineTheme("ousia-vscode-light", {
     "editor.lineHighlightBackground": "#f6f8fa",
     "editor.selectionBackground": "#add6ff",
     "editor.inactiveSelectionBackground": "#e5ebf1",
+    "scrollbarSlider.background": "#00000000",
+    "scrollbarSlider.hoverBackground": "#6e76813d",
+    "scrollbarSlider.activeBackground": "#6e76815c",
   },
 })
 
@@ -195,7 +204,9 @@ export function EditorExtension({ context }: ExtensionProps) {
   const [isLoadingFiles, setIsLoadingFiles] = useState(false)
   const [isReading, setIsReading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isOpeningProject, setIsOpeningProject] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  const [fileLoadError, setFileLoadError] = useState("")
   const projectPath = context.project.path
   const resolvedTheme = context.theme.resolved
   const treeStyle = useMemo(
@@ -252,7 +263,7 @@ export function EditorExtension({ context }: ExtensionProps) {
       bracketPairColorization: { enabled: true },
       cursorBlinking: "smooth",
       fontFamily:
-        "Menlo, Monaco, 'SF Mono', Consolas, 'Liberation Mono', monospace",
+        'ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
       fontLigatures: false,
       fontSize: 14,
       lineHeight: 22,
@@ -273,6 +284,11 @@ export function EditorExtension({ context }: ExtensionProps) {
       roundedSelection: false,
       scrollBeyondLastLine: false,
       smoothScrolling: true,
+      scrollbar: {
+        horizontalScrollbarSize: 6,
+        verticalScrollbarSize: 6,
+        useShadows: false,
+      },
       tabSize: 2,
       theme: document.documentElement.classList.contains("dark")
         ? "ousia-vscode-dark"
@@ -359,6 +375,7 @@ export function EditorExtension({ context }: ExtensionProps) {
     queueMicrotask(() => {
       if (!isCancelled) {
         setIsLoadingFiles(true)
+        setFileLoadError("")
         setStatus("正在加载文件...")
       }
     })
@@ -374,6 +391,7 @@ export function EditorExtension({ context }: ExtensionProps) {
           return
         }
         setFiles(result.files)
+        setFileLoadError("")
         const storedActivePath = storedState?.activePath
         const fileEntries = result.files.filter((file) => file.kind === "file")
         const nextPath =
@@ -384,16 +402,16 @@ export function EditorExtension({ context }: ExtensionProps) {
         setStatus(
           fileEntries.length
             ? `已索引 ${fileEntries.length} 个文件`
-            : "未找到可编辑的源文件"
+            : "空文件夹"
         )
       })
       .catch((error: unknown) => {
         if (!isCancelled) {
+          const message = error instanceof Error ? error.message : "文件加载失败"
           setFiles([])
           setActivePath("")
-          setStatus(
-            error instanceof Error ? error.message : "文件加载失败"
-          )
+          setFileLoadError(message)
+          setStatus(message)
         }
       })
       .finally(() => {
@@ -409,7 +427,10 @@ export function EditorExtension({ context }: ExtensionProps) {
 
   useEffect(() => {
     if (!activePath || !projectPath || !window.ousia) {
-      editorRef.current?.setValue("")
+      const previousModel = editorRef.current?.getModel()
+      editorRef.current?.setModel(null)
+      previousModel?.dispose()
+      queueMicrotask(() => setIsDirty(false))
       return
     }
 
@@ -516,11 +537,37 @@ export function EditorExtension({ context }: ExtensionProps) {
     }
   }
 
+  async function openProjectDirectory() {
+    if (!context.app?.openProjectDirectory || isOpeningProject) {
+      return
+    }
+
+    setIsOpeningProject(true)
+    try {
+      await context.app.openProjectDirectory()
+    } finally {
+      setIsOpeningProject(false)
+    }
+  }
+
+  const shouldShowEmptyState = !isLoadingFiles && !activePath
+  const emptyStateTitle = projectPath
+    ? fileLoadError || "空文件夹"
+    : "打开文件夹开始编辑"
+  const emptyStateDescription = projectPath
+    ? fileLoadError
+      ? "当前项目路径不可用。你可以打开另一个文件夹，或在设置里调整默认工作目录。"
+      : "打开另一个文件夹，或在当前路径创建文件。"
+    : "选择一个项目文件夹后，编辑器会在这里显示可编辑的源文件。"
+
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-[#ffffff] text-[#24292f] dark:bg-[#1e1e1e] dark:text-[#cccccc]">
+    <div className="ousia-editor-surface flex h-full min-h-0 overflow-hidden bg-[#ffffff] text-[#24292f] dark:bg-[#1e1e1e] dark:text-[#cccccc]">
       <aside className="flex min-h-0 w-[244px] shrink-0 flex-col overflow-hidden border-r border-[#d8dee4] bg-[#ffffff] dark:border-[#2b2b2b] dark:bg-[#181818]">
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-[#d8dee4] px-3 text-xs font-semibold text-[#24292f] dark:border-[#2b2b2b] dark:text-[#cccccc]">
-          <FolderTree className="size-4 text-muted-foreground" />
+          <Folder
+            className="shrink-0 text-muted-foreground"
+            size={18}
+          />
           <span className="min-w-0 truncate">{context.project.name}</span>
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -560,6 +607,37 @@ export function EditorExtension({ context }: ExtensionProps) {
         </div>
         <div className="relative min-h-0 flex-1">
           <div ref={editorElementRef} className="absolute inset-0" />
+          {shouldShowEmptyState ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#ffffff] px-8 dark:bg-[#1e1e1e]">
+              <div className="flex max-w-[420px] flex-col items-center text-center">
+                <div className="mb-5 flex size-16 items-center justify-center rounded-2xl border border-[#d8dee4] bg-[#f6f8fa] text-[#57606a] dark:border-[#2b2b2b] dark:bg-[#252526] dark:text-[#cccccc]/75">
+                  <FileCode size={32} />
+                </div>
+                <h2 className="text-[15px] font-semibold text-[#24292f] dark:text-[#cccccc]">
+                  {emptyStateTitle}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#57606a] dark:text-[#cccccc]/70">
+                  {emptyStateDescription}
+                </p>
+                {context.app?.openProjectDirectory ? (
+                  <Button
+                    type="button"
+                    className="mt-5"
+                    size="sm"
+                    onClick={() => void openProjectDirectory()}
+                    disabled={isOpeningProject}
+                  >
+                    {isOpeningProject ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <FolderOpen size={16} />
+                    )}
+                    <span>打开文件夹</span>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {isReading ? (
             <div className="pointer-events-none absolute top-3 right-3 flex items-center gap-2 rounded-md border bg-popover px-2 py-1 text-xs text-muted-foreground dark:shadow-sm">
               <Loader2 className="size-3.5 animate-spin" />
@@ -569,7 +647,7 @@ export function EditorExtension({ context }: ExtensionProps) {
         </div>
         <div className="flex h-6 shrink-0 items-center justify-between border-t border-[#d8dee4] bg-[#ffffff] px-2 font-mono text-[11px] text-[#57606a] dark:border-[#2b2b2b] dark:bg-[#181818] dark:text-[#cccccc]/75">
           <span className="min-w-0 truncate">{status}</span>
-          <span>{languageForPath(activePath)}</span>
+          <span>{activePath ? languageForPath(activePath) : ""}</span>
         </div>
       </section>
     </div>

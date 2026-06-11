@@ -1,5 +1,16 @@
 import { basename } from "node:path"
 import { platform } from "node:process"
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { tmpdir } from "node:os"
+import { delimiter, join } from "node:path"
 import * as pty from "node-pty"
 
 import type {
@@ -26,6 +37,11 @@ type ProjectTerminalModuleOptions = {
   emitTerminalEvent: (event: TerminalEvent) => void
 }
 
+type TerminalSession = {
+  cleanup: () => void
+  process: pty.IPty
+}
+
 function terminalKey(context: OusiaTerminalDisposePayload) {
   return `${context.projectPath}::${context.sessionId}::${context.terminalId}`
 }
@@ -44,37 +60,234 @@ function defaultShell() {
   return process.env.SHELL || "/bin/zsh"
 }
 
-function defaultShellArgs(shellPath: string) {
+function shellQuote(value: string) {
+  return `'${value.replaceAll("'", "'\"'\"'")}'`
+}
+
+function zshDoubleQuote(value: string) {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("$", "\\$")
+    .replaceAll("`", "\\`")
+}
+
+function terminalExtensionResourceRoot() {
+  const packagedRoot = join(process.resourcesPath, "terminal")
+  if (existsSync(packagedRoot)) {
+    return packagedRoot
+  }
+
+  return join(process.cwd(), "src/extensions/system/terminal")
+}
+
+function bundledStarshipBinDir() {
   if (platform === "win32") {
-    return []
+    return null
   }
-  if (basename(shellPath) === "zsh") {
-    return ["-l"]
+
+  const binName = "starship"
+  const binDir = join(
+    terminalExtensionResourceRoot(),
+    "vendor/starship",
+    `${platform}-${process.arch}`
+  )
+  const binPath = join(binDir, binName)
+
+  if (!existsSync(binPath)) {
+    return null
   }
-  if (basename(shellPath) === "bash") {
-    return ["-l"]
+
+  try {
+    chmodSync(binPath, 0o755)
+  } catch {
+    // Packaged apps may expose read-only resources; use existing permissions.
   }
-  return []
+
+  return binDir
+}
+
+function createShellLaunch(shellPath: string, cwd: string) {
+  if (platform === "win32") {
+    return { args: [] as string[], cleanup: () => {}, env: {} }
+  }
+
+  const shellName = basename(shellPath)
+  const tempDir = mkdtempSync(join(tmpdir(), "ousia-terminal-"))
+  const cleanup = () => {
+    rmSync(tempDir, { force: true, recursive: true })
+  }
+  const projectName = basename(cwd) || "project"
+  const quotedProjectName = shellQuote(projectName)
+  const zshProjectName = zshDoubleQuote(projectName)
+  const starshipConfigPath = join(tempDir, "starship.toml")
+  const starshipPresetPath = join(
+    terminalExtensionResourceRoot(),
+    "presets/plain-text-symbols.toml"
+  )
+  const starshipBinDir = bundledStarshipBinDir()
+  const pathEnv = starshipBinDir
+    ? `${starshipBinDir}${delimiter}${process.env.PATH ?? ""}`
+    : undefined
+
+  const starshipPresetCommand = [
+    `export OUSIA_TERMINAL=1`,
+    `export STARSHIP_CONFIG=${shellQuote(starshipConfigPath)}`,
+    ...(starshipBinDir
+      ? [`export PATH=${shellQuote(starshipBinDir)}:"$PATH"`]
+      : []),
+  ]
+
+  if (existsSync(starshipPresetPath)) {
+    copyFileSync(starshipPresetPath, starshipConfigPath)
+  }
+
+  if (shellName === "zsh") {
+    writeFileSync(
+      join(tempDir, ".zshenv"),
+      `[[ -r "$HOME/.zshenv" ]] && source "$HOME/.zshenv"\n`
+    )
+    writeFileSync(
+      join(tempDir, ".zprofile"),
+      `[[ -r "$HOME/.zprofile" ]] && source "$HOME/.zprofile"\n`
+    )
+    writeFileSync(
+      join(tempDir, ".zshrc"),
+      [
+        `[[ -r "$HOME/.zshrc" ]] && source "$HOME/.zshrc"`,
+        ``,
+      ].join("\n")
+    )
+    writeFileSync(
+      join(tempDir, ".zlogin"),
+      [
+        `[[ -r "$HOME/.zlogin" ]] && source "$HOME/.zlogin"`,
+        ...starshipPresetCommand,
+        `precmd_functions=()`,
+        `preexec_functions=()`,
+        `if command -v starship >/dev/null 2>&1; then`,
+        `  eval "$(starship init zsh)"`,
+        `else`,
+        `  PROMPT="%F{green}${zshProjectName}%f %F{blue}%~%f %# "`,
+        `fi`,
+        `RPROMPT=""`,
+        `RPS1=""`,
+        ``,
+      ].join("\n")
+    )
+
+    return {
+      args: ["-l"],
+      cleanup,
+      env: {
+        OUSIA_TERMINAL: "1",
+        ...(pathEnv ? { PATH: pathEnv } : {}),
+        STARSHIP_CONFIG: starshipConfigPath,
+        ZDOTDIR: tempDir,
+      },
+    }
+  }
+
+  if (shellName === "bash") {
+    const bashRcPath = join(tempDir, "bashrc")
+    writeFileSync(
+      bashRcPath,
+      [
+        `[[ -r "$HOME/.bash_profile" ]] && source "$HOME/.bash_profile"`,
+        `[[ -r "$HOME/.bash_login" ]] && source "$HOME/.bash_login"`,
+        `[[ -r "$HOME/.profile" ]] && source "$HOME/.profile"`,
+        `[[ -r "$HOME/.bashrc" ]] && source "$HOME/.bashrc"`,
+        ...starshipPresetCommand,
+        `if command -v starship >/dev/null 2>&1; then`,
+        `  eval "$(starship init bash)"`,
+        `else`,
+        `  PROMPT_COMMAND=`,
+        `  PS1=${shellQuote(`${projectName} \\w \\$ `)}`,
+        `fi`,
+        ``,
+      ].join("\n")
+    )
+
+    return {
+      args: ["--rcfile", bashRcPath, "-i"],
+      cleanup,
+      env: {
+        OUSIA_TERMINAL: "1",
+        ...(pathEnv ? { PATH: pathEnv } : {}),
+        STARSHIP_CONFIG: starshipConfigPath,
+      },
+    }
+  }
+
+  if (shellName === "fish") {
+    const fishConfigDir = join(tempDir, "fish")
+    const fishConfigPath = join(fishConfigDir, "config.fish")
+    mkdirSync(fishConfigDir, { recursive: true })
+    writeFileSync(
+      fishConfigPath,
+      [
+        `test -r "$HOME/.config/fish/config.fish"; and source "$HOME/.config/fish/config.fish"`,
+        `set -gx OUSIA_TERMINAL 1`,
+        `set -gx STARSHIP_CONFIG ${shellQuote(starshipConfigPath)}`,
+        ...(starshipBinDir
+          ? [`set -gx PATH ${shellQuote(starshipBinDir)} $PATH`]
+          : []),
+        `if command -v starship >/dev/null 2>&1`,
+        `  starship preset plain-text-symbols -o "$STARSHIP_CONFIG" >/dev/null 2>&1`,
+        `  starship init fish | source`,
+        `else`,
+        `  functions -e fish_prompt 2>/dev/null`,
+        `  function fish_prompt`,
+        `    set_color green`,
+        `    echo -n ${quotedProjectName}`,
+        `    set_color normal`,
+        `    echo -n " "`,
+        `    set_color blue`,
+        `    echo -n (prompt_pwd)`,
+        `    set_color normal`,
+        `    echo -n " > "`,
+        `  end`,
+        `end`,
+        ``,
+      ].join("\n")
+    )
+
+    return {
+      args: [],
+      cleanup,
+      env: {
+        OUSIA_TERMINAL: "1",
+        ...(pathEnv ? { PATH: pathEnv } : {}),
+        STARSHIP_CONFIG: starshipConfigPath,
+        XDG_CONFIG_HOME: tempDir,
+      },
+    }
+  }
+
+  cleanup()
+  return { args: [] as string[], cleanup: () => {}, env: {} }
 }
 
 export function createProjectTerminalModule({
   emitTerminalEvent,
 }: ProjectTerminalModuleOptions) {
-  const terminalSessions = new Map<string, pty.IPty>()
+  const terminalSessions = new Map<string, TerminalSession>()
 
   async function createTerminal(
     payload: OusiaTerminalCreatePayload
   ): Promise<OusiaTerminalCreateResult> {
     const cwd = resolveProjectRoot(payload.projectPath)
     const key = terminalKey(payload)
-    const previousTerminal = terminalSessions.get(key)
+    const previousSession = terminalSessions.get(key)
     terminalSessions.delete(key)
-    previousTerminal?.kill()
+    previousSession?.process.kill()
+    previousSession?.cleanup()
 
     const cols = clampTerminalSize(payload.cols, 80, 500)
     const rows = clampTerminalSize(payload.rows, 24, 200)
     const shellPath = defaultShell()
-    const terminalProcess = pty.spawn(shellPath, defaultShellArgs(shellPath), {
+    const shellLaunch = createShellLaunch(shellPath, cwd)
+    const terminalProcess = pty.spawn(shellPath, shellLaunch.args, {
       name: "xterm-256color",
       cols,
       rows,
@@ -84,12 +297,17 @@ export function createProjectTerminalModule({
         COLORTERM: "truecolor",
         TERM: "xterm-256color",
         TERM_PROGRAM: "Ousia",
+        TERM_PROGRAM_VERSION: process.env.npm_package_version || "0.0.0",
+        ...shellLaunch.env,
       },
     })
 
-    terminalSessions.set(key, terminalProcess)
+    terminalSessions.set(key, {
+      cleanup: shellLaunch.cleanup,
+      process: terminalProcess,
+    })
     terminalProcess.onData((data) => {
-      if (terminalSessions.get(key) !== terminalProcess) {
+      if (terminalSessions.get(key)?.process !== terminalProcess) {
         return
       }
       emitTerminalEvent({
@@ -99,10 +317,12 @@ export function createProjectTerminalModule({
       })
     })
     terminalProcess.onExit(({ exitCode, signal }) => {
-      if (terminalSessions.get(key) !== terminalProcess) {
+      const session = terminalSessions.get(key)
+      if (session?.process !== terminalProcess) {
         return
       }
       terminalSessions.delete(key)
+      session.cleanup()
       emitTerminalEvent({
         type: "exit",
         terminalId: payload.terminalId,
@@ -117,7 +337,7 @@ export function createProjectTerminalModule({
   async function writeTerminal(
     payload: OusiaTerminalWritePayload
   ): Promise<OusiaTerminalOperationResult> {
-    terminalSessions.get(terminalKey(payload))?.write(payload.data)
+    terminalSessions.get(terminalKey(payload))?.process.write(payload.data)
     return { ok: true }
   }
 
@@ -126,9 +346,9 @@ export function createProjectTerminalModule({
   ): Promise<OusiaTerminalOperationResult> {
     const terminal = terminalSessions.get(terminalKey(payload))
     if (terminal) {
-      terminal.resize(
-        clampTerminalSize(payload.cols, terminal.cols, 500),
-        clampTerminalSize(payload.rows, terminal.rows, 200)
+      terminal.process.resize(
+        clampTerminalSize(payload.cols, terminal.process.cols, 500),
+        clampTerminalSize(payload.rows, terminal.process.rows, 200)
       )
     }
     return { ok: true }
@@ -141,13 +361,17 @@ export function createProjectTerminalModule({
     const terminal = terminalSessions.get(key)
     if (terminal) {
       terminalSessions.delete(key)
-      terminal.kill()
+      terminal.process.kill()
+      terminal.cleanup()
     }
     return { ok: true }
   }
 
   function disposeAllTerminals() {
-    terminalSessions.forEach((terminal) => terminal.kill())
+    terminalSessions.forEach((terminal) => {
+      terminal.process.kill()
+      terminal.cleanup()
+    })
     terminalSessions.clear()
   }
 

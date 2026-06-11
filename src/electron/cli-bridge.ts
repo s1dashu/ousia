@@ -15,7 +15,7 @@ const workspaceExtensions = [
   { id: "extension.firstParty.browser", title: "浏览器", aliases: ["browser", "web", "浏览器"] },
   { id: "extension.firstParty.editor", title: "编辑器", aliases: ["editor", "code", "file", "编辑器"] },
   { id: "extension.firstParty.terminal", title: "终端", aliases: ["terminal", "shell", "bash", "终端"] },
-  { id: "extension.firstParty.pdfEditor", title: "PDF 编辑器", aliases: ["pdf", "pdfeditor", "pdf-editor", "PDF", "PDF编辑器", "PDF 编辑器"] },
+  { id: "extension.firstParty.pdfEditor", title: "PDF", aliases: ["pdf", "pdfeditor", "pdf-editor", "PDF", "PDF编辑器", "PDF 编辑器"] },
   { id: "extension.firstParty.excalidraw", title: "Excalidraw", aliases: ["excalidraw", "whiteboard", "画板", "白板"] },
   { id: "extension.firstParty.univerSheets", title: "表格", aliases: ["excel", "spreadsheet", "sheet", "sheets", "table", "univer", "表格", "电子表格"] },
 ]

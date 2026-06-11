@@ -13,10 +13,12 @@ The MVP implements workspace tabs first.
 
 ## Agent-Extension Contract
 
-Ousia's extension runtime should evolve around two complementary contracts:
+Ousia's extension runtime should evolve around three complementary contracts:
 
 1. Context: each extension publishes structured state that the agent can read.
 2. Actions: each extension exposes common operations that the agent can invoke.
+3. Intents: each extension can ask the host to route explicit user intent back
+   into the agent experience.
 
 The context contract is the agent's perception layer for GUI surfaces. It should
 not be limited to app-level project/session metadata. For each mounted extension
@@ -54,6 +56,13 @@ be able to see the target surface, understand what changed, and interrupt or
 correct the agent through normal UI. Destructive or externally visible actions
 should require an explicit confirmation policy even when the extension is trusted.
 
+Extension intents are user-originated requests from an extension surface into
+the chat/agent host. The first implemented intent is `quoteToInput`: a surface
+can send selected source text plus metadata such as title, URL, extension id,
+and tab id, and the host appends it to the current chat input as an editable
+quote. Intents should be narrow and source-attributed, and should not become a
+generic back channel for extensions to silently drive the agent.
+
 ## Current Implementation
 
 The current renderer implementation has an extension registry, an extension slot
@@ -61,11 +70,27 @@ renderer, and an extension context object. Browser, Editor, and Terminal are
 registered as first-party preinstalled extensions. PDF Editor is registered as a
 first-party optional workspace extension.
 
-The first-party browser extension uses Electron's native `<webview>` tag. The
-renderer owns the browser chrome and address bar, while Electron main enables
-the tag and sanitizes attached webviews before they load remote content. It uses
-a shared `persist:ousia-browser` partition so cookies, local storage, and login
-state survive app restarts and are shared across projects.
+The first-party browser extension uses main-process-owned Electron
+`WebContentsView` instances. The renderer owns the browser chrome, address bar,
+find bar, auth prompt, session selector, and status UI, while Electron main owns
+the web contents, bounds, lifecycle, permissions, downloads, context menus,
+new-window handling, certificate errors, client certificate selection, HTTP auth
+callbacks, page search, zoom, crash recovery state, and browser session
+partitioning. This keeps remote page hosting out of the renderer-owned React DOM
+and avoids enabling Electron's `<webview>` tag.
+
+Browser tabs support three session modes:
+
+- `global`: shared `persist:ousia-browser`, preserving cookies, local storage,
+  and login state across projects.
+- `project`: persistent project-scoped partitions for project-isolated browsing
+  state.
+- `temporary`: in-memory per-tab partitions for throwaway browsing state.
+
+The browser can read the current page selection through the main-owned
+`WebContentsView` and route it through the extension `quoteToInput` intent,
+appending a Markdown quote with the page title and URL into the current chat
+composer.
 
 The same browser partition is configured in Electron main for WebAuthn account
 selection. On macOS, Touch ID / Secure Enclave passkey prompts require
@@ -81,13 +106,29 @@ giving the renderer direct filesystem access.
 The first-party terminal extension embeds xterm.js edge to edge in the workspace
 tab. It does not spawn shell processes from the renderer; it sends input and
 resize events through preload IPC to Electron main, where `node-pty` owns the
-shell session for the selected project/session context.
+shell session for the selected project/session context. The renderer uses the
+bundled Ousia Terminal Mono font, falls back to the Codex-style system mono
+stack, and reapplies the Ousia terminal theme after shell startup/output so user
+shell configuration can load without taking over the client-controlled terminal
+palette and font metrics.
+Electron main launches common shells through temporary wrapper startup files.
+Those wrappers source the user's normal shell config first, then point Starship
+at a temporary copy of the Terminal extension's vendored
+`plain-text-symbols.toml` preset and run `starship init` when Starship is
+available. User PATH/tooling setup is preserved while the terminal prompt
+defaults to Ousia's plain-text Starship style. If Starship is unavailable, the
+wrapper falls back to a compact built-in prompt.
+Bundled Starship binaries are owned by the Terminal extension resource folder
+under `src/extensions/system/terminal/vendor/starship/<platform>-<arch>/` and
+are copied into packaged Electron resources; when present, that directory is
+prepended to `PATH` before checking for `starship`.
 
 The first-party optional PDF Editor extension embeds `@embedpdf/react-pdf-viewer`
 for PDF viewing and annotation UI, uses `pdf-lib` for lightweight local write
 operations, and reads/saves project PDF bytes through Electron main IPC. It
-polls project PDF metadata so agent-written file changes are reflected in the
-workspace tab.
+adds an Ousia selection-menu command that sends the current PDF text selection
+through the shared `quoteToInput` chat intent, and polls project PDF metadata so
+agent-written file changes are reflected in the workspace tab.
 
 The first-party optional Excel extension embeds Univer through the official
 Univer Sheets core preset. It currently provides an embedded editing surface
@@ -106,9 +147,9 @@ Runtime extension docs:
 
 - `docs/runtime-extensions.md`
 
-Runtime extension authoring skill for pi:
+Ousia usage and runtime extension authoring skill for pi:
 
-- `/Users/bytedance/.pi/agent/skills/ousia-extension/SKILL.md`
+- `/Users/bytedance/.pi/agent/skills/ousia/SKILL.md`
 
 ## Intended Direction
 

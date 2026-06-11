@@ -1,21 +1,23 @@
 import {
   app,
   BrowserWindow,
-  dialog,
   Menu,
+  nativeTheme,
   screen,
-  session as electronSession,
   shell,
-  type WebAuthnAccount,
 } from "electron"
 import { existsSync } from "node:fs"
 import { env, platform } from "node:process"
 import { join } from "node:path"
 
-import type { OusiaEnsureWindowWidthPayload } from "./chat-types.js"
+import type {
+  OusiaEnsureWindowWidthPayload,
+  OusiaThemePreference,
+  OusiaWindowState,
+} from "./chat-types.js"
+import { loadAppState, saveWindowState } from "./app-state-store.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
-const browserPartition = "persist:ousia-browser"
 const MAIN_WINDOW_MIN_WIDTH = 340
 
 type WindowHostOptions = {
@@ -32,12 +34,46 @@ function isExternalUrl(url: string) {
   }
 }
 
-function isAllowedWebviewUrl(url: string) {
-  try {
-    const parsed = new URL(url)
-    return ["about:", "file:", "http:", "https:"].includes(parsed.protocol)
-  } catch {
-    return false
+function resolveInitialWindowBackground(theme: OusiaThemePreference) {
+  const resolvedTheme =
+    theme === "system"
+      ? nativeTheme.shouldUseDarkColors
+        ? "dark"
+        : "light"
+      : theme
+
+  return resolvedTheme === "dark" ? "#111111" : "#fdfbf9"
+}
+
+function resolveInitialWindowBounds(windowState: OusiaWindowState) {
+  const width = Math.max(MAIN_WINDOW_MIN_WIDTH, Math.round(windowState.width))
+  const height = Math.max(600, Math.round(windowState.height))
+  const bounds =
+    typeof windowState.x === "number" && typeof windowState.y === "number"
+      ? {
+          x: Math.round(windowState.x),
+          y: Math.round(windowState.y),
+          width,
+          height,
+        }
+      : {
+          width,
+          height,
+        }
+
+  if (typeof bounds.x !== "number" || typeof bounds.y !== "number") {
+    return bounds
+  }
+
+  const display = screen.getDisplayMatching(bounds)
+  const workArea = display.workArea
+  const visibleWidth = Math.min(bounds.width, workArea.width)
+  const visibleHeight = Math.min(bounds.height, workArea.height)
+  return {
+    x: Math.min(Math.max(bounds.x, workArea.x), workArea.x + workArea.width - 80),
+    y: Math.min(Math.max(bounds.y, workArea.y), workArea.y + workArea.height - 80),
+    width: visibleWidth,
+    height: visibleHeight,
   }
 }
 
@@ -122,18 +158,10 @@ function getWebAuthnKeychainAccessGroup() {
   return `${teamId}.com.ousia.desktop.webauthn`
 }
 
-function describeWebAuthnAccount(account: WebAuthnAccount) {
-  return (
-    account.displayName ||
-    account.name ||
-    account.userHandle ||
-    account.credentialId
-  )
-}
-
 export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOptions) {
   let mainWindow: BrowserWindow | undefined
   let lastEmittedFullscreen: boolean | undefined
+  let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
 
   function getMainWindow() {
     return mainWindow
@@ -186,49 +214,53 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     const delta = minWidth - bounds.width
     const x = payload.anchor === "right" ? bounds.x - delta : bounds.x
     mainWindow.setBounds({ ...bounds, x, width: minWidth }, true)
+    scheduleWindowStateSave()
     return { ok: true, width: minWidth }
   }
 
+  function getCurrentWindowState(): OusiaWindowState | null {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
+      return null
+    }
+    const bounds = mainWindow.isMaximized()
+      ? mainWindow.getNormalBounds()
+      : mainWindow.getBounds()
+    return {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      isMaximized: mainWindow.isMaximized(),
+    }
+  }
+
+  function saveCurrentWindowState() {
+    if (saveWindowStateTimer) {
+      clearTimeout(saveWindowStateTimer)
+      saveWindowStateTimer = undefined
+    }
+    const state = getCurrentWindowState()
+    if (!state) {
+      return
+    }
+    void saveWindowState(state).catch((error: unknown) => {
+      writeRuntimeLog("window.state", "error", {
+        message: error instanceof Error ? error.message : String(error),
+      })
+    })
+  }
+
+  function scheduleWindowStateSave() {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
+      return
+    }
+    if (saveWindowStateTimer) {
+      clearTimeout(saveWindowStateTimer)
+    }
+    saveWindowStateTimer = setTimeout(saveCurrentWindowState, 350)
+  }
+
   function configureBrowserWebAuthn() {
-    const browserSession = electronSession.fromPartition(browserPartition)
-
-    browserSession.on(
-      "select-webauthn-account",
-      async (_event, details, callback) => {
-        try {
-          if (details.accounts.length === 0) {
-            callback()
-            return
-          }
-
-          if (details.accounts.length === 1) {
-            callback(details.accounts[0].credentialId)
-            return
-          }
-
-          const buttons = details.accounts.map(describeWebAuthnAccount)
-          const cancelId = buttons.length
-          const result = await dialog.showMessageBox(mainWindow!, {
-            type: "question",
-            title: "选择通行密钥",
-            message: `为 ${details.relyingPartyId} 选择一个通行密钥`,
-            buttons: [...buttons, "取消"],
-            cancelId,
-            defaultId: 0,
-            noLink: true,
-          })
-
-          callback(
-            result.response === cancelId
-              ? undefined
-              : details.accounts[result.response]?.credentialId
-          )
-        } catch {
-          callback()
-        }
-      }
-    )
-
     if (platform !== "darwin") {
       return
     }
@@ -251,38 +283,27 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
 
   async function createWindow() {
     installApplicationMenu()
+    const appState = await loadAppState()
+    const initialBounds = resolveInitialWindowBounds(appState.windowState)
 
     mainWindow = new BrowserWindow({
-      width: 1440,
-      height: 900,
+      ...initialBounds,
       minWidth: MAIN_WINDOW_MIN_WIDTH,
       minHeight: 600,
       title: "Ousia",
       titleBarStyle: "hiddenInset",
       trafficLightPosition: { x: 14, y: 12 },
-      backgroundColor: "#111111",
+      backgroundColor: resolveInitialWindowBackground(appState.settings.theme),
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         preload: join(__dirname, "preload.js"),
-        webviewTag: true,
       },
     })
+    if (appState.windowState.isMaximized) {
+      mainWindow.maximize()
+    }
     onWindowChanged(mainWindow)
-
-    mainWindow.webContents.on(
-      "will-attach-webview",
-      (event, webPreferences, params) => {
-        delete webPreferences.preload
-        webPreferences.contextIsolation = true
-        webPreferences.nodeIntegration = false
-        webPreferences.sandbox = true
-
-        if (!isAllowedWebviewUrl(params.src)) {
-          event.preventDefault()
-        }
-      }
-    )
 
     mainWindow.webContents.on(
       "console-message",
@@ -345,11 +366,27 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     mainWindow.webContents.once("did-finish-load", () =>
       emitWindowFullscreenState()
     )
-    mainWindow.on("resize", emitInferredWindowFullscreenState)
-    mainWindow.on("move", emitInferredWindowFullscreenState)
+    mainWindow.on("resize", () => {
+      emitInferredWindowFullscreenState()
+      scheduleWindowStateSave()
+    })
+    mainWindow.on("move", () => {
+      emitInferredWindowFullscreenState()
+      scheduleWindowStateSave()
+    })
+    mainWindow.on("maximize", scheduleWindowStateSave)
+    mainWindow.on("unmaximize", scheduleWindowStateSave)
     mainWindow.on("enter-full-screen", () => emitWindowFullscreenState())
-    mainWindow.on("leave-full-screen", () => emitWindowFullscreenState())
+    mainWindow.on("leave-full-screen", () => {
+      emitWindowFullscreenState()
+      scheduleWindowStateSave()
+    })
+    mainWindow.on("close", saveCurrentWindowState)
     mainWindow.on("closed", () => {
+      if (saveWindowStateTimer) {
+        clearTimeout(saveWindowStateTimer)
+        saveWindowStateTimer = undefined
+      }
       onClosed()
       mainWindow = undefined
       onWindowChanged(undefined)

@@ -36,7 +36,7 @@ export const extensionRegistry: ExtensionDefinition[] = [
   },
   {
     id: "extension.firstParty.pdfEditor",
-    title: "PDF 编辑器",
+    title: "PDF",
     slot: "workspace.tab",
     kind: "bundled",
     distribution: "first-party-optional",

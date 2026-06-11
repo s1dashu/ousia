@@ -3,6 +3,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type ChangeEvent,
   type CSSProperties,
   type ClipboardEvent,
   type FormEvent,
@@ -10,26 +11,30 @@ import {
   type UIEvent,
 } from "react"
 import {
-  Add01Icon,
-  AiSearchIcon,
-  AlertCircleIcon,
-  ArrowDown01Icon,
-  ArrowUp02Icon,
-  CheckmarkCircle02Icon,
-  Clock01Icon,
-  CodeIcon,
-  Copy01Icon,
-  DatabaseIcon,
-  File01Icon,
-  Loading03Icon,
-  MoreHorizontalIcon,
-  LayoutRightIcon,
-  Search01Icon,
-  TerminalIcon,
-  Tick02Icon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { ArrowDown } from "lucide-react"
+  ArrowDown,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  CircleAlert,
+  CircleCheck,
+  Clock,
+  Code,
+  Copy,
+  Database,
+  File,
+  FileImage,
+  FileText,
+  LoaderCircle,
+  type LucideIcon,
+  MoreHorizontal,
+  Paperclip,
+  PanelLeft,
+  Plus,
+  Search,
+  Sparkles,
+  Terminal,
+  X,
+} from "lucide-react"
 import { Streamdown } from "streamdown"
 import "streamdown/styles.css"
 
@@ -39,39 +44,66 @@ import type {
   SessionRecord,
 } from "@/app/app-state"
 import {
-  findModelPreset,
+  findRegistryModel,
+  getConfiguredModelPresets,
+  modelLabel,
   modelPresetValue,
-  modelPresets,
 } from "@/app/model-presets"
 import { Button } from "@/components/ui/button"
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import type {
-  OusiaChatEvent,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Textarea } from "@/components/ui/textarea"
+import {
+  getOusiaModelProviderApiKey,
+  normalizeOusiaAppSettings,
+  type OusiaChatAttachment,
+  type OusiaChatEvent,
+  type OusiaModelRegistryResult,
+  type OusiaThinkingLevel,
 } from "@/electron/chat-types"
+import type { ExtensionAgentQuoteToInputPayload } from "@/extensions/types"
 import type { ChatItem } from "@/features/chat/chat-events"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 import { cn } from "@/lib/utils"
 
 const CHAT_INPUT_MAX_HEIGHT = 192
+const CHAT_INPUT_MIN_HEIGHT = 48
 const CHAT_CONTENT_MAX_WIDTH_CLASS = "mx-auto w-full max-w-4xl"
+const DEFAULT_CHAT_THINKING_LEVEL: OusiaThinkingLevel = "medium"
+const TURN_WAIT_INDICATOR_DELAY_MS = 180
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
+
+const chatThinkingLabels: Record<OusiaThinkingLevel, string> = {
+  off: "Off",
+  minimal: "Minimal",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Extra High",
+}
 
 type ChatAreaProps = {
   currentProject: ProjectRecord | undefined
   currentSession: SessionRecord | undefined
+  draftQuoteIntent?: ChatQuoteIntent | null
   items: ChatItem[]
   isAgentWorking: boolean
   isSidebarCollapsed: boolean
   isWindowFullscreen: boolean
   isWorkspaceCollapsed: boolean
+  modelRegistry: OusiaModelRegistryResult | undefined
   onLocalEvent: (event: OusiaChatEvent) => void
   onGenerateSessionTitle: (sessionId: string, firstPrompt: string) => void
+  onDraftQuoteIntentHandled?: (id: string) => void
   onExpandWorkspace: () => void
   onSettingsChange: (settings: AppSettings) => void
   onToggleSidebar: () => void
@@ -79,27 +111,68 @@ type ChatAreaProps = {
   style: CSSProperties
 }
 
+export type ChatQuoteIntent = ExtensionAgentQuoteToInputPayload & {
+  id: string
+}
+
+type ChatAttachmentSummary = Pick<
+  OusiaChatAttachment,
+  "id" | "kind" | "mediaType" | "name" | "size"
+>
+
+const TOOL_NAME_LABELS: Record<string, string> = {
+  bash: "终端",
+  edit: "编辑",
+  find: "查找",
+  grep: "搜索",
+  ls: "列目录",
+  read: "读取",
+  write: "写入",
+}
+
+function normalizeToolName(name: string) {
+  return name
+    .trim()
+    .replace(/^tool[-_:]/i, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .trim()
+}
+
 function formatToolName(name: string) {
   if (!name) {
     return "工具"
   }
-  return name
-    .replace(/^tool[-_:]/i, "")
-    .replace(/[-_]+/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
+
+  const normalizedName = normalizeToolName(name)
+  const mappedName = TOOL_NAME_LABELS[normalizedName.toLowerCase()]
+  if (mappedName) {
+    return mappedName
+  }
+
+  return normalizedName
     .replace(/\b\w/g, (character) => character.toUpperCase())
+}
+
+function defaultThinkingLevelFor(levels: OusiaThinkingLevel[]) {
+  return levels.includes(DEFAULT_CHAT_THINKING_LEVEL)
+    ? DEFAULT_CHAT_THINKING_LEVEL
+    : (levels[0] ?? DEFAULT_CHAT_THINKING_LEVEL)
 }
 
 export function ChatArea({
   currentProject,
   currentSession,
+  draftQuoteIntent,
   items,
   isAgentWorking,
   isSidebarCollapsed,
   isWindowFullscreen,
   isWorkspaceCollapsed,
+  modelRegistry,
   onLocalEvent,
   onGenerateSessionTitle,
+  onDraftQuoteIntentHandled,
   onExpandWorkspace,
   onSettingsChange,
   onToggleSidebar,
@@ -107,31 +180,48 @@ export function ChatArea({
   style,
 }: ChatAreaProps) {
   const [draft, setDraft] = useState("")
+  const [attachments, setAttachments] = useState<OusiaChatAttachment[]>([])
   const [isSending, setIsSending] = useState(false)
   const [isInterrupting, setIsInterrupting] = useState(false)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
   const [openSessionMenuKey, setOpenSessionMenuKey] = useState<string | null>(
     null
   )
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">(
     "idle"
   )
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
-  const sessionMenuRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const inputScrollTopBeforeResizeRef = useRef(0)
   const isComposingRef = useRef(false)
   const isProgrammaticScrollRef = useRef(false)
-  const hasElectronApi = Boolean(window.ousia)
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
-  const selectedModelPreset = findModelPreset(
+  const configuredModelPresets = getConfiguredModelPresets(
+    settings.modelProviders,
+    modelRegistry
+  )
+  const selectedModelPreset = findRegistryModel(
+    modelRegistry,
     settings.modelProvider,
     settings.modelId
   )
-  const selectedModelValue = selectedModelPreset
-    ? modelPresetValue(selectedModelPreset.provider, selectedModelPreset.modelId)
-    : "custom"
+  const activeThinkingLevels =
+    selectedModelPreset?.thinkingLevels ?? [settings.thinkingLevel]
+  const selectedThinkingLevel = activeThinkingLevels.includes(
+    settings.thinkingLevel
+  )
+    ? settings.thinkingLevel
+    : defaultThinkingLevelFor(activeThinkingLevels)
+  const selectedModelLabel =
+    selectedModelPreset ? modelLabel(selectedModelPreset) : settings.modelId
+  const showTurnWaitIndicator = useDelayedTurnWaitIndicator(
+    shouldShowTurnWaitIndicator(items, isAgentWorking)
+  )
+  const hasDraftContent = Boolean(draft.trim() || attachments.length)
 
   function isScrolledToLatest(node: HTMLDivElement) {
     return node.scrollHeight - node.scrollTop - node.clientHeight < 24
@@ -182,31 +272,33 @@ export function ChatArea({
   }, [isAgentWorking, isFollowingLatest, items])
 
   useEffect(() => {
-    if (!currentSession) {
+    const sessionId = currentSession?.id
+    if (!sessionId) {
       return
     }
-    inputRef.current?.focus()
-  }, [currentSession])
+    const frameId = window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true })
+    })
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [currentSession?.id])
 
   useEffect(() => {
-    if (!isSessionMenuOpen) {
+    if (
+      !selectedModelPreset ||
+      selectedModelPreset.thinkingLevels.includes(settings.thinkingLevel)
+    ) {
       return
     }
 
-    function handlePointerDown(event: PointerEvent) {
-      const node = sessionMenuRef.current
-      if (node?.contains(event.target as Node)) {
-        return
-      }
-      setOpenSessionMenuKey(null)
-      setCopyStatus("idle")
-    }
-
-    window.addEventListener("pointerdown", handlePointerDown)
-    return () => {
-      window.removeEventListener("pointerdown", handlePointerDown)
-    }
-  }, [isSessionMenuOpen])
+    onSettingsChange(
+      normalizeOusiaAppSettings({
+        ...settings,
+        thinkingLevel: defaultThinkingLevelFor(selectedModelPreset.thinkingLevels),
+      })
+    )
+  }, [onSettingsChange, selectedModelPreset, settings])
 
   useLayoutEffect(() => {
     const node = inputRef.current
@@ -214,12 +306,54 @@ export function ChatArea({
       return
     }
 
+    const previousScrollTop = Math.max(
+      node.scrollTop,
+      inputScrollTopBeforeResizeRef.current
+    )
     node.style.height = "auto"
-    const nextHeight = Math.min(node.scrollHeight, CHAT_INPUT_MAX_HEIGHT)
+    const nextHeight = Math.min(
+      Math.max(node.scrollHeight, CHAT_INPUT_MIN_HEIGHT),
+      CHAT_INPUT_MAX_HEIGHT
+    )
     node.style.height = `${nextHeight}px`
     node.style.overflowY =
       node.scrollHeight > CHAT_INPUT_MAX_HEIGHT ? "auto" : "hidden"
+    node.scrollTop = Math.min(
+      previousScrollTop,
+      Math.max(0, node.scrollHeight - node.clientHeight)
+    )
+    inputScrollTopBeforeResizeRef.current = node.scrollTop
   }, [draft])
+
+  useEffect(() => {
+    if (!draftQuoteIntent) {
+      return
+    }
+    const block = formatQuoteIntentForDraft(draftQuoteIntent)
+    let focusFrameId: number | undefined
+    const frameId = window.requestAnimationFrame(() => {
+      setDraft((current) => {
+        const trimmedCurrent = current.replace(/\s+$/, "")
+        return trimmedCurrent ? `${trimmedCurrent}\n\n${block}` : block
+      })
+      focusFrameId = window.requestAnimationFrame(() => {
+        const node = inputRef.current
+        if (!node) {
+          return
+        }
+        node.focus({ preventScroll: true })
+        const cursor = node.value.length
+        node.setSelectionRange(cursor, cursor)
+      })
+    })
+    onDraftQuoteIntentHandled?.(draftQuoteIntent.id)
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      if (focusFrameId !== undefined) {
+        window.cancelAnimationFrame(focusFrameId)
+      }
+    }
+  }, [draftQuoteIntent, onDraftQuoteIntentHandled])
 
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const isAtLatest = isScrolledToLatest(event.currentTarget)
@@ -233,10 +367,34 @@ export function ChatArea({
     setShowScrollToLatest(!isAtLatest)
   }
 
+  function updateThinkingLevel(thinkingLevel: OusiaThinkingLevel) {
+    onSettingsChange(
+      normalizeOusiaAppSettings({
+        ...settings,
+        thinkingLevel,
+      })
+    )
+  }
+
+  function updateModel(model: (typeof configuredModelPresets)[number]) {
+    const thinkingLevel = model.thinkingLevels.includes(settings.thinkingLevel)
+      ? settings.thinkingLevel
+      : defaultThinkingLevelFor(model.thinkingLevels)
+
+    onSettingsChange(
+      normalizeOusiaAppSettings({
+        ...settings,
+        modelProvider: model.provider,
+        modelId: model.modelId,
+        thinkingLevel,
+      })
+    )
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const text = draft.trim()
-    if (!text || isSending) {
+    if ((!text && attachments.length === 0) || isSending) {
       return
     }
     if (!window.ousia || !currentProject || !currentSession) {
@@ -250,25 +408,57 @@ export function ChatArea({
       })
       return
     }
+    if (
+      attachments.some((attachment) => attachment.kind === "image") &&
+      selectedModelPreset &&
+      !selectedModelPreset.input.includes("image")
+    ) {
+      onLocalEvent({
+        type: "error",
+        id: `image-model-${Date.now()}`,
+        text: "当前模型不支持图片输入，请切换到支持识图的模型后重试。",
+        timestamp: new Date().toISOString(),
+      })
+      return
+    }
+    const outgoingAttachments = attachments
     setDraft("")
+    setAttachments([])
     scrollToLatest("auto")
     setIsSending(true)
     const shouldGenerateTitle =
       currentSession.title.trim() === "新会话" && items.length === 0
+    onLocalEvent({
+      type: "run_status",
+      status: "starting",
+      timestamp: new Date().toISOString(),
+    })
     try {
-      await window.ousia.sendChatMessage({
+      const result = await window.ousia.sendChatMessage({
         prompt: text,
+        attachments: outgoingAttachments,
         projectPath: currentProject.path,
         sessionId: currentSession.id,
-        thinkingLevel: settings.thinkingLevel,
+        thinkingLevel: selectedThinkingLevel,
         model: {
           provider: settings.modelProvider,
           modelId: settings.modelId,
-          apiKey: settings.modelApiKey.trim() || undefined,
+          apiKey: getOusiaModelProviderApiKey(settings)?.trim() || undefined,
         },
       })
+      if (!result.ok) {
+        onLocalEvent({
+          type: "run_status",
+          status: "error",
+          timestamp: new Date().toISOString(),
+        })
+      }
       if (shouldGenerateTitle) {
-        onGenerateSessionTitle(currentSession.id, text)
+        const titlePrompt =
+          text || outgoingAttachments.map((attachment) => attachment.name).join(" ")
+        if (titlePrompt) {
+          onGenerateSessionTitle(currentSession.id, titlePrompt)
+        }
       }
     } finally {
       setIsSending(false)
@@ -300,6 +490,11 @@ export function ChatArea({
       setCopyStatus("idle")
       return
     }
+    if (isModelMenuOpen) {
+      event.preventDefault()
+      setIsModelMenuOpen(false)
+      return
+    }
     event.preventDefault()
     void handleInterrupt()
   }
@@ -329,6 +524,12 @@ export function ChatArea({
   }
 
   function handlePaste(event: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = filesFromDataTransfer(event.clipboardData)
+    if (files.length) {
+      event.preventDefault()
+      void addFiles(files)
+      return
+    }
     const text = event.clipboardData.getData("text/plain")
     const normalizedText = normalizePastedMessageText(text)
     if (normalizedText === text) {
@@ -336,6 +537,7 @@ export function ChatArea({
     }
     event.preventDefault()
     const target = event.currentTarget
+    inputScrollTopBeforeResizeRef.current = target.scrollTop
     const selectionStart = target.selectionStart
     const selectionEnd = target.selectionEnd
     setDraft(
@@ -346,6 +548,59 @@ export function ChatArea({
       const nextCursor = selectionStart + normalizedText.length
       inputRef.current?.setSelectionRange(nextCursor, nextCursor)
     })
+  }
+
+  function handleDraftChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    inputScrollTopBeforeResizeRef.current = event.currentTarget.scrollTop
+    setDraft(event.currentTarget.value)
+  }
+
+  async function addFiles(files: File[]) {
+    const currentTotal = attachments.reduce((total, item) => total + item.size, 0)
+    const selectedTotal = files.reduce((total, file) => total + file.size, 0)
+    if (currentTotal + selectedTotal > MAX_TOTAL_ATTACHMENT_BYTES) {
+      onLocalEvent({
+        type: "error",
+        id: `attachments-too-large-${Date.now()}`,
+        text: "附件总大小不能超过 40 MB。",
+        timestamp: new Date().toISOString(),
+      })
+      return
+    }
+
+    const next: OusiaChatAttachment[] = []
+    for (const file of files) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        onLocalEvent({
+          type: "error",
+          id: `attachment-too-large-${Date.now()}-${file.name}`,
+          text: `${file.name} 超过 20 MB，已跳过。`,
+          timestamp: new Date().toISOString(),
+        })
+        continue
+      }
+      try {
+        next.push(await chatAttachmentFromFile(file))
+      } catch {
+        onLocalEvent({
+          type: "error",
+          id: `attachment-read-failed-${Date.now()}-${file.name}`,
+          text: `${file.name} 读取失败，已跳过。`,
+          timestamp: new Date().toISOString(),
+        })
+      }
+    }
+    if (!next.length) {
+      return
+    }
+    setAttachments((current) => [...current, ...next])
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true })
+    })
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((current) => current.filter((item) => item.id !== id))
   }
 
   return (
@@ -370,56 +625,51 @@ export function ChatArea({
           </div>
         </div>
         <div className="window-no-drag flex shrink-0 items-center gap-1">
-          <div className="relative" ref={sessionMenuRef}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="更多会话操作"
-              aria-expanded={isSessionMenuOpen}
-              aria-haspopup="menu"
-              onClick={() => {
-                setOpenSessionMenuKey((current) =>
-                  current === currentSessionMenuKey ? null : currentSessionMenuKey
-                )
+          <DropdownMenu
+            modal={false}
+            open={isSessionMenuOpen}
+            onOpenChange={(open) => {
+              setOpenSessionMenuKey(open ? currentSessionMenuKey : null)
+              if (!open) {
                 setCopyStatus("idle")
-              }}
-            >
-              <HugeiconsIcon
-                icon={MoreHorizontalIcon}
-                size={19}
-                strokeWidth={1.8}
-              />
-            </Button>
-            {isSessionMenuOpen ? (
-              <div
-                role="menu"
-                aria-label="会话操作"
-                className="absolute top-full right-0 z-50 mt-2 min-w-48 rounded-md bg-popover p-1 text-popover-foreground ring-1 ring-foreground/10 dark:shadow-md"
-              >
-                <button
+              }
+            }}
+          >
+            <DropdownMenuTrigger
+              render={
+                <Button
                   type="button"
-                  role="menuitem"
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent focus-visible:text-accent-foreground"
-                  onClick={() => void handleCopySessionHistory()}
-                >
-                  <HugeiconsIcon
-                    icon={copyStatus === "copied" ? Tick02Icon : Copy01Icon}
-                    size={16}
-                    strokeWidth={1.9}
-                    className="text-muted-foreground"
-                  />
-                  <span className="flex-1">
-                    {copyStatus === "copied"
-                      ? "已复制"
-                      : copyStatus === "failed"
-                        ? "复制失败"
-                        : "复制会话历史"}
-                  </span>
-                </button>
-              </div>
-            ) : null}
-          </div>
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="更多会话操作"
+                />
+              }
+            >
+              <MoreHorizontal size={19} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-auto rounded-md shadow-none dark:shadow-md"
+            >
+              <DropdownMenuItem
+                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-muted/45 focus:bg-muted/45"
+                onClick={() => void handleCopySessionHistory()}
+              >
+                {copyStatus === "copied" ? (
+                  <Check size={16} className="text-muted-foreground" />
+                ) : (
+                  <Copy size={16} className="text-muted-foreground" />
+                )}
+                <span className="flex-1">
+                  {copyStatus === "copied"
+                    ? "已复制"
+                    : copyStatus === "failed"
+                      ? "复制失败"
+                      : "复制会话历史"}
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {isWorkspaceCollapsed ? (
             <Button
               type="button"
@@ -428,11 +678,7 @@ export function ChatArea({
               aria-label="展开工作区"
               onClick={onExpandWorkspace}
             >
-              <HugeiconsIcon
-                icon={LayoutRightIcon}
-                size={19}
-                strokeWidth={1.8}
-              />
+              <PanelLeft size={19} />
             </Button>
           ) : null}
         </div>
@@ -440,25 +686,17 @@ export function ChatArea({
 
       <div
         ref={scrollRef}
-        className="ousia-hover-scrollbar min-h-0 flex-1 select-text overflow-auto px-5 pt-4 pb-8"
+        className="ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 select-text overflow-auto px-5 pt-4 pb-16"
         onScroll={handleChatScroll}
       >
-        <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-3")}>
+        <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-5")}>
           {items.length ? (
             <>
               {items.map((item) => <ChatItemView item={item} key={item.id} />)}
-              {shouldShowTurnWaitIndicator(items, isAgentWorking) ? (
-                <AgentTurnWaitIndicator />
-              ) : null}
+              {showTurnWaitIndicator ? <AgentTurnWaitIndicator /> : null}
             </>
           ) : (
-            <div className="flex min-h-[45vh] items-center justify-center text-center text-sm leading-6 text-muted-foreground">
-              <div className="max-w-sm">
-                {hasElectronApi
-                  ? `让智能体在 ${currentProject?.path ?? "某个项目"} 中工作。`
-                  : "请用 Electron 打开以和 pi coding agent 对话。"}
-              </div>
-            </div>
+            null
           )}
         </div>
       </div>
@@ -480,12 +718,29 @@ export function ChatArea({
 
       <form className="shrink-0 px-5 pt-2 pb-5" onSubmit={handleSubmit}>
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
-          <div className="rounded-xl bg-card p-3 dark:shadow-sm">
-            <textarea
+          <div className="rounded-xl bg-white px-3 pt-2 pb-2 ring-1 ring-border/80 outline outline-4 outline-border/30 transition-[outline-color,outline-width,ring-color] focus-within:ring-ring/45 focus-within:outline-[5px] focus-within:outline-ring/20 dark:bg-background dark:ring-border/80 dark:outline-border/30 dark:focus-within:ring-ring/45 dark:focus-within:outline-ring/20">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.currentTarget.files ?? [])
+                event.currentTarget.value = ""
+                void addFiles(files)
+              }}
+            />
+            {attachments.length ? (
+              <AttachmentStrip
+                attachments={attachments}
+                onRemove={removeAttachment}
+              />
+            ) : null}
+            <Textarea
               ref={inputRef}
               aria-label="消息"
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={handleDraftChange}
               onPaste={handlePaste}
               onCompositionStart={() => {
                 isComposingRef.current = true
@@ -502,86 +757,167 @@ export function ChatArea({
                   event.currentTarget.form?.requestSubmit()
                 }
               }}
-              className="ousia-hover-scrollbar min-h-14 w-full resize-none bg-transparent text-sm leading-6 outline-none placeholder:text-muted-foreground"
+              className="ousia-hover-scrollbar min-h-12 rounded-none border-0 bg-transparent p-0 text-sm leading-6 [field-sizing:fixed] focus-visible:ring-0"
               placeholder={isAgentWorking ? "继续发送消息..." : "在这里输入消息...."}
             />
-            <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="mt-2 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
+                  className="size-7"
                   aria-label="添加附件"
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <HugeiconsIcon icon={Add01Icon} size={18} strokeWidth={2} />
+                  <Plus size={18} />
                 </Button>
-                <Select
-                  items={[
-                    ...modelPresets.map((preset) => ({
-                      label: preset.label,
-                      value: modelPresetValue(preset.provider, preset.modelId),
-                    })),
-                    { label: "自定义模型", value: "custom" },
-                  ]}
-                  value={selectedModelValue}
-                  onValueChange={(value) => {
-                    if (value === "custom") {
-                      return
-                    }
-                    const preset = modelPresets.find(
-                      (item) =>
-                        modelPresetValue(item.provider, item.modelId) === value
-                    )
-                    if (!preset) {
-                      return
-                    }
-                    onSettingsChange({
-                      ...settings,
-                      modelProvider: preset.provider,
-                      modelId: preset.modelId,
-                    })
-                  }}
+                <DropdownMenu
+                  modal={false}
+                  open={isModelMenuOpen}
+                  onOpenChange={setIsModelMenuOpen}
                 >
-                  <SelectTrigger
-                    aria-label="切换模型"
-                    size="sm"
-                    className="max-w-52 border-transparent bg-transparent px-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:bg-transparent dark:hover:bg-accent"
+                  <DropdownMenuTrigger
+                    aria-label="切换模型和推理强度"
+                    className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground outline-none transition-[background-color,color,scale] hover:bg-accent hover:text-accent-foreground active:scale-[0.96]"
                   >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent align="start" alignItemWithTrigger={false}>
-                    <SelectGroup>
-                      {modelPresets.map((preset) => (
-                        <SelectItem
-                          key={modelPresetValue(
-                            preset.provider,
-                            preset.modelId
-                          )}
-                          value={modelPresetValue(
-                            preset.provider,
-                            preset.modelId
-                          )}
+                    <span className="min-w-0 truncate text-foreground">
+                      {selectedModelLabel}
+                    </span>
+                    {selectedThinkingLevel !== "off" ? (
+                      <span className="shrink-0 text-muted-foreground">
+                        {chatThinkingLabels[selectedThinkingLevel]}
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      size={16}
+                      className="shrink-0 text-muted-foreground"
+                    />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    sideOffset={8}
+                    align="start"
+                    className="w-72 rounded-xl p-2 shadow-[0_18px_50px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.08)] dark:shadow-[0_18px_50px_rgba(0,0,0,0.42),0_0_0_1px_rgba(255,255,255,0.1)]"
+                  >
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm">
+                      Reasoning
+                    </DropdownMenuLabel>
+                    <DropdownMenuRadioGroup value={selectedThinkingLevel}>
+                      {activeThinkingLevels.map((level) => (
+                        <DropdownMenuRadioItem
+                          key={level}
+                          value={level}
+                          className="h-10 rounded-md px-2"
+                          onClick={() => updateThinkingLevel(level)}
                         >
-                          {preset.label}
-                        </SelectItem>
+                          <span className="min-w-0 flex-1 truncate">
+                            {chatThinkingLabels[level]}
+                          </span>
+                        </DropdownMenuRadioItem>
                       ))}
-                      <SelectItem value="custom">自定义模型</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
+                    </DropdownMenuRadioGroup>
+                    <DropdownMenuSeparator className="my-2" />
+                    <DropdownMenuRadioGroup
+                      value={
+                        selectedModelPreset
+                          ? modelPresetValue(
+                              selectedModelPreset.provider,
+                              selectedModelPreset.modelId
+                            )
+                          : undefined
+                      }
+                    >
+                      {configuredModelPresets.map((preset) => {
+                        const value = modelPresetValue(
+                          preset.provider,
+                          preset.modelId
+                        )
+
+                        return (
+                          <DropdownMenuRadioItem
+                            key={value}
+                            value={value}
+                            className="h-10 rounded-md px-2"
+                            onClick={() => updateModel(preset)}
+                          >
+                            <span className="min-w-0 flex-1 truncate">
+                              {modelLabel(preset)}
+                            </span>
+                          </DropdownMenuRadioItem>
+                        )
+                      })}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <Button
                 type="submit"
-                size="icon"
-                disabled={isSending || !draft.trim()}
+                size="icon-sm"
+                className="size-7"
+                disabled={isSending || !hasDraftContent}
+                aria-label="发送消息"
               >
-                <HugeiconsIcon icon={ArrowUp02Icon} size={19} strokeWidth={2} />
+                <ArrowUp size={18} />
               </Button>
             </div>
           </div>
         </div>
       </form>
     </section>
+  )
+}
+
+function AttachmentStrip({
+  attachments,
+  onRemove,
+}: {
+  attachments: OusiaChatAttachment[]
+  onRemove: (id: string) => void
+}) {
+  return (
+    <div className="mb-2 flex max-h-28 flex-wrap gap-2 overflow-auto pr-1">
+      {attachments.map((attachment) => (
+        <div
+          key={attachment.id}
+          className="group flex h-12 max-w-56 items-center gap-2 rounded-md border bg-muted/25 px-2"
+        >
+          {attachment.kind === "image" ? (
+            <img
+              alt=""
+              src={`data:${attachment.mediaType};base64,${attachment.dataBase64}`}
+              className="size-8 shrink-0 rounded object-cover"
+            />
+          ) : (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded bg-background text-muted-foreground">
+              {attachment.kind === "text" ? (
+                <FileText size={17} />
+              ) : (
+                <File size={17} />
+              )}
+            </span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs leading-4">
+              {attachment.name}
+            </span>
+            <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+              {formatBytes(attachment.size)}
+            </span>
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="size-6 shrink-0 text-muted-foreground"
+            aria-label={`移除 ${attachment.name}`}
+            onClick={() => onRemove(attachment.id)}
+          >
+            <X size={14} />
+          </Button>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -634,9 +970,45 @@ function ChatItemView({ item }: { item: ChatItem }) {
           {item.text}
         </Streamdown>
       ) : (
-        <p className="m-0 break-words whitespace-pre-wrap">{item.text}</p>
+        <>
+          {item.attachments?.length ? (
+            <MessageAttachmentList attachments={item.attachments} />
+          ) : null}
+          {item.text ? (
+            <p className="m-0 break-words whitespace-pre-wrap">{item.text}</p>
+          ) : null}
+        </>
       )}
     </article>
+  )
+}
+
+function MessageAttachmentList({
+  attachments,
+}: {
+  attachments: ChatAttachmentSummary[]
+}) {
+  return (
+    <div className="mb-1.5 flex flex-wrap gap-1.5">
+      {attachments.map((attachment) => {
+        const IconComponent =
+          attachment.kind === "image"
+            ? FileImage
+            : attachment.kind === "text"
+              ? FileText
+              : Paperclip
+        return (
+          <span
+            key={attachment.id}
+            className="inline-flex max-w-52 items-center gap-1.5 rounded-md border bg-background/80 px-2 py-1 text-xs text-muted-foreground"
+            title={`${attachment.name} · ${formatBytes(attachment.size)}`}
+          >
+            <IconComponent size={14} className="shrink-0" />
+            <span className="truncate">{attachment.name}</span>
+          </span>
+        )
+      })}
+    </div>
   )
 }
 
@@ -658,6 +1030,127 @@ function normalizePastedMessageText(text: string) {
     !/\n\s*$/.test(trimmed)
 
   return looksLikeCopiedSingleMessage ? trimmed : text
+}
+
+function filesFromDataTransfer(dataTransfer: DataTransfer) {
+  const files = Array.from(dataTransfer.files ?? [])
+  if (files.length) {
+    return files
+  }
+  return Array.from(dataTransfer.items ?? [])
+    .filter((item) => item.kind === "file")
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file))
+}
+
+async function chatAttachmentFromFile(
+  file: File
+): Promise<OusiaChatAttachment> {
+  const mediaType = file.type || mediaTypeFromFileName(file.name)
+  const base = {
+    id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    name: file.name || "未命名文件",
+    mediaType,
+    size: file.size,
+  }
+
+  if (mediaType.startsWith("image/")) {
+    return {
+      ...base,
+      kind: "image",
+      dataBase64: await readFileAsBase64(file),
+    }
+  }
+
+  if (isTextLikeFile(file, mediaType)) {
+    return {
+      ...base,
+      kind: "text",
+      text: await file.text(),
+    }
+  }
+
+  return {
+    ...base,
+    kind: "file",
+  }
+}
+
+function readFileAsBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : ""
+      resolve(result.replace(/^data:[^;]+;base64,/, ""))
+    }
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("读取文件失败"))
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function isTextLikeFile(file: File, mediaType: string) {
+  if (mediaType.startsWith("text/")) {
+    return true
+  }
+  return /\.(c|cc|conf|cpp|cs|css|csv|go|h|hpp|html|ini|java|js|json|jsx|log|md|mjs|py|rb|rs|sh|sql|svg|toml|ts|tsx|txt|vue|xml|yaml|yml)$/i.test(
+    file.name
+  )
+}
+
+function mediaTypeFromFileName(name: string) {
+  if (/\.png$/i.test(name)) {
+    return "image/png"
+  }
+  if (/\.(jpe?g)$/i.test(name)) {
+    return "image/jpeg"
+  }
+  if (/\.gif$/i.test(name)) {
+    return "image/gif"
+  }
+  if (/\.webp$/i.test(name)) {
+    return "image/webp"
+  }
+  if (/\.svg$/i.test(name)) {
+    return "image/svg+xml"
+  }
+  if (/\.(md|txt|log)$/i.test(name)) {
+    return "text/plain"
+  }
+  if (/\.json$/i.test(name)) {
+    return "application/json"
+  }
+  return "application/octet-stream"
+}
+
+function formatBytes(size: number) {
+  if (!Number.isFinite(size) || size <= 0) {
+    return "0 B"
+  }
+  const units = ["B", "KB", "MB", "GB"]
+  let value = size
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value >= 10 || unitIndex === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unitIndex]}`
+}
+
+function formatQuoteIntentForDraft(intent: ChatQuoteIntent) {
+  const selectedText = intent.quote.text.trim()
+  const quote = selectedText
+    .split(/\r?\n/)
+    .map((line) => `> ${line}`)
+    .join("\n")
+  const sourceLabel =
+    intent.source.title?.trim() || intent.source.url?.trim() || "浏览器选区"
+  const source = intent.source.url?.trim()
+    ? `来源：[${sourceLabel}](${intent.source.url.trim()})`
+    : `来源：${sourceLabel}`
+
+  return `${quote}\n\n${source}`
 }
 
 function formatSessionHistoryForClipboard({
@@ -760,9 +1253,38 @@ function shouldShowTurnWaitIndicator(items: ChatItem[], isAgentWorking: boolean)
   })
 }
 
+function useDelayedTurnWaitIndicator(shouldShow: boolean) {
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    if (!shouldShow) {
+      const timeoutId = window.setTimeout(() => {
+        setIsVisible(false)
+      }, 0)
+      return () => {
+        window.clearTimeout(timeoutId)
+      }
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsVisible(true)
+    }, TURN_WAIT_INDICATOR_DELAY_MS)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [shouldShow])
+
+  return isVisible
+}
+
 function AgentTurnWaitIndicator() {
   return (
-    <div className="flex items-center px-2 py-1" aria-label="等待下一步响应" role="status">
+    <div
+      className="flex min-h-10 items-start px-2 pt-1"
+      aria-label="等待下一步响应"
+      role="status"
+    >
       <span className="flex h-5 items-center gap-1">
         {[0, 1, 2].map((index) => (
           <span
@@ -787,7 +1309,7 @@ function ToolCallView({ item }: { item: ToolChatItem }) {
   const output = item.output ?? (item.status === "finished" ? item.text : "")
   const errorText = item.errorText ?? (item.status === "failed" ? item.text : "")
   const status = getToolStatus(item.status)
-  const ToolIcon = getToolIcon(item.name)
+  const StatusIcon = status.icon
 
   return (
     <div className="overflow-hidden rounded-lg bg-muted/25 text-xs text-card-foreground">
@@ -798,7 +1320,7 @@ function ToolCallView({ item }: { item: ToolChatItem }) {
         onClick={() => setIsOpen((current) => !current)}
       >
         <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-background/70 text-muted-foreground">
-          <HugeiconsIcon icon={ToolIcon} size={15} strokeWidth={1.9} />
+          {renderToolIcon(item.name)}
         </span>
         <span className="min-w-0 flex-1 truncate font-medium">
           {formatToolName(item.name)}
@@ -809,18 +1331,14 @@ function ToolCallView({ item }: { item: ToolChatItem }) {
             status.className
           )}
         >
-          <HugeiconsIcon
-            icon={status.icon}
+          <StatusIcon
             size={12}
-            strokeWidth={2}
             className={status.isSpinning ? "animate-spin" : undefined}
           />
           {status.label}
         </span>
-        <HugeiconsIcon
-          icon={ArrowDown01Icon}
+        <ChevronDown
           size={15}
-          strokeWidth={1.9}
           className={cn(
             "shrink-0 text-muted-foreground transition-transform",
             isOpen && "rotate-180"
@@ -830,18 +1348,18 @@ function ToolCallView({ item }: { item: ToolChatItem }) {
 
       {isOpen ? (
         <div className="bg-muted/15 px-3 py-3">
-          <ToolPayloadSection title="Parameters" value={input || "{}"} />
+          <ToolPayloadSection title="参数" value={input || "{}"} />
           {errorText ? (
             <ToolPayloadSection
-              title="Error"
+              title="错误"
               value={errorText}
               tone="destructive"
             />
           ) : output ? (
-            <ToolPayloadSection title="Result" value={output} />
+            <ToolPayloadSection title="结果" value={output} />
           ) : item.status === "running" ? (
             <div className="mt-3 text-[11px] leading-5 text-muted-foreground">
-              Waiting for result...
+              等待结果...
             </div>
           ) : null}
         </div>
@@ -882,11 +1400,16 @@ function ToolPayloadSection({
   )
 }
 
-function getToolStatus(status: ToolChatItem["status"]) {
+function getToolStatus(status: ToolChatItem["status"]): {
+  label: string
+  icon: LucideIcon
+  className: string
+  isSpinning: boolean
+} {
   if (status === "failed") {
     return {
-      label: "Error",
-      icon: AlertCircleIcon,
+      label: "失败",
+      icon: CircleAlert,
       className:
         "bg-destructive/10 text-destructive dark:bg-destructive/15",
       isSpinning: false,
@@ -894,41 +1417,41 @@ function getToolStatus(status: ToolChatItem["status"]) {
   }
   if (status === "running") {
     return {
-      label: "Running",
-      icon: Loading03Icon,
+      label: "运行中",
+      icon: LoaderCircle,
       className: "bg-background/70 text-muted-foreground",
       isSpinning: true,
     }
   }
   return {
-    label: "Completed",
-    icon: CheckmarkCircle02Icon,
+    label: "已完成",
+    icon: CircleCheck,
     className: "bg-background/70 text-muted-foreground",
     isSpinning: false,
   }
 }
 
-function getToolIcon(name: string) {
+function renderToolIcon(name: string) {
   const normalizedName = name.toLowerCase()
   if (normalizedName.includes("bash") || normalizedName.includes("shell")) {
-    return TerminalIcon
+    return <Terminal size={15} />
   }
   if (normalizedName.includes("read") || normalizedName.includes("file")) {
-    return File01Icon
+    return <File size={15} />
   }
   if (normalizedName.includes("grep") || normalizedName.includes("find")) {
-    return Search01Icon
+    return <Search size={15} />
   }
   if (normalizedName.includes("search")) {
-    return AiSearchIcon
+    return <Sparkles size={15} />
   }
   if (normalizedName.includes("database") || normalizedName.includes("sql")) {
-    return DatabaseIcon
+    return <Database size={15} />
   }
   if (normalizedName.includes("code") || normalizedName.includes("edit")) {
-    return CodeIcon
+    return <Code size={15} />
   }
-  return Clock01Icon
+  return <Clock size={15} />
 }
 
 function formatToolPayloadForDisplay(value: string) {

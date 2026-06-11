@@ -9,6 +9,7 @@ module.exports = {
     asar: {
       unpack: "**/node_modules/node-pty/**/*",
     },
+    extraResource: ["src/extensions/system/terminal"],
   },
   rebuildConfig: {},
   makers: [

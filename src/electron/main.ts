@@ -1,9 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron"
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  type OpenDialogOptions,
+} from "electron"
 import { basename } from "node:path"
 import { env } from "node:process"
 
 import { createAgentConversationModule } from "./agent-conversations.js"
 import { loadAppState, saveAppState } from "./app-state-store.js"
+import { createBrowserHost } from "./browser-host.js"
 import { generateChatTitleWithUtilityModel } from "./chat-title-generator.js"
 import { ousiaCliBinDir, startCliBridge } from "./cli-bridge.js"
 import {
@@ -13,6 +20,14 @@ import {
 } from "./extension-state-store.js"
 import type {
   OusiaAppState,
+  OusiaBrowserAuthResponsePayload,
+  OusiaBrowserBoundsPayload,
+  OusiaBrowserCreatePayload,
+  OusiaBrowserFindPayload,
+  OusiaBrowserNavigatePayload,
+  OusiaBrowserStopFindPayload,
+  OusiaBrowserTabPayload,
+  OusiaBrowserZoomPayload,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatGenerateTitlePayload,
@@ -29,12 +44,14 @@ import type {
   OusiaPdfSaveFilePayload,
   OusiaRuntimeExtensionDeletePayload,
   OusiaRuntimeExtensionsChangedEvent,
+  OusiaSelectDirectoryResult,
   OusiaTerminalCreatePayload,
   OusiaTerminalDisposePayload,
   OusiaTerminalResizePayload,
   OusiaTerminalWritePayload,
 } from "./chat-types.js"
 import { expandHomePath, isPathInside } from "./host-paths.js"
+import { listPiModels } from "./model-registry.js"
 import { createProjectFilesModule } from "./project-files.js"
 import { createProjectTerminalModule } from "./project-terminal.js"
 import {
@@ -100,8 +117,12 @@ const runtimeExtensions = createRuntimeExtensionModule({
 
 const projectFiles = createProjectFilesModule()
 const projectTerminal = createProjectTerminalModule({ emitTerminalEvent })
+const browserHost = createBrowserHost({
+  getMainWindow: () => mainWindow,
+})
 const windowHost = createWindowHost({
   onClosed() {
+    browserHost.destroyAll()
     runtimeExtensions.closeRuntimeExtensionWatchers()
   },
   onWindowChanged(window) {
@@ -127,14 +148,32 @@ ipcMain.handle("ousia:chat:interrupt", (_event, payload: OusiaChatContext) =>
   agentConversations.interruptChat(payload)
 )
 
-ipcMain.handle("ousia:project:open", async () => {
-  const result = await dialog.showOpenDialog(mainWindow!, {
+ipcMain.handle("ousia:models:list", () => listPiModels(app.getPath("userData")))
+
+async function selectDirectory(): Promise<OusiaSelectDirectoryResult> {
+  const options: OpenDialogOptions = {
     properties: ["openDirectory", "createDirectory"],
-  })
+  }
+  const result = mainWindow
+    ? await dialog.showOpenDialog(mainWindow, options)
+    : await dialog.showOpenDialog(options)
   if (result.canceled || !result.filePaths[0]) {
     return { canceled: true }
   }
-  const path = result.filePaths[0]
+  return {
+    canceled: false,
+    path: result.filePaths[0],
+  }
+}
+
+ipcMain.handle("ousia:directory:select", () => selectDirectory())
+
+ipcMain.handle("ousia:project:open", async () => {
+  const result = await selectDirectory()
+  if (result.canceled) {
+    return result
+  }
+  const path = result.path
   return {
     canceled: false,
     path,
@@ -249,6 +288,75 @@ ipcMain.handle(
   "ousia:host:project-pty:dispose",
   (_event, payload: OusiaTerminalDisposePayload) =>
     projectTerminal.disposeTerminal(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:create",
+  (_event, payload: OusiaBrowserCreatePayload) => browserHost.create(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:set-bounds",
+  (_event, payload: OusiaBrowserBoundsPayload) => browserHost.setBounds(payload)
+)
+
+ipcMain.handle("ousia:browser:destroy", (_event, payload: OusiaBrowserTabPayload) =>
+  browserHost.destroy(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:navigate",
+  (_event, payload: OusiaBrowserNavigatePayload) => browserHost.navigate(payload)
+)
+
+ipcMain.handle("ousia:browser:back", (_event, payload: OusiaBrowserTabPayload) =>
+  browserHost.goBack(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:forward",
+  (_event, payload: OusiaBrowserTabPayload) => browserHost.goForward(payload)
+)
+
+ipcMain.handle("ousia:browser:reload", (_event, payload: OusiaBrowserTabPayload) =>
+  browserHost.reload(payload)
+)
+
+ipcMain.handle("ousia:browser:stop", (_event, payload: OusiaBrowserTabPayload) =>
+  browserHost.stop(payload)
+)
+
+ipcMain.handle("ousia:browser:focus", (_event, payload: OusiaBrowserTabPayload) =>
+  browserHost.focus(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:open-external",
+  (_event, payload: OusiaBrowserTabPayload) => browserHost.openExternal(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:read-selection",
+  (_event, payload: OusiaBrowserTabPayload) => browserHost.readSelection(payload)
+)
+
+ipcMain.handle("ousia:browser:find", (_event, payload: OusiaBrowserFindPayload) =>
+  browserHost.find(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:stop-find",
+  (_event, payload: OusiaBrowserStopFindPayload) => browserHost.stopFind(payload)
+)
+
+ipcMain.handle("ousia:browser:zoom", (_event, payload: OusiaBrowserZoomPayload) =>
+  browserHost.setZoom(payload)
+)
+
+ipcMain.handle(
+  "ousia:browser:auth-response",
+  (_event, payload: OusiaBrowserAuthResponsePayload) =>
+    browserHost.respondToAuth(payload)
 )
 
 ipcMain.on("ousia:log:renderer-error", (_event, payload: unknown) => {

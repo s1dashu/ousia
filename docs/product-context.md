@@ -53,7 +53,7 @@ Current MVP scope:
 - Workspace tabs as the first customizable extension surface.
 - Session-aware agent cwd: unassigned sessions use the default work dir; project
   sessions use their selected project path.
-- User-configurable default work dir, defaulting to `~/Ousia`.
+- User-configurable default work dir, defaulting to `~/.ousia/workspace`.
 
 Deferred scope:
 
@@ -89,4 +89,4 @@ Deferred scope:
 - Creating a project creates/selects a default session under that project; the
   project row itself only expands or collapses its session list.
 - Workspace: right-side open surface for extensions and system surfaces such as browser, editor, terminal, and custom apps.
-- Default work dir: directory used by unassigned sessions, currently `~/Ousia`.
+- Default work dir: directory used by unassigned sessions, currently `~/.ousia/workspace`.

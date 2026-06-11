@@ -64,13 +64,30 @@ Implemented:
 - Open local directory as project through the native folder picker.
 - Monaco-based workspace editor with project file navigation and save support.
 - xterm.js-based workspace terminal backed by Electron main `node-pty`
-  sessions.
+  sessions, using bundled Ousia Terminal Mono for terminal glyph coverage plus
+  a client-owned xterm theme that is reapplied after shell output. The PTY
+  sources user shell config through a wrapper and then applies Starship's
+  `plain-text-symbols` preset when Starship is available, with a compact
+  built-in prompt fallback. Optional bundled Starship binaries are scoped to
+  `src/extensions/system/terminal/vendor/starship/<platform>-<arch>/` and copied
+  as Electron extra resources.
 - Create, select, rename, delete sessions.
+- Session lists use dnd-kit sortable drag-and-drop for manual reordering, while
+  newly created or recently active sessions move to the top of their own session
+  group.
+- Project rows in the sidebar use dnd-kit sortable drag-and-drop to adjust and
+  persist project order.
 - Full-page settings surface with an inset VS Code-like floating left tab list
-  for appearance, general, and Agent settings. Select controls apply
+  for appearance, general, and model settings. Select controls apply
   immediately; text inputs apply on blur, so there is no save button.
-- Default work dir setting, default `~/Ousia`.
-- Model, runtime API key, and thinking level settings passed into pi chat turns.
+- Default work dir setting, default `~/.ousia/workspace`; Electron main creates
+  that directory during app-state load when the user has not chosen a custom
+  default work dir.
+- Model, selected provider runtime API key, and thinking level settings passed
+  into pi chat turns. The chat input menu owns model and thinking-level
+  selection. Model settings only manage provider entries and per-provider API
+  keys; provider addition is populated from pi's real `ModelRegistry`, including
+  custom `models.json` entries, instead of free-form provider text.
 - First user message in a default `新会话` triggers asynchronous session title
   generation through a pi-resolved lightweight utility model, capped at 16
   characters.
@@ -84,13 +101,18 @@ Implemented:
 - Esc interruption from the focused chat region/input through pi `abort()`.
 - Steering messages: sending while the agent is working queues through pi
   `steer` instead of waiting for the current run to finish.
+- Chat input supports selecting files with the attach button and pasting files
+  into the input. Image files are passed to pi through `session.prompt(...,
+  { images })` for vision-capable models; text-like files are inlined into the
+  prompt; other binaries remain visible as attachment metadata.
 - Streamdown Markdown rendering for assistant messages, with Streamdown link safety disabled.
 - Thinking block weak quote style, collapsed after completion.
 - Runtime extension packages loaded globally from `~/.ousia/extensions`, with
   frontend apps declared in `package.json#ousia.app` and automatic refresh from
   Electron main file watching.
-- Renderer project/session/settings/selection persistence is routed through
-  `src/app/app-state.ts` into Electron `src/electron/app-state-store.ts`.
+- Renderer project/session/settings/selection and shell layout persistence is
+  routed through `src/app/app-state.ts` into Electron
+  `src/electron/app-state-store.ts`.
 - App State persists with `schemaVersion: 2`; schema 1 project-nested sessions
   are migrated into the current top-level session list.
 - Extension-owned local UI state is routed through
@@ -113,7 +135,8 @@ Implemented:
   not opened as default workspace tabs.
 - First-party optional PDF Editor workspace extension, backed by
   `@embedpdf/react-pdf-viewer`, `pdf-lib`, and project-scoped PDF IPC for
-  listing, syncing, and saving `.pdf` files.
+  listing, syncing, saving `.pdf` files, and quoting the current PDF text
+  selection into the active chat input.
 - First-party optional Excalidraw workspace extension, backed by
   `@excalidraw/excalidraw`, for standalone whiteboard and sketch editing.
 - First-party optional Excel workspace extension that embeds the Univer Sheets
@@ -123,6 +146,10 @@ Implemented:
 - Workspace supports multiple open tab instances, close-on-hover tab icons, and
   a persistent new-tab button that opens an app-launcher-style extension picker.
 - Open workspace tabs and the active tab are restored globally across projects.
+- Sidebar/workspace collapse state and sidebar/chat column widths are restored
+  from Electron `userData/app-state.json`.
+- Native window size, position, and maximized state are restored from Electron
+  `userData/app-state.json`.
 - Workspace extensions receive their `extensionId` and `tabId` in context so
   they can persist global, project, tab, or resource scoped state without
   leaking extension-specific fields into the shell schema.
@@ -132,11 +159,19 @@ Implemented:
   `~/.ousia/bin/ousia`, starts a token-protected loopback bridge, and lets pi
   bash sessions invoke first-party extension actions without adding dedicated
   agent tools.
-- CLI-operable extension usage is help-first: pi's extra prompt lives in
-  `prompts/pi-extra-system-prompt.md` and tells the agent to list extensions,
-  call `help`, avoid unlisted actions, preserve the user's language, and avoid
-  emoji or Markdown in normal conversation. Concrete action names, arguments,
-  examples, and limitations belong in each extension's CLI help output.
+- CLI-operable extension usage is help-first: Ousia installs a unified `ousia`
+  usage skill under the same app-scoped pi agent directory used by Ousia chat
+  sessions, `<userData>/pi-agent/skills`, and lets pi discover it through the
+  normal skill loader. Ousia also adds the default pi user skill directory,
+  `~/.pi/agent/skills`, as additional skill paths for non-Ousia user skills so
+  embedded sessions can use the user's normal pi skills while keeping app-scoped
+  auth, models, settings, and sessions. Ousia does not additionally import a
+  default-user `ousia` skill into embedded sessions; the app-scoped `ousia`
+  skill is the single Ousia usage entry. Installation is one-time; user edits or
+  deletion of that visible skill are not rewritten on later session creation.
+  The skill tells the agent to list extensions, call `help`, and avoid unlisted
+  actions. Concrete action names, arguments, examples, and limitations belong in
+  each extension's CLI help output, not in pi's system prompt.
 - Generic workspace extension focus through the CLI: `openAndFocus` opens and
   focuses any registered Ousia workspace extension tab. PDF editor also supports
   `openFile` to open a current-project PDF inside that editor.
@@ -146,7 +181,7 @@ Implemented:
 - Session message history in renderer is in-memory after hydration, with pi
   history loaded on session selection.
 - Rename/delete use local metadata only; deeper pi session file management is not implemented.
-- Default unassigned sessions run in the configured default work dir, currently `~/Ousia`.
+- Default unassigned sessions run in the configured default work dir, currently `~/.ousia/workspace`.
 - Runtime extension file watching uses Node `fs.watch`.
 - Runtime extension frontend apps loaded from `~/.ousia/extensions` are
   `user-local` distribution extensions with `local-user` trust. They are not

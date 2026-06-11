@@ -1,6 +1,17 @@
 import type {
   OusiaAppState,
   OusiaAppStateSaveResult,
+  OusiaBrowserAuthResponsePayload,
+  OusiaBrowserBoundsPayload,
+  OusiaBrowserCreatePayload,
+  OusiaBrowserEvent,
+  OusiaBrowserFindPayload,
+  OusiaBrowserNavigatePayload,
+  OusiaBrowserOperationResult,
+  OusiaBrowserSelectionResult,
+  OusiaBrowserStopFindPayload,
+  OusiaBrowserTabPayload,
+  OusiaBrowserZoomPayload,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatGenerateTitlePayload,
@@ -22,6 +33,7 @@ import type {
   OusiaExtensionStateResult,
   OusiaExtensionStateSaveResult,
   OusiaExtensionStateSetPayload,
+  OusiaModelRegistryResult,
   OusiaOpenProjectResult,
   OusiaPdfListFilesPayload,
   OusiaPdfListFilesResult,
@@ -33,6 +45,7 @@ import type {
   OusiaRuntimeExtensionDeleteResult,
   OusiaRuntimeExtensionsChangedEvent,
   OusiaRuntimeExtensionsResult,
+  OusiaSelectDirectoryResult,
   OusiaTerminalCreatePayload,
   OusiaTerminalCreateResult,
   OusiaTerminalDisposePayload,
@@ -68,7 +81,9 @@ declare global {
       interruptChat(
         payload: OusiaChatContext
       ): Promise<OusiaChatInterruptResult>
+      listModels(): Promise<OusiaModelRegistryResult>
       openProjectDirectory(): Promise<OusiaOpenProjectResult>
+      selectDirectory(): Promise<OusiaSelectDirectoryResult>
       ensureWindowWidth(
         payload: OusiaEnsureWindowWidthPayload
       ): Promise<OusiaEnsureWindowWidthResult>
@@ -113,6 +128,52 @@ declare global {
       disposeTerminal(
         payload: OusiaTerminalDisposePayload
       ): Promise<OusiaTerminalOperationResult>
+      createBrowser(
+        payload: OusiaBrowserCreatePayload
+      ): Promise<OusiaBrowserOperationResult>
+      setBrowserBounds(
+        payload: OusiaBrowserBoundsPayload
+      ): Promise<OusiaBrowserOperationResult>
+      destroyBrowser(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      navigateBrowser(
+        payload: OusiaBrowserNavigatePayload
+      ): Promise<OusiaBrowserOperationResult>
+      browserBack(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      browserForward(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      reloadBrowser(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      stopBrowser(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      focusBrowser(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      openBrowserExternal(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserOperationResult>
+      readBrowserSelection(
+        payload: OusiaBrowserTabPayload
+      ): Promise<OusiaBrowserSelectionResult | null>
+      findInBrowser(
+        payload: OusiaBrowserFindPayload
+      ): Promise<OusiaBrowserOperationResult>
+      stopBrowserFind(
+        payload: OusiaBrowserStopFindPayload
+      ): Promise<OusiaBrowserOperationResult>
+      setBrowserZoom(
+        payload: OusiaBrowserZoomPayload
+      ): Promise<OusiaBrowserOperationResult>
+      respondToBrowserAuth(
+        payload: OusiaBrowserAuthResponsePayload
+      ): Promise<OusiaBrowserOperationResult>
+      onBrowserEvent(callback: (event: OusiaBrowserEvent) => void): () => void
       onTerminalEvent(
         callback: (event: OusiaTerminalEvent) => void
       ): () => void

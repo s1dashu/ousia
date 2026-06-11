@@ -4,9 +4,18 @@
 
 The current UI should feel closer to Codex desktop in density and seriousness, but not copy Codex exactly.
 
+Typography follows Codex desktop's system-first choice: UI text uses
+`-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`, so Chinese falls
+back to the platform UI font such as PingFang SC on macOS. Code, terminal,
+paths, logs, and other monospaced surfaces use Codex's default mono stack:
+`ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`.
+The workspace terminal is the exception: it loads the bundled Ousia Terminal
+Mono first, then falls back to the system mono stack, so powerline and Nerd Font
+prompt glyphs render correctly without changing the rest of the UI.
+
 The app uses a shadcn preset as the visual base. The user explicitly asked not to keep the earlier Pie-client styling. The light color theme uses a warm tea/coffee neutral palette inspired by Radix Sand, but pushed warmer than stock Sand so bubbles and controls do not read as cold gray.
-`Cloud Tea` is an additional experimental light neutral option based on sampled
-reference colors `#eee6df` and `#f3f2ee`.
+The settings UI also exposes the broader Radix light color scales for quick
+appearance tinting, while keeping `Tea` as the default Ousia-specific neutral.
 
 Light mode uses pure white for primary work canvases: chat, workspace, settings,
 and other main detail surfaces. `background`, `card`, `popover`, `muted`, and
@@ -14,6 +23,9 @@ sidebar tokens intentionally use slightly different warm neutral lightness
 values for secondary surfaces, controls, message bubbles, active states, borders,
 and nested UI. The selected Radix-style color scale should tint those supporting
 layers without washing the main reading/work areas.
+Panel and header separators should stay low-contrast and slightly translucent
+so they divide areas without becoming muddy lines on warm surfaces. Inputs can
+keep a firmer border than shell separators.
 
 Generated shadcn/ui reference files live under `ref/`; see `docs/shadcn-reference.md`. Before changing shared UI primitives in `src/components/ui/`, compare against the reference component so state styles, menu padding, focus rings, and radius choices stay intentional.
 
@@ -21,17 +33,16 @@ Generated shadcn/ui reference files live under `ref/`; see `docs/shadcn-referenc
 
 Ousia intentionally uses two primary icon families:
 
-- Hugeicons: use for ordinary, quiet, utility-style UI controls that should feel
-  familiar and not visually loud, such as sidebar project/session actions,
-  settings, attach/send controls, collapse controls, search, delete, rename, and
-  similar tool actions.
+- Lucide icons: use for ordinary, quiet, utility-style UI controls that should
+  feel familiar and not visually loud, such as sidebar actions, attach/send
+  controls, collapse controls, search, delete, rename, and similar tool actions.
 - Solar icons: use for areas that need stronger expression or heavier visual
   identity, especially workspace extension/tab signals such as Browser, Editor,
   Terminal, Extensions, and other major navigation-level icons.
 
-Avoid adding new icon families for routine UI. If an icon currently comes from
-another set, prefer replacing it with Hugeicons unless it is intentionally acting
-as a high-expression Solar signal.
+Avoid adding new icon families for routine UI beyond Lucide and Solar. If an
+icon currently comes from another set, prefer replacing it with Lucide unless it
+is intentionally acting as a high-expression Solar signal.
 
 ## Layout
 
@@ -82,7 +93,11 @@ Sidebar requirements:
 - Project rows are expandable containers, not selectable conversation targets.
   Clicking a project row only expands or collapses the project sessions under it.
 - Project rows use small folder icons.
+- Project sessions use the same left-aligned text position as the primary
+  session list, with a subtle left rail to show hierarchy.
 - Sessions support rename and delete.
+- Sessions with an active agent run show a small right-aligned spinner in the
+  row action position.
 - The active background state belongs only to session rows, never project rows.
 - Deleting all sessions shows a muted `无会话` fallback.
 - The sidebar can be collapsed with `Command+B` or by dragging below the
@@ -93,7 +108,7 @@ Sidebar requirements:
   session title.
 - Settings lives at bottom left.
 - Settings use a VS Code-like two-column layout with a compact floating tab list
-  to the left of the detail pane for `外观设置`, `通用设置`, and `Agent 设置`.
+  to the left of the detail pane for `外观设置`, `通用设置`, and `模型设置`.
   The tab list should be inset from the shell edge with comfortable horizontal
   padding, not a full-height rail pressed against the border. Settings do not
   have a save button: selects apply immediately, while text inputs apply on
@@ -141,3 +156,6 @@ Workspace requirements:
   turns that tab into the selected extension page.
 - Horizontal tab overflow must not consume header height.
 - The workspace is not a fixed review/code surface. It stays open/free for browser, editor, terminal, runtime extensions, and future surfaces.
+- If the editor workspace has no selected file or the current project contains
+  no editable source files, it should show a VS Code-like empty state with a
+  clear folder-opening action instead of a blank editor buffer.

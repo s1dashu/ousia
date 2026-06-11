@@ -26,6 +26,19 @@ export type ExtensionDistribution =
 
 export type ExtensionTrust = "first-party" | "community" | "local-user"
 
+export type ExtensionAgentQuoteToInputPayload = {
+  source: {
+    extensionId: string
+    tabId?: string
+    title?: string
+    url?: string
+  }
+  quote: {
+    text: string
+    html?: string
+  }
+}
+
 export type ExtensionContext = {
   extensionId: string
   tabId?: string
@@ -41,7 +54,15 @@ export type ExtensionContext = {
   agent: {
     thinkingLevel: OusiaThinkingLevel
     model: OusiaModelSettings
+    quoteToInput?: (
+      payload: ExtensionAgentQuoteToInputPayload
+    ) => void | Promise<void>
   }
+  app?: {
+    openBrowserTab?: (url: string) => void | Promise<void>
+    openProjectDirectory?: () => Promise<void>
+  }
+  isActive?: boolean
   theme: {
     preference: Theme
     resolved: ResolvedTheme

@@ -69,7 +69,7 @@ export function normalizeWorkspaceTabsState(
   state: WorkspaceTabsState | undefined,
   selectedWorkspaceExtensionId: string
 ): WorkspaceTabsState {
-  if (!state?.tabs?.length) {
+  if (!state || !Array.isArray(state.tabs)) {
     return createDefaultWorkspaceTabs(selectedWorkspaceExtensionId)
   }
 
@@ -82,7 +82,7 @@ export function normalizeWorkspaceTabsState(
   )
 
   if (!tabs.length) {
-    return createDefaultWorkspaceTabs(selectedWorkspaceExtensionId)
+    return { tabs: [], activeTabId: "" }
   }
 
   const activeTabId = tabs.some((tab) => tab.id === state.activeTabId)

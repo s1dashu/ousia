@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider.tsx"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider defaultTheme="dark" storageKey="ousia.theme">
+    <ThemeProvider defaultTheme="light" storageKey="ousia.theme">
       <App />
     </ThemeProvider>
   </StrictMode>

@@ -7,26 +7,61 @@ import {
   type MouseEvent,
 } from "react"
 import {
-  Add01Icon,
-  Delete02Icon,
-  Folder01Icon,
-  FolderAddIcon,
-  FolderOpenIcon,
-  Settings01Icon,
-} from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+  closestCenter,
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { AnimatePresence, motion } from "framer-motion"
+import { Folder, FolderOpen, Plus, Settings, Trash2 } from "lucide-react"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { Button } from "@/components/ui/button"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 
-const sidebarAddIconSize = 20
+const sidebarAddIconSize = 19
 const sidebarFolderIconSize = 18
 const sidebarMenuIconSize = 18
+const sidebarIconStrokeWidth = 1.8
 const sidebarActionButtonClass = "size-7 justify-self-end"
 const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_28px]"
-const sidebarRowXClass = "px-3"
+const sidebarProjectActionButtonClass = "size-6 justify-self-center"
+const sidebarProjectLeadGridClass =
+  "grid-cols-[26px_minmax(0,1fr)_24px_4px_24px]"
+const sidebarProjectSessionGridClass = "grid-cols-[26px_minmax(0,1fr)_28px]"
+const sidebarRowXClass = "px-2"
+const sidebarListGapClass = "flex flex-col gap-px"
+const sidebarSectionHeaderXClass = "pl-2 pr-0"
+const sidebarProjectSessionCompactCount = 5
+const sidebarProjectSessionPreviewCount = 10
+const sidebarRowStateClass =
+  "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)]"
+const sidebarSelectedRowClass = "bg-[var(--sidebar-accent)]"
+const sidebarGhostActionClass =
+  "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
+const defaultSessionGroupId = "default"
+
+type SidebarSortableData = {
+  kind: "project" | "session"
+  label: string
+  groupId?: string
+}
+
+type SidebarDragPreview = SidebarSortableData & {
+  id: string
+}
 
 type SidebarProps = {
   onCreateProjectSession: (projectId: string) => void
@@ -37,14 +72,319 @@ type SidebarProps = {
   onOpenProject: () => void
   onOpenSettings: () => void
   onRenameSession: (sessionId: string, title: string) => void
+  onReorderProjects: (sourceProjectId: string, targetProjectId: string) => void
+  onReorderSessions: (sourceSessionId: string, targetSessionId: string) => void
   onSelectSession: (sessionId: string) => void
   onToggleSidebar: () => void
   expandedProjectIds: string[]
   projects: ProjectRecord[]
   selectedSessionId: string
+  sessionRunStatusById: Record<string, "idle" | "working">
   sessions: SessionRecord[]
   isWindowFullscreen: boolean
   style: CSSProperties
+}
+
+type SortableSessionRowProps = {
+  editingInputRef: React.RefObject<HTMLInputElement | null>
+  editingSessionId: string | null
+  editingSessionTitle: string
+  groupId: string
+  onCancelRename: () => void
+  onCommitRename: (session: SessionRecord) => void
+  onDeleteSession: (sessionId: string) => void
+  onRenameTitleChange: (title: string) => void
+  onSelectSession: (sessionId: string) => void
+  onStartRename: (session: SessionRecord) => void
+  projectChild?: boolean
+  selectedSessionId: string
+  session: SessionRecord
+  sessionRunStatus: "idle" | "working"
+}
+
+type SortableProjectSectionProps = {
+  children: React.ReactNode
+  isExpanded: boolean
+  onCreateProjectSession: (projectId: string) => void
+  onDeleteProject: (projectId: string) => void
+  onToggleProject: (projectId: string) => void
+  project: ProjectRecord
+}
+
+function handleTextButtonMouseDown(event: MouseEvent<HTMLButtonElement>) {
+  event.preventDefault()
+}
+
+function getSortableData(value: unknown): SidebarSortableData | null {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+  const data = value as Partial<SidebarSortableData>
+  if (data.kind !== "project" && data.kind !== "session") {
+    return null
+  }
+  if (typeof data.label !== "string") {
+    return null
+  }
+  return {
+    kind: data.kind,
+    label: data.label,
+    ...(typeof data.groupId === "string" ? { groupId: data.groupId } : {}),
+  }
+}
+
+function DragPreview({ label }: { label: string }) {
+  return (
+    <div
+      className={[
+        "grid h-9 w-[220px] items-center rounded-lg",
+        "bg-[var(--sidebar-accent)] px-3 text-sm text-sidebar-accent-foreground opacity-95",
+      ].join(" ")}
+    >
+      <div className="truncate">{label}</div>
+    </div>
+  )
+}
+
+function SortableSessionRow({
+  editingInputRef,
+  editingSessionId,
+  editingSessionTitle,
+  groupId,
+  onCancelRename,
+  onCommitRename,
+  onDeleteSession,
+  onRenameTitleChange,
+  onSelectSession,
+  onStartRename,
+  projectChild,
+  selectedSessionId,
+  session,
+  sessionRunStatus,
+}: SortableSessionRowProps) {
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: session.id,
+    data: {
+      kind: "session",
+      label: session.title,
+      groupId,
+    } satisfies SidebarSortableData,
+    disabled: editingSessionId === session.id,
+  })
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+  const isSessionWorking = sessionRunStatus === "working"
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={[
+        "group/session font-radix-regular relative grid h-9 w-full cursor-grab items-center rounded-lg text-sm active:cursor-grabbing",
+        sidebarRowStateClass,
+        projectChild ? "gap-x-0 gap-y-1" : "gap-1",
+        projectChild ? sidebarProjectSessionGridClass : sidebarSingleActionGridClass,
+        sidebarRowXClass,
+        session.id === selectedSessionId ? sidebarSelectedRowClass : "",
+        isDragging ? "opacity-35" : "",
+      ].join(" ")}
+      onClick={() => {
+        if (editingSessionId !== session.id) {
+          onSelectSession(session.id)
+        }
+      }}
+      onDoubleClick={() => {
+        if (editingSessionId !== session.id) {
+          onStartRename(session)
+        }
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      {projectChild ? <div aria-hidden="true" /> : null}
+      {editingSessionId === session.id ? (
+        <input
+          ref={editingInputRef}
+          aria-label="重命名会话"
+          className="min-w-0 bg-transparent text-left outline-none"
+          value={editingSessionTitle}
+          onChange={(event) => onRenameTitleChange(event.target.value)}
+          onBlur={() => onCommitRename(session)}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault()
+              onCommitRename(session)
+            } else if (event.key === "Escape") {
+              event.preventDefault()
+              onCancelRename()
+            }
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="min-w-0 truncate text-left outline-none focus-visible:text-sidebar-accent-foreground"
+          onMouseDown={handleTextButtonMouseDown}
+        >
+          {session.title}
+        </button>
+      )}
+      <div className="relative size-7 justify-self-end">
+        {isSessionWorking ? (
+          <div
+            className={[
+              "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
+              "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
+            ].join(" ")}
+            aria-label={`${session.title} 运行中`}
+            title="运行中"
+          >
+            <span className="size-3.5 animate-spin rounded-full border-2 border-sidebar-accent-foreground/20 border-t-sidebar-accent-foreground" />
+          </div>
+        ) : null}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={[
+            "absolute inset-0",
+            sidebarActionButtonClass,
+            sidebarGhostActionClass,
+            "opacity-0 transition-opacity group-hover/session:opacity-100 group-focus-within/session:opacity-100",
+          ].join(" ")}
+          aria-label={`删除 ${session.title}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onDeleteSession(session.id)
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <Trash2
+            className="text-sidebar-accent-foreground"
+            size={sidebarMenuIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function SortableProjectSection({
+  children,
+  isExpanded,
+  onCreateProjectSession,
+  onDeleteProject,
+  onToggleProject,
+  project,
+}: SortableProjectSectionProps) {
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: project.id,
+    data: {
+      kind: "project",
+      label: project.name,
+    } satisfies SidebarSortableData,
+  })
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <section ref={setNodeRef} style={style} className="min-w-0">
+      <div
+        className={[
+          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing",
+          sidebarRowStateClass,
+          sidebarProjectLeadGridClass,
+          sidebarRowXClass,
+          isDragging ? "opacity-35" : "",
+        ].join(" ")}
+        {...attributes}
+        {...listeners}
+      >
+        {isExpanded ? (
+          <FolderOpen
+            className="shrink-0 justify-self-start"
+            size={sidebarFolderIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        ) : (
+          <Folder
+            className="shrink-0 justify-self-start"
+            size={sidebarFolderIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        )}
+        <button
+          type="button"
+          aria-expanded={isExpanded}
+          className="font-radix-regular h-full min-w-0 rounded-md pr-1 text-left text-sm outline-none focus-visible:ring-0"
+          title={project.path}
+          onMouseDown={handleTextButtonMouseDown}
+          onClick={() => onToggleProject(project.id)}
+        >
+          <span className="min-w-0 truncate">{project.name}</span>
+        </button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action opacity-0 transition-opacity`}
+          aria-label={`从 Ousia 移除 ${project.name}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onDeleteProject(project.id)
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <Trash2
+            className="text-sidebar-accent-foreground"
+            size={sidebarMenuIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        </Button>
+        <div aria-hidden="true" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action opacity-0 transition-opacity`}
+          aria-label={`在 ${project.name} 下新建会话`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onCreateProjectSession(project.id)
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <Plus
+            className="text-sidebar-accent-foreground"
+            size={sidebarAddIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        </Button>
+      </div>
+      {children}
+    </section>
+  )
 }
 
 export function Sidebar({
@@ -56,19 +396,36 @@ export function Sidebar({
   onOpenProject,
   onOpenSettings,
   onRenameSession,
+  onReorderProjects,
+  onReorderSessions,
   onSelectSession,
   onToggleSidebar,
   expandedProjectIds,
   projects,
   selectedSessionId,
+  sessionRunStatusById,
   sessions,
   isWindowFullscreen,
   style,
 }: SidebarProps) {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingSessionTitle, setEditingSessionTitle] = useState("")
+  const [compactProjectSessionIds, setCompactProjectSessionIds] = useState<
+    string[]
+  >([])
+  const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
   const editingInputRef = useRef<HTMLInputElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 4,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
   const visibleExpandedProjectIds = useMemo(() => {
     const projectIds = new Set(projects.map((project) => project.id))
     return new Set(
@@ -110,91 +467,62 @@ export function Sidebar({
     )
   }
 
-  function handleTextButtonMouseDown(event: MouseEvent<HTMLButtonElement>) {
-    event.preventDefault()
+  function handleDragStart(event: DragStartEvent) {
+    const data = getSortableData(event.active.data.current)
+    if (!data) {
+      return
+    }
+    setDragPreview({
+      ...data,
+      id: String(event.active.id),
+    })
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const activeData = getSortableData(event.active.data.current)
+    const overData = getSortableData(event.over?.data.current)
+    if (!activeData || !overData || !event.over || event.active.id === event.over.id) {
+      setDragPreview(null)
+      return
+    }
+    if (activeData.kind === "project" && overData.kind === "project") {
+      onReorderProjects(String(event.active.id), String(event.over.id))
+    } else if (
+      activeData.kind === "session" &&
+      overData.kind === "session" &&
+      activeData.groupId === overData.groupId
+    ) {
+      onReorderSessions(String(event.active.id), String(event.over.id))
+    }
+    setDragPreview(null)
+  }
+
+  function handleDragCancel() {
+    setDragPreview(null)
   }
 
   function renderSessionRow(
     session: SessionRecord,
-    options: { projectChild?: boolean } = {}
+    options: { projectChild?: boolean; groupId: string }
   ) {
     return (
-      <div
+      <SortableSessionRow
         key={session.id}
-        className={[
-          "group/session relative grid h-9 w-full cursor-default items-center gap-1 rounded-lg text-sm font-medium text-muted-foreground hover:text-accent-foreground",
-          options.projectChild
-            ? "grid-cols-[28px_minmax(0,1fr)_28px]"
-            : sidebarSingleActionGridClass,
-          sidebarRowXClass,
-          session.id === selectedSessionId
-            ? "bg-sidebar-accent text-sidebar-accent-foreground"
-            : "",
-        ].join(" ")}
-        onClick={() => {
-          if (editingSessionId !== session.id) {
-            onSelectSession(session.id)
-          }
-        }}
-        onDoubleClick={() => {
-          if (editingSessionId !== session.id) {
-            startRenameSession(session)
-          }
-        }}
-      >
-        {options.projectChild ? <div aria-hidden="true" /> : null}
-        {editingSessionId === session.id ? (
-          <input
-            ref={editingInputRef}
-            aria-label="重命名会话"
-            className={[
-              "min-w-0 bg-transparent text-left outline-none",
-              options.projectChild ? "" : "",
-            ].join(" ")}
-            value={editingSessionTitle}
-            onChange={(event) => setEditingSessionTitle(event.target.value)}
-            onBlur={() => commitRenameSession(session)}
-            onClick={(event) => event.stopPropagation()}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                commitRenameSession(session)
-              } else if (event.key === "Escape") {
-                event.preventDefault()
-                cancelRenameSession()
-              }
-            }}
-          />
-        ) : (
-          <button
-            type="button"
-            className="min-w-0 truncate text-left outline-none focus-visible:text-accent-foreground"
-            onMouseDown={handleTextButtonMouseDown}
-          >
-            {session.title}
-          </button>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={`${sidebarActionButtonClass} opacity-0 transition-opacity group-hover/session:opacity-100 group-focus-within/session:opacity-100`}
-          aria-label={`删除 ${session.title}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onDeleteSession(session.id)
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <HugeiconsIcon
-            icon={Delete02Icon}
-            className="text-muted-foreground"
-            size={sidebarMenuIconSize}
-            strokeWidth={1.8}
-          />
-        </Button>
-      </div>
+        editingInputRef={editingInputRef}
+        editingSessionId={editingSessionId}
+        editingSessionTitle={editingSessionTitle}
+        groupId={options.groupId}
+        onCancelRename={cancelRenameSession}
+        onCommitRename={commitRenameSession}
+        onDeleteSession={onDeleteSession}
+        onRenameTitleChange={setEditingSessionTitle}
+        onSelectSession={onSelectSession}
+        onStartRename={startRenameSession}
+        projectChild={options.projectChild}
+        selectedSessionId={selectedSessionId}
+        session={session}
+        sessionRunStatus={sessionRunStatusById[session.id] ?? "idle"}
+      />
     )
   }
 
@@ -212,182 +540,202 @@ export function Sidebar({
       </div>
 
       <div className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-3 pb-2">
-        <div
-          className={[
-            "grid items-center gap-1 pt-2 pb-1.5",
-            sidebarSingleActionGridClass,
-            sidebarRowXClass,
-          ].join(" ")}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
         >
-          <div className="text-sm font-semibold text-muted-foreground">
-            会话
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={sidebarActionButtonClass}
-            aria-label="新建会话"
-            onClick={() => onCreateSession()}
+          <div
+            className={[
+              "grid items-center gap-1 pt-2 pb-1.5",
+              sidebarSingleActionGridClass,
+              sidebarSectionHeaderXClass,
+            ].join(" ")}
           >
-            <HugeiconsIcon
-              icon={Add01Icon}
-              className="text-muted-foreground"
-              size={sidebarAddIconSize}
-              strokeWidth={1.8}
-            />
-          </Button>
-        </div>
-        <div>
-          {defaultSessions.length ? (
-            defaultSessions.map((session) => renderSessionRow(session))
-          ) : (
-            <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-              无会话
+            <div className="font-radix-medium text-sm text-muted-foreground">
+              会话
             </div>
-          )}
-        </div>
-
-        <div
-          className={[
-            "mt-3 grid items-center gap-1 pt-2 pb-1.5",
-            sidebarSingleActionGridClass,
-            sidebarRowXClass,
-          ].join(" ")}
-        >
-          <div className="text-sm font-semibold text-muted-foreground">
-            项目
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={sidebarActionButtonClass}
+              aria-label="新建会话"
+              onMouseDown={handleTextButtonMouseDown}
+              onClick={() => onCreateSession()}
+            >
+              <Plus
+                className="text-muted-foreground"
+                size={sidebarAddIconSize}
+                strokeWidth={sidebarIconStrokeWidth}
+              />
+            </Button>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={sidebarActionButtonClass}
-            aria-label="创建项目"
-            onClick={onOpenProject}
+          <SortableContext
+            items={defaultSessions.map((session) => session.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <HugeiconsIcon
-              icon={FolderAddIcon}
-              className="text-muted-foreground"
-              size={sidebarFolderIconSize}
-              strokeWidth={1.8}
-            />
-          </Button>
-        </div>
-        <div>
-          {projects.map((project) => {
-            const isExpanded = visibleExpandedProjectIds.has(project.id)
-            const projectSessions = sessions.filter(
-              (session) => session.projectId === project.id
-            )
-            return (
-              <section key={project.id}>
-                <div
-                  className={[
-                    "project-row grid h-9 w-full min-w-0 items-center gap-1 rounded-md text-muted-foreground",
-                    "grid-cols-[28px_minmax(0,1fr)_28px_28px]",
-                    sidebarRowXClass,
-                  ].join(" ")}
-                >
-                  <HugeiconsIcon
-                    icon={isExpanded ? FolderOpenIcon : Folder01Icon}
-                    className="shrink-0 justify-self-start text-muted-foreground"
-                    size={sidebarFolderIconSize}
-                    strokeWidth={1.8}
-                  />
-                  <button
-                    type="button"
-                    aria-expanded={isExpanded}
-                    className="h-full min-w-0 rounded-md pr-1 text-left text-sm font-medium outline-none hover:text-accent-foreground focus-visible:text-accent-foreground focus-visible:ring-0"
-                    title={project.path}
-                    onMouseDown={handleTextButtonMouseDown}
-                    onClick={() => toggleProject(project.id)}
-                  >
-                    <span className="min-w-0 truncate">{project.name}</span>
-                  </button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className={`${sidebarActionButtonClass} project-row-action opacity-0 transition-opacity`}
-                    aria-label={`从 Ousia 移除 ${project.name}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onDeleteProject(project.id)
-                    }}
-                  >
-                    <HugeiconsIcon
-                      icon={Delete02Icon}
-                      className="text-muted-foreground"
-                      size={sidebarMenuIconSize}
-                      strokeWidth={1.8}
-                    />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className={`${sidebarActionButtonClass} project-row-action opacity-0 transition-opacity`}
-                    aria-label={`在 ${project.name} 下新建会话`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onCreateProjectSession(project.id)
-                    }}
-                  >
-                    <HugeiconsIcon
-                      icon={Add01Icon}
-                      className="text-muted-foreground"
-                      size={sidebarAddIconSize}
-                      strokeWidth={1.8}
-                    />
-                  </Button>
+            <div className={sidebarListGapClass}>
+              {defaultSessions.length ? (
+                defaultSessions.map((session) =>
+                  renderSessionRow(session, {
+                    groupId: defaultSessionGroupId,
+                  })
+                )
+              ) : (
+                <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                  无会话
                 </div>
-                <AnimatePresence initial={false}>
-                  {isExpanded ? (
-                    <motion.div
-                      key={`${project.id}-sessions`}
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{
-                        duration: 0.16,
-                        ease: [0.2, 0, 0, 1],
-                      }}
-                      className="overflow-hidden"
-                    >
-                      <div>
-                        {projectSessions.length ? (
-                          projectSessions.map((session) =>
-                            renderSessionRow(session, { projectChild: true })
-                          )
-                        ) : (
-                          <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                            无会话
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </section>
-            )
-          })}
-          {!projects.length ? (
-            <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-              无项目
+              )}
             </div>
-          ) : null}
-        </div>
+          </SortableContext>
+
+          <div
+            className={[
+              "mt-3 grid items-center gap-1 pt-2 pb-1.5",
+              sidebarSingleActionGridClass,
+              sidebarSectionHeaderXClass,
+            ].join(" ")}
+          >
+            <div className="font-radix-medium text-sm text-muted-foreground">
+              项目
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={sidebarActionButtonClass}
+              aria-label="创建项目"
+              onMouseDown={handleTextButtonMouseDown}
+              onClick={onOpenProject}
+            >
+              <Plus
+                className="text-muted-foreground"
+                size={sidebarAddIconSize}
+                strokeWidth={sidebarIconStrokeWidth}
+              />
+            </Button>
+          </div>
+          <SortableContext
+            items={projects.map((project) => project.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className={sidebarListGapClass}>
+              {projects.map((project) => {
+                const isExpanded = visibleExpandedProjectIds.has(project.id)
+                const projectSessions = sessions.filter(
+                  (session) => session.projectId === project.id
+                )
+                const canCompactProjectSessions =
+                  projectSessions.length > sidebarProjectSessionPreviewCount
+                const isProjectSessionListCompact =
+                  compactProjectSessionIds.includes(project.id)
+                const visibleProjectSessions =
+                  canCompactProjectSessions && isProjectSessionListCompact
+                    ? projectSessions.slice(0, sidebarProjectSessionCompactCount)
+                    : projectSessions
+                return (
+                  <SortableProjectSection
+                    key={project.id}
+                    isExpanded={isExpanded}
+                    onCreateProjectSession={onCreateProjectSession}
+                    onDeleteProject={onDeleteProject}
+                    onToggleProject={toggleProject}
+                    project={project}
+                  >
+                    <AnimatePresence initial={false}>
+                      {isExpanded ? (
+                        <motion.div
+                          key={`${project.id}-sessions`}
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{
+                            duration: 0.16,
+                            ease: [0.2, 0, 0, 1],
+                          }}
+                          className="overflow-hidden"
+                        >
+                          <SortableContext
+                            items={visibleProjectSessions.map(
+                              (session) => session.id
+                            )}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <div className={`${sidebarListGapClass} pt-px`}>
+                              {projectSessions.length ? (
+                                visibleProjectSessions.map((session) =>
+                                  renderSessionRow(session, {
+                                    groupId: project.id,
+                                    projectChild: true,
+                                  })
+                                )
+                              ) : (
+                                <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                                  无会话
+                                </div>
+                              )}
+                              {canCompactProjectSessions ? (
+                                <button
+                                  type="button"
+                                  className={[
+                                    "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
+                                    sidebarProjectSessionGridClass,
+                                    sidebarRowXClass,
+                                  ].join(" ")}
+                                  onMouseDown={handleTextButtonMouseDown}
+                                  onClick={() => {
+                                    setCompactProjectSessionIds((current) =>
+                                      isProjectSessionListCompact
+                                        ? current.filter((id) => id !== project.id)
+                                        : [...current, project.id]
+                                    )
+                                  }}
+                                >
+                                  <span aria-hidden="true" />
+                                  <span>
+                                    {isProjectSessionListCompact
+                                      ? "展示更多"
+                                      : "展示更少"}
+                                  </span>
+                                </button>
+                              ) : null}
+                            </div>
+                          </SortableContext>
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </SortableProjectSection>
+                )
+              })}
+              {!projects.length ? (
+                <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                  无项目
+                </div>
+              ) : null}
+            </div>
+          </SortableContext>
+          <DragOverlay
+            dropAnimation={{
+              duration: 150,
+              easing: "cubic-bezier(0.2, 0, 0, 1)",
+            }}
+          >
+            {dragPreview ? <DragPreview label={dragPreview.label} /> : null}
+          </DragOverlay>
+        </DndContext>
       </div>
 
       <div className="p-2">
         <Button
           type="button"
           variant="ghost"
-          className="h-9 w-full justify-start gap-2 text-sm font-medium"
+          className={`font-radix-regular h-9 w-full justify-start gap-2 text-sm ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
-          <HugeiconsIcon icon={Settings01Icon} size={18} strokeWidth={1.8} />
+          <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />
           <span>设置</span>
         </Button>
       </div>

@@ -35,7 +35,12 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
   }
 
   if (event.type === "user_message") {
-    next.push({ id: event.id, role: "user", text: event.text })
+    next.push({
+      id: event.id,
+      role: "user",
+      text: event.text,
+      attachments: event.attachments,
+    })
   } else if (event.type === "assistant_text_start") {
     upsertText(event.id, "assistant", (item) => {
       item.status = "streaming"

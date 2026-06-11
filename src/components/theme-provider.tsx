@@ -23,6 +23,8 @@ const THEME_VALUES: Theme[] = ["dark", "light", "system"]
 const ThemeProviderContext = React.createContext<
   ThemeProviderState | undefined
 >(undefined)
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? React.useEffect : React.useLayoutEffect
 
 function isTheme(value: string | null): value is Theme {
   if (value === null) {
@@ -118,7 +120,7 @@ export function ThemeProvider({
     [disableTransitionOnChange]
   )
 
-  React.useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     applyTheme(resolvedTheme)
   }, [resolvedTheme, applyTheme])
 

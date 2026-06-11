@@ -1,5 +1,4 @@
-import { LayoutLeftIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { PanelLeft } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
@@ -34,7 +33,7 @@ export function TitleBarSidebarToggle({
         aria-label={label}
         onClick={onClick}
       >
-        <HugeiconsIcon icon={LayoutLeftIcon} size={19} strokeWidth={1.8} />
+        <PanelLeft size={19} strokeWidth={1.8} />
       </Button>
     </div>
   )

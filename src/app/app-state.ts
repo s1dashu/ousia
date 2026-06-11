@@ -29,11 +29,45 @@ export const projectNameFromPath = ousiaProjectNameFromPath
 export const createDefaultProject = createDefaultOusiaProject
 export const createDefaultAppState = createDefaultOusiaAppState
 
-export async function loadInitialAppState(): Promise<InitialAppState> {
-  if (!window.ousia) {
-    return createDefaultAppState()
+function readStoredThemePreference(): AppSettings["theme"] | null {
+  if (typeof window === "undefined") {
+    return null
   }
-  return window.ousia.loadAppState()
+  const storedTheme = window.localStorage.getItem("ousia.theme")
+  if (
+    storedTheme === "dark" ||
+    storedTheme === "light" ||
+    storedTheme === "system"
+  ) {
+    return storedTheme
+  }
+  return null
+}
+
+export async function loadInitialAppState(): Promise<InitialAppState> {
+  const storedTheme = readStoredThemePreference()
+  if (!window.ousia) {
+    const state = createDefaultAppState()
+    return storedTheme
+      ? {
+          ...state,
+          settings: {
+            ...state.settings,
+            theme: storedTheme,
+          },
+        }
+      : state
+  }
+  const state = await window.ousia.loadAppState()
+  return storedTheme
+    ? {
+        ...state,
+        settings: {
+          ...state.settings,
+          theme: storedTheme,
+        },
+      }
+    : state
 }
 
 export async function saveAppState(state: InitialAppState) {
