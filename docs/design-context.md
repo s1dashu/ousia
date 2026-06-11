@@ -86,8 +86,10 @@ Sidebar requirements:
 - High information density.
 - `会话` is the primary sidebar list and has a new-session action on the right.
 - Newly created default sessions are unassigned and use the default work dir.
-- `项目` sits directly below the conversation list and has a create-project
-  action on the right.
+- `项目` defaults below the conversation list and has a create-project action
+  on the right.
+- The `会话` and `项目` section headers are sortable, so the user can drag
+  either top-level section above the other.
 - Project creation opens the native folder picker and supports creating a new
   folder from that picker.
 - Project rows are expandable containers, not selectable conversation targets.
@@ -107,12 +109,9 @@ Sidebar requirements:
   title-bar position. When collapsed, the expand control appears before the chat
   session title.
 - Settings lives at bottom left.
-- Settings use a VS Code-like two-column layout with a compact floating tab list
-  to the left of the detail pane for `外观设置`, `通用设置`, and `模型设置`.
-  The tab list should be inset from the shell edge with comfortable horizontal
-  padding, not a full-height rail pressed against the border. Settings do not
-  have a save button: selects apply immediately, while text inputs apply on
-  blur.
+- Settings use a single centered vertical column. `通用设置`, `外观设置`, and
+  `模型设置` appear in sequence without a left navigation rail. Settings do not
+  have a save button: selects apply immediately, while text inputs apply on blur.
 
 ## Chat
 

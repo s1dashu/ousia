@@ -130,11 +130,14 @@ export type OusiaAppSelectionState = {
   workspaceTabs: OusiaWorkspaceTabsState
 }
 
+export type OusiaSidebarSectionId = "sessions" | "projects"
+
 export type OusiaShellLayoutState = {
   sidebarWidth: number
   chatWidth: number
   isSidebarCollapsed: boolean
   isWorkspaceCollapsed: boolean
+  sidebarSectionOrder: OusiaSidebarSectionId[]
 }
 
 export type OusiaWindowState = {
@@ -492,6 +495,7 @@ export function createDefaultOusiaShellLayout(): OusiaShellLayoutState {
     chatWidth: 520,
     isSidebarCollapsed: false,
     isWorkspaceCollapsed: false,
+    sidebarSectionOrder: ["sessions", "projects"],
   }
 }
 

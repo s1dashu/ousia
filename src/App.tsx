@@ -46,6 +46,7 @@ import {
   type OusiaAppearanceColorScale,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
+  type OusiaSidebarSectionId,
   type OusiaWorkspaceAction,
 } from "@/electron/chat-types"
 import type { ExtensionAgentQuoteToInputPayload } from "@/extensions/types"
@@ -189,6 +190,19 @@ function moveSessionToGroupFront(
   return next
 }
 
+function normalizeSidebarSectionOrder(
+  sectionOrder: OusiaSidebarSectionId[]
+): OusiaSidebarSectionId[] {
+  return [
+    ...new Set(
+      [...sectionOrder, "sessions", "projects"].filter(
+        (sectionId): sectionId is OusiaSidebarSectionId =>
+          sectionId === "sessions" || sectionId === "projects"
+      )
+    ),
+  ]
+}
+
 function ResizeHandle({
   label,
   onPointerDown,
@@ -228,9 +242,6 @@ function SettingsPage({
   settings: AppSettings
 }) {
   const [draft, setDraft] = useState(settings)
-  const [activeSection, setActiveSection] = useState<
-    "appearance" | "general" | "agent"
-  >("general")
   const [isAddProviderDialogOpen, setIsAddProviderDialogOpen] = useState(false)
   const [newProviderId, setNewProviderId] = useState("")
   const [newProviderApiKey, setNewProviderApiKey] = useState("")
@@ -388,11 +399,6 @@ function SettingsPage({
   const selectedColorScaleDescription = appearanceColorScales.find(
     (scale) => scale.value === draft.appearanceColorScale
   )?.description
-  const settingsSections = [
-    { id: "general", label: "通用设置" },
-    { id: "appearance", label: "外观设置" },
-    { id: "agent", label: "模型设置" },
-  ] as const
 
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-[#fff] dark:bg-background">
@@ -408,33 +414,48 @@ function SettingsPage({
         </Button>
         <h1 className="text-base font-semibold">设置</h1>
       </header>
-      <div className="flex min-h-0 flex-1 justify-center px-8">
-        <div className="flex min-h-0 w-full max-w-[940px]">
-          <nav className="w-44 shrink-0 py-7 pr-3">
-          <div className="sticky top-7 space-y-1">
-            {settingsSections.map((section) => (
-              <button
-                key={section.id}
+      <div className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-8 py-7">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-10">
+          <section>
+            <h2 className="text-sm font-semibold">通用设置</h2>
+            <label className="mt-4 block text-xs font-medium text-muted-foreground">
+              默认工作目录
+            </label>
+            <div className="mt-2 flex items-center gap-2">
+              <Input
+                className="flex-1 rounded-md bg-card/40"
+                value={draft.defaultWorkDir}
+                onChange={(event) =>
+                  updateDraft({
+                    defaultWorkDir: event.target.value,
+                  })
+                }
+                onBlur={() => commitRequiredTextSetting("defaultWorkDir")}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur()
+                  }
+                }}
+                placeholder="~/.ousia/workspace"
+              />
+              <Button
                 type="button"
-                className={[
-                  "flex h-9 w-full items-center rounded-md px-3 text-left text-sm outline-none transition-colors",
-                  activeSection === section.id
-                    ? "bg-accent text-accent-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                ].join(" ")}
-                onClick={() => setActiveSection(section.id)}
+                variant="outline"
+                size="sm"
+                className="h-9"
+                onClick={chooseDefaultWorkDir}
               >
-                {section.label}
-              </button>
-            ))}
-          </div>
-        </nav>
+                <FolderOpen size={15} />
+                选择
+              </Button>
+            </div>
+            <div className="mt-2 text-xs leading-5 text-muted-foreground">
+              未归属项目的会话会使用该目录。支持 ~/.ousia/workspace 这类路径。
+            </div>
+          </section>
 
-          <div className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto py-7 pl-5">
-          <div className="w-full max-w-2xl">
-            {activeSection === "appearance" ? (
-              <section>
-                <h2 className="text-sm font-semibold">外观设置</h2>
+          <section>
+            <h2 className="text-sm font-semibold">外观设置</h2>
             <div className="mt-4">
               <span className="text-xs font-medium text-muted-foreground">
                 外观模式
@@ -502,69 +523,27 @@ function SettingsPage({
                 {selectedColorScaleDescription}
               </div>
             ) : null}
-              </section>
-            ) : null}
+          </section>
 
-            {activeSection === "general" ? (
-              <section>
-                <h2 className="text-sm font-semibold">通用设置</h2>
-                <label className="mt-4 block text-xs font-medium text-muted-foreground">
-                  默认工作目录
-                </label>
-                <div className="mt-2 flex items-center gap-2">
-                  <Input
-                    className="flex-1 rounded-md bg-card/40"
-                    value={draft.defaultWorkDir}
-                    onChange={(event) =>
-                      updateDraft({
-                        defaultWorkDir: event.target.value,
-                      })
-                    }
-                    onBlur={() => commitRequiredTextSetting("defaultWorkDir")}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.currentTarget.blur()
-                      }
-                    }}
-                    placeholder="~/.ousia/workspace"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={chooseDefaultWorkDir}
-                  >
-                    <FolderOpen size={15} />
-                    选择
-                  </Button>
-                </div>
-                <div className="mt-2 text-xs leading-5 text-muted-foreground">
-                  未归属项目的会话会使用该目录。支持 ~/.ousia/workspace 这类路径。
-                </div>
-              </section>
-            ) : null}
-
-            {activeSection === "agent" ? (
-              <section>
-                <h2 className="text-sm font-semibold">模型设置</h2>
-                <div className="mt-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      供应商密钥
-                    </span>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
-                      disabled={!addableProviders.length}
-                      onClick={openAddProviderDialog}
-                    >
-                      <Plus size={15} />
-                      添加
-                    </Button>
-                  </div>
+          <section>
+            <h2 className="text-sm font-semibold">模型设置</h2>
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-medium text-muted-foreground">
+                  供应商密钥
+                </span>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
+                  disabled={!addableProviders.length}
+                  onClick={openAddProviderDialog}
+                >
+                  <Plus size={15} />
+                  添加
+                </Button>
+              </div>
                   <div className="mt-4">
                     <Table>
                       <TableBody>
@@ -719,9 +698,6 @@ function SettingsPage({
                   </DialogContent>
                 </Dialog>
               </section>
-            ) : null}
-          </div>
-          </div>
         </div>
       </div>
     </section>
@@ -740,6 +716,9 @@ export function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
     initialState.shellLayout.isSidebarCollapsed
   )
+  const [sidebarSectionOrder, setSidebarSectionOrder] = useState<
+    OusiaSidebarSectionId[]
+  >(normalizeSidebarSectionOrder(initialState.shellLayout.sidebarSectionOrder))
   const [isShellResizing, setIsShellResizing] = useState(false)
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false)
   const [isWorkspaceCollapsed, setIsWorkspaceCollapsed] = useState(
@@ -830,6 +809,7 @@ export function App() {
           chatWidth,
           isSidebarCollapsed,
           isWorkspaceCollapsed,
+          sidebarSectionOrder,
         },
         windowState: initialState.windowState,
         expandedProjectIds: expandedProjectIds.filter((projectId) =>
@@ -852,6 +832,7 @@ export function App() {
       selectedProject?.id,
       selectedSession?.id,
       selectedWorkspaceExtensionId,
+      sidebarSectionOrder,
       sidebarWidth,
       workspaceTabs,
       initialState.windowState,
@@ -879,6 +860,9 @@ export function App() {
       setChatWidth(state.shellLayout.chatWidth)
       setIsSidebarCollapsed(state.shellLayout.isSidebarCollapsed)
       setIsWorkspaceCollapsed(state.shellLayout.isWorkspaceCollapsed)
+      setSidebarSectionOrder(
+        normalizeSidebarSectionOrder(state.shellLayout.sidebarSectionOrder)
+      )
       setProjects(state.projects)
       setExpandedProjectIds(state.expandedProjectIds)
       setSessions(state.sessions)
@@ -966,6 +950,7 @@ export function App() {
         chatWidth,
         isSidebarCollapsed,
         isWorkspaceCollapsed,
+        sidebarSectionOrder,
       },
       windowState: initialState.windowState,
       expandedProjectIds: expandedProjectIds.filter((projectId) =>
@@ -988,6 +973,7 @@ export function App() {
     selectedProject?.id,
     selectedSession?.id,
     selectedWorkspaceExtensionId,
+    sidebarSectionOrder,
     sidebarWidth,
     workspaceTabs,
     initialState.windowState,
@@ -1244,6 +1230,19 @@ export function App() {
   function handleReorderSessions(sourceSessionId: string, targetSessionId: string) {
     setSessions((current) =>
       reorderSessionsById(current, sourceSessionId, targetSessionId)
+    )
+  }
+
+  function handleReorderSidebarSections(
+    sourceSectionId: OusiaSidebarSectionId,
+    targetSectionId: OusiaSidebarSectionId
+  ) {
+    setSidebarSectionOrder((current) =>
+      reorderById(
+        normalizeSidebarSectionOrder(current).map((id) => ({ id })),
+        sourceSectionId,
+        targetSectionId
+      ).map((item) => item.id)
     )
   }
 
@@ -1518,6 +1517,7 @@ export function App() {
             onOpenSettings={handleOpenSettings}
             onRenameSession={handleRenameSession}
             onReorderProjects={handleReorderProjects}
+            onReorderSidebarSections={handleReorderSidebarSections}
             onReorderSessions={handleReorderSessions}
             onSelectSession={handleSelectSession}
             onToggleSidebar={() => setIsSidebarCollapsed(true)}
@@ -1525,6 +1525,7 @@ export function App() {
             onExpandedProjectIdsChange={setExpandedProjectIds}
             projects={projects}
             selectedSessionId={selectedSession?.id ?? ""}
+            sidebarSectionOrder={sidebarSectionOrder}
             sessionRunStatusById={runStatusBySession}
             sessions={sessions}
             isWindowFullscreen={isWindowFullscreen}

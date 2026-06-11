@@ -64,10 +64,11 @@ Renderer:
   window state, workspace tabs, and the currently selected session/project
   through Electron IPC. The durable adapter is Electron
   `userData/app-state.json`; renderer code does not read or write storage keys
-  directly. Shell layout state includes sidebar/workspace collapse state and
-  sidebar/chat column widths. Native window state includes restored bounds and
-  maximized state, owned by Electron main so renderer app-state saves do not
-  overwrite the latest window size. Workspace tabs persist their active
+  directly. Shell layout state includes sidebar/workspace collapse state,
+  sidebar/chat column widths, and the sortable `会话`/`项目` sidebar section
+  order. Native window state includes restored bounds and maximized state,
+  owned by Electron main so renderer app-state saves do not overwrite the
+  latest window size. Workspace tabs persist their active
   extension plus a lightweight opened-resource descriptor, so file-backed
   surfaces such as PDF Editor and Excalidraw can restore the last opened file
   after restart.

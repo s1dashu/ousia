@@ -120,15 +120,15 @@ type ChatAttachmentSummary = Pick<
   "id" | "kind" | "mediaType" | "name" | "size"
 >
 
-const TOOL_NAME_LABELS: Record<string, string> = {
-  bash: "终端",
-  edit: "编辑",
-  find: "查找",
-  grep: "搜索",
-  ls: "列目录",
-  read: "读取",
-  write: "写入",
-}
+const BUILT_IN_TOOL_NAMES = new Set([
+  "bash",
+  "edit",
+  "find",
+  "grep",
+  "ls",
+  "read",
+  "write",
+])
 
 function normalizeToolName(name: string) {
   return name
@@ -141,17 +141,16 @@ function normalizeToolName(name: string) {
 
 function formatToolName(name: string) {
   if (!name) {
-    return "工具"
+    return "tool"
   }
 
   const normalizedName = normalizeToolName(name)
-  const mappedName = TOOL_NAME_LABELS[normalizedName.toLowerCase()]
-  if (mappedName) {
-    return mappedName
+  const canonicalName = normalizedName.toLowerCase()
+  if (BUILT_IN_TOOL_NAMES.has(canonicalName)) {
+    return canonicalName
   }
 
-  return normalizedName
-    .replace(/\b\w/g, (character) => character.toUpperCase())
+  return normalizedName || "tool"
 }
 
 function defaultThinkingLevelFor(levels: OusiaThinkingLevel[]) {

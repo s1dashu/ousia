@@ -70,6 +70,15 @@ function normalizeShellLayout(value: unknown): OusiaShellLayoutState {
   if (!isRecord(value)) {
     return fallback
   }
+  const storedSectionOrder = Array.isArray(value.sidebarSectionOrder)
+    ? value.sidebarSectionOrder.filter(
+        (sectionId): sectionId is OusiaShellLayoutState["sidebarSectionOrder"][number] =>
+          sectionId === "sessions" || sectionId === "projects"
+      )
+    : []
+  const sidebarSectionOrder = [
+    ...new Set([...storedSectionOrder, ...fallback.sidebarSectionOrder]),
+  ]
   return {
     sidebarWidth: clampNumber(value.sidebarWidth, fallback.sidebarWidth, 200, 360),
     chatWidth: clampNumber(value.chatWidth, fallback.chatWidth, 340, 1600),
@@ -81,6 +90,7 @@ function normalizeShellLayout(value: unknown): OusiaShellLayoutState {
       typeof value.isWorkspaceCollapsed === "boolean"
         ? value.isWorkspaceCollapsed
         : fallback.isWorkspaceCollapsed,
+    sidebarSectionOrder,
   }
 }
 

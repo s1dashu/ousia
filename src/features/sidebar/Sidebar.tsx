@@ -29,6 +29,7 @@ import { Folder, FolderOpen, Plus, Settings, Trash2 } from "lucide-react"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { Button } from "@/components/ui/button"
+import type { OusiaSidebarSectionId } from "@/electron/chat-types"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 
 const sidebarAddIconSize = 19
@@ -54,7 +55,7 @@ const sidebarGhostActionClass =
 const defaultSessionGroupId = "default"
 
 type SidebarSortableData = {
-  kind: "project" | "session"
+  kind: "project" | "section" | "session"
   label: string
   groupId?: string
 }
@@ -73,12 +74,17 @@ type SidebarProps = {
   onOpenSettings: () => void
   onRenameSession: (sessionId: string, title: string) => void
   onReorderProjects: (sourceProjectId: string, targetProjectId: string) => void
+  onReorderSidebarSections: (
+    sourceSectionId: OusiaSidebarSectionId,
+    targetSectionId: OusiaSidebarSectionId
+  ) => void
   onReorderSessions: (sourceSessionId: string, targetSessionId: string) => void
   onSelectSession: (sessionId: string) => void
   onToggleSidebar: () => void
   expandedProjectIds: string[]
   projects: ProjectRecord[]
   selectedSessionId: string
+  sidebarSectionOrder: OusiaSidebarSectionId[]
   sessionRunStatusById: Record<string, "idle" | "working">
   sessions: SessionRecord[]
   isWindowFullscreen: boolean
@@ -111,6 +117,14 @@ type SortableProjectSectionProps = {
   project: ProjectRecord
 }
 
+type SortableSidebarSectionProps = {
+  actionLabel: string
+  children: React.ReactNode
+  id: OusiaSidebarSectionId
+  label: string
+  onAction: () => void
+}
+
 function handleTextButtonMouseDown(event: MouseEvent<HTMLButtonElement>) {
   event.preventDefault()
 }
@@ -120,7 +134,11 @@ function getSortableData(value: unknown): SidebarSortableData | null {
     return null
   }
   const data = value as Partial<SidebarSortableData>
-  if (data.kind !== "project" && data.kind !== "session") {
+  if (
+    data.kind !== "project" &&
+    data.kind !== "section" &&
+    data.kind !== "session"
+  ) {
     return null
   }
   if (typeof data.label !== "string") {
@@ -133,7 +151,46 @@ function getSortableData(value: unknown): SidebarSortableData | null {
   }
 }
 
-function DragPreview({ label }: { label: string }) {
+function isSidebarSectionId(value: string): value is OusiaSidebarSectionId {
+  return value === "sessions" || value === "projects"
+}
+
+function normalizeSidebarSectionOrder(
+  sectionOrder: OusiaSidebarSectionId[]
+): OusiaSidebarSectionId[] {
+  return [
+    ...new Set(
+      [...sectionOrder, "sessions", "projects"].filter(isSidebarSectionId)
+    ),
+  ]
+}
+
+function DragPreview({
+  innerWidth,
+  preview,
+}: {
+  innerWidth: number
+  preview: SidebarDragPreview
+}) {
+  if (preview.kind === "section") {
+    return (
+      <div
+        className={[
+          "grid items-start rounded-lg",
+          "bg-[var(--sidebar-accent)] px-3 py-2 text-sm text-sidebar-accent-foreground opacity-80",
+        ].join(" ")}
+        style={{
+          width: innerWidth,
+          minHeight: 76,
+        }}
+      >
+        <div className="font-radix-medium truncate text-muted-foreground">
+          {preview.label}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       className={[
@@ -141,7 +198,7 @@ function DragPreview({ label }: { label: string }) {
         "bg-[var(--sidebar-accent)] px-3 text-sm text-sidebar-accent-foreground opacity-95",
       ].join(" ")}
     >
-      <div className="truncate">{label}</div>
+      <div className="truncate">{preview.label}</div>
     </div>
   )
 }
@@ -387,6 +444,74 @@ function SortableProjectSection({
   )
 }
 
+function SortableSidebarSection({
+  actionLabel,
+  children,
+  id,
+  label,
+  onAction,
+}: SortableSidebarSectionProps) {
+  const {
+    attributes,
+    isDragging,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id,
+    data: {
+      kind: "section",
+      label,
+    } satisfies SidebarSortableData,
+  })
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <section
+      ref={setNodeRef}
+      style={style}
+      className={["mt-3 min-w-0 first:mt-0", isDragging ? "opacity-35" : ""].join(
+        " "
+      )}
+    >
+      <div
+        className={[
+          "grid cursor-grab items-center gap-1 pt-2 pb-1.5 active:cursor-grabbing",
+          sidebarSingleActionGridClass,
+          sidebarSectionHeaderXClass,
+        ].join(" ")}
+        {...attributes}
+        {...listeners}
+      >
+        <div className="font-radix-medium text-sm text-muted-foreground">
+          {label}
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={sidebarActionButtonClass}
+          aria-label={actionLabel}
+          onMouseDown={handleTextButtonMouseDown}
+          onClick={onAction}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <Plus
+            className="text-muted-foreground"
+            size={sidebarAddIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        </Button>
+      </div>
+      {children}
+    </section>
+  )
+}
+
 export function Sidebar({
   onCreateProjectSession,
   onCreateSession,
@@ -397,12 +522,14 @@ export function Sidebar({
   onOpenSettings,
   onRenameSession,
   onReorderProjects,
+  onReorderSidebarSections,
   onReorderSessions,
   onSelectSession,
   onToggleSidebar,
   expandedProjectIds,
   projects,
   selectedSessionId,
+  sidebarSectionOrder,
   sessionRunStatusById,
   sessions,
   isWindowFullscreen,
@@ -416,6 +543,10 @@ export function Sidebar({
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
   const editingInputRef = useRef<HTMLInputElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
+  const sidebarInnerWidth =
+    typeof style.width === "number" ? Math.max(176, style.width - 24) : 220
+  const visibleSidebarSectionOrder =
+    normalizeSidebarSectionOrder(sidebarSectionOrder)
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -485,7 +616,13 @@ export function Sidebar({
       setDragPreview(null)
       return
     }
-    if (activeData.kind === "project" && overData.kind === "project") {
+    if (activeData.kind === "section" && overData.kind === "section") {
+      const activeSectionId = String(event.active.id)
+      const overSectionId = String(event.over.id)
+      if (isSidebarSectionId(activeSectionId) && isSidebarSectionId(overSectionId)) {
+        onReorderSidebarSections(activeSectionId, overSectionId)
+      }
+    } else if (activeData.kind === "project" && overData.kind === "project") {
       onReorderProjects(String(event.active.id), String(event.over.id))
     } else if (
       activeData.kind === "session" &&
@@ -526,6 +663,156 @@ export function Sidebar({
     )
   }
 
+  function renderSessionsSection() {
+    return (
+      <SortableSidebarSection
+        key="sessions"
+        id="sessions"
+        label="会话"
+        actionLabel="新建会话"
+        onAction={onCreateSession}
+      >
+        <SortableContext
+          items={defaultSessions.map((session) => session.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className={sidebarListGapClass}>
+            {defaultSessions.length ? (
+              defaultSessions.map((session) =>
+                renderSessionRow(session, {
+                  groupId: defaultSessionGroupId,
+                })
+              )
+            ) : (
+              <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                无会话
+              </div>
+            )}
+          </div>
+        </SortableContext>
+      </SortableSidebarSection>
+    )
+  }
+
+  function renderProjectsSection() {
+    return (
+      <SortableSidebarSection
+        key="projects"
+        id="projects"
+        label="项目"
+        actionLabel="创建项目"
+        onAction={onOpenProject}
+      >
+        <SortableContext
+          items={projects.map((project) => project.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className={sidebarListGapClass}>
+            {projects.map((project) => {
+              const isExpanded = visibleExpandedProjectIds.has(project.id)
+              const projectSessions = sessions.filter(
+                (session) => session.projectId === project.id
+              )
+              const canCompactProjectSessions =
+                projectSessions.length > sidebarProjectSessionPreviewCount
+              const isProjectSessionListCompact = compactProjectSessionIds.includes(
+                project.id
+              )
+              const visibleProjectSessions =
+                canCompactProjectSessions && isProjectSessionListCompact
+                  ? projectSessions.slice(0, sidebarProjectSessionCompactCount)
+                  : projectSessions
+              return (
+                <SortableProjectSection
+                  key={project.id}
+                  isExpanded={isExpanded}
+                  onCreateProjectSession={onCreateProjectSession}
+                  onDeleteProject={onDeleteProject}
+                  onToggleProject={toggleProject}
+                  project={project}
+                >
+                  <AnimatePresence initial={false}>
+                    {isExpanded ? (
+                      <motion.div
+                        key={`${project.id}-sessions`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{
+                          duration: 0.16,
+                          ease: [0.2, 0, 0, 1],
+                        }}
+                        className="overflow-hidden"
+                      >
+                        <SortableContext
+                          items={visibleProjectSessions.map(
+                            (session) => session.id
+                          )}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className={`${sidebarListGapClass} pt-px`}>
+                            {projectSessions.length ? (
+                              visibleProjectSessions.map((session) =>
+                                renderSessionRow(session, {
+                                  groupId: project.id,
+                                  projectChild: true,
+                                })
+                              )
+                            ) : (
+                              <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                                无会话
+                              </div>
+                            )}
+                            {canCompactProjectSessions ? (
+                              <button
+                                type="button"
+                                className={[
+                                  "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
+                                  sidebarProjectSessionGridClass,
+                                  sidebarRowXClass,
+                                ].join(" ")}
+                                onMouseDown={handleTextButtonMouseDown}
+                                onClick={() => {
+                                  setCompactProjectSessionIds((current) =>
+                                    isProjectSessionListCompact
+                                      ? current.filter((id) => id !== project.id)
+                                      : [...current, project.id]
+                                  )
+                                }}
+                              >
+                                <span aria-hidden="true" />
+                                <span>
+                                  {isProjectSessionListCompact
+                                    ? "展示更多"
+                                    : "展示更少"}
+                                </span>
+                              </button>
+                            ) : null}
+                          </div>
+                        </SortableContext>
+                      </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </SortableProjectSection>
+              )
+            })}
+            {!projects.length ? (
+              <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                无项目
+              </div>
+            ) : null}
+          </div>
+        </SortableContext>
+      </SortableSidebarSection>
+    )
+  }
+
+  function renderSidebarSection(sectionId: OusiaSidebarSectionId) {
+    return sectionId === "sessions"
+      ? renderSessionsSection()
+      : renderProjectsSection()
+  }
+
   return (
     <aside
       className="flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
@@ -547,175 +834,11 @@ export function Sidebar({
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <div
-            className={[
-              "grid items-center gap-1 pt-2 pb-1.5",
-              sidebarSingleActionGridClass,
-              sidebarSectionHeaderXClass,
-            ].join(" ")}
-          >
-            <div className="font-radix-medium text-sm text-muted-foreground">
-              会话
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className={sidebarActionButtonClass}
-              aria-label="新建会话"
-              onMouseDown={handleTextButtonMouseDown}
-              onClick={() => onCreateSession()}
-            >
-              <Plus
-                className="text-muted-foreground"
-                size={sidebarAddIconSize}
-                strokeWidth={sidebarIconStrokeWidth}
-              />
-            </Button>
-          </div>
           <SortableContext
-            items={defaultSessions.map((session) => session.id)}
+            items={visibleSidebarSectionOrder}
             strategy={verticalListSortingStrategy}
           >
-            <div className={sidebarListGapClass}>
-              {defaultSessions.length ? (
-                defaultSessions.map((session) =>
-                  renderSessionRow(session, {
-                    groupId: defaultSessionGroupId,
-                  })
-                )
-              ) : (
-                <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                  无会话
-                </div>
-              )}
-            </div>
-          </SortableContext>
-
-          <div
-            className={[
-              "mt-3 grid items-center gap-1 pt-2 pb-1.5",
-              sidebarSingleActionGridClass,
-              sidebarSectionHeaderXClass,
-            ].join(" ")}
-          >
-            <div className="font-radix-medium text-sm text-muted-foreground">
-              项目
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className={sidebarActionButtonClass}
-              aria-label="创建项目"
-              onMouseDown={handleTextButtonMouseDown}
-              onClick={onOpenProject}
-            >
-              <Plus
-                className="text-muted-foreground"
-                size={sidebarAddIconSize}
-                strokeWidth={sidebarIconStrokeWidth}
-              />
-            </Button>
-          </div>
-          <SortableContext
-            items={projects.map((project) => project.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className={sidebarListGapClass}>
-              {projects.map((project) => {
-                const isExpanded = visibleExpandedProjectIds.has(project.id)
-                const projectSessions = sessions.filter(
-                  (session) => session.projectId === project.id
-                )
-                const canCompactProjectSessions =
-                  projectSessions.length > sidebarProjectSessionPreviewCount
-                const isProjectSessionListCompact =
-                  compactProjectSessionIds.includes(project.id)
-                const visibleProjectSessions =
-                  canCompactProjectSessions && isProjectSessionListCompact
-                    ? projectSessions.slice(0, sidebarProjectSessionCompactCount)
-                    : projectSessions
-                return (
-                  <SortableProjectSection
-                    key={project.id}
-                    isExpanded={isExpanded}
-                    onCreateProjectSession={onCreateProjectSession}
-                    onDeleteProject={onDeleteProject}
-                    onToggleProject={toggleProject}
-                    project={project}
-                  >
-                    <AnimatePresence initial={false}>
-                      {isExpanded ? (
-                        <motion.div
-                          key={`${project.id}-sessions`}
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{
-                            duration: 0.16,
-                            ease: [0.2, 0, 0, 1],
-                          }}
-                          className="overflow-hidden"
-                        >
-                          <SortableContext
-                            items={visibleProjectSessions.map(
-                              (session) => session.id
-                            )}
-                            strategy={verticalListSortingStrategy}
-                          >
-                            <div className={`${sidebarListGapClass} pt-px`}>
-                              {projectSessions.length ? (
-                                visibleProjectSessions.map((session) =>
-                                  renderSessionRow(session, {
-                                    groupId: project.id,
-                                    projectChild: true,
-                                  })
-                                )
-                              ) : (
-                                <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                                  无会话
-                                </div>
-                              )}
-                              {canCompactProjectSessions ? (
-                                <button
-                                  type="button"
-                                  className={[
-                                    "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
-                                    sidebarProjectSessionGridClass,
-                                    sidebarRowXClass,
-                                  ].join(" ")}
-                                  onMouseDown={handleTextButtonMouseDown}
-                                  onClick={() => {
-                                    setCompactProjectSessionIds((current) =>
-                                      isProjectSessionListCompact
-                                        ? current.filter((id) => id !== project.id)
-                                        : [...current, project.id]
-                                    )
-                                  }}
-                                >
-                                  <span aria-hidden="true" />
-                                  <span>
-                                    {isProjectSessionListCompact
-                                      ? "展示更多"
-                                      : "展示更少"}
-                                  </span>
-                                </button>
-                              ) : null}
-                            </div>
-                          </SortableContext>
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  </SortableProjectSection>
-                )
-              })}
-              {!projects.length ? (
-                <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                  无项目
-                </div>
-              ) : null}
-            </div>
+            {visibleSidebarSectionOrder.map(renderSidebarSection)}
           </SortableContext>
           <DragOverlay
             dropAnimation={{
@@ -723,7 +846,12 @@ export function Sidebar({
               easing: "cubic-bezier(0.2, 0, 0, 1)",
             }}
           >
-            {dragPreview ? <DragPreview label={dragPreview.label} /> : null}
+            {dragPreview ? (
+              <DragPreview
+                innerWidth={sidebarInnerWidth}
+                preview={dragPreview}
+              />
+            ) : null}
           </DragOverlay>
         </DndContext>
       </div>

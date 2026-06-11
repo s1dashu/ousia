@@ -76,7 +76,8 @@ Implemented:
   newly created or recently active sessions move to the top of their own session
   group.
 - Project rows in the sidebar use dnd-kit sortable drag-and-drop to adjust and
-  persist project order.
+  persist project order. The top-level `会话` and `项目` sidebar sections are
+  also sortable and persist their relative order.
 - Full-page settings surface with an inset VS Code-like floating left tab list
   for appearance, general, and model settings. Select controls apply
   immediately; text inputs apply on blur, so there is no save button.
@@ -146,8 +147,9 @@ Implemented:
 - Workspace supports multiple open tab instances, close-on-hover tab icons, and
   a persistent new-tab button that opens an app-launcher-style extension picker.
 - Open workspace tabs and the active tab are restored globally across projects.
-- Sidebar/workspace collapse state and sidebar/chat column widths are restored
-  from Electron `userData/app-state.json`.
+- Sidebar/workspace collapse state, sidebar/chat column widths, and the
+  `会话`/`项目` sidebar section order are restored from Electron
+  `userData/app-state.json`.
 - Native window size, position, and maximized state are restored from Electron
   `userData/app-state.json`.
 - Workspace extensions receive their `extensionId` and `tabId` in context so
