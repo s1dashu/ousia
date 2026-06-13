@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { app } from "electron"
@@ -7,7 +7,6 @@ import {
   AuthStorage,
   createAgentSession,
   DefaultResourceLoader,
-  getAgentDir,
   ModelRegistry,
   SessionManager,
   SettingsManager,
@@ -41,210 +40,13 @@ type AgentConversationModuleOptions = {
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
 }
 
-const OUSIA_SKILL_NAME = "ousia"
-
-const OUSIA_USAGE_SKILL = `---
-name: ousia
-description: "Use for Ousia Desktop itself: operating existing Ousia workspace extensions, opening/viewing/editing local files or artifacts inside Ousia, using the local ousia CLI, or creating/updating/removing Ousia runtime extensions. Prefer this over macOS open/Preview/Finder when the user asks to open a PDF, document, file, artifact, editor, workspace surface, extension, plugin, addon, dashboard, inspector, or tool panel in Ousia."
----
-
-# Ousia Usage
-
-Use this skill for Ousia Desktop itself. It covers both operating existing
-workspace extensions and authoring local runtime extensions.
-
-## Operate Workspace Extensions
-
-Ousia exposes a local CLI named \`ousia\` for controlling visible workspace
-extensions from the bash tool. Use this path when the user asks to open, view,
-preview, inspect, or edit a local file or artifact and an Ousia workspace
-extension may be the right visible surface.
-
-Do not satisfy an Ousia extension request by running macOS commands such as
-\`open <file>\`, \`open -a Preview <file>\`, Finder reveal commands, or other
-system-default app launches. Those commands open files outside Ousia and do not
-focus the requested workspace extension. Use them only if the user explicitly
-asks for a system/default app, or if the \`ousia\` CLI is unavailable and you
-explain that fallback.
-
-Core facts:
-
-- Ousia workspace extensions are visible tabs in the workspace area. Opening or
-  focusing one changes what the user can see in the app.
-- The agent can discover registered extensions with \`ousia extension list\`.
-  The list includes extension ids, aliases, titles, and supported file types.
-- \`openAndFocus\` is a generic action for every registered Ousia workspace
-  extension. It opens that extension's workspace tab if needed, then focuses it.
-- File-type actions are extension-specific. For example, the PDF Editor can open
-  an existing PDF with its documented \`openFile\` action; other extensions may
-  expose different actions.
-- Always call an extension's \`help\` action before using extension-specific
-  actions. Trust the returned action names, JSON arguments, examples, and
-  limitations over guesses.
-- When the user names an Ousia extension or asks to open something inside Ousia,
-  use the Ousia CLI path first. Do not use \`open\`, Preview, Finder, or another
-  external macOS app for that request.
-
-Workflow:
-
-1. If the user gives only a loose file name, search for the requested file path
-   from the current project.
-2. Run \`ousia extension list\` to see registered workspace extension ids,
-   aliases, and titles.
-3. Choose the matching extension by title, id, alias, or supported file type.
-4. Before operating the extension, inspect its supported actions:
-
-   \`\`\`bash
-   ousia extension invoke --extension <extensionId-or-alias> --action help
-   \`\`\`
-
-5. Use only actions, arguments, examples, and limitations returned by \`help\`.
-   Do not invent extension actions or extension-specific arguments.
-6. Invoke the documented action with structured JSON when required.
-
-## Common Commands
-
-\`\`\`bash
-ousia extension list
-ousia extension invoke --extension extension.firstParty.pdfEditor --action help
-ousia extension invoke --extension extension.firstParty.pdfEditor --action openFile --json '{"path":"relative-or-absolute.pdf"}'
-ousia extension invoke --extension extension.firstParty.pdfEditor --action openAndFocus
-\`\`\`
-
-For PDF files, use the PDF editor if it is available: inspect its \`help\`
-action, then open the file with its documented \`openFile\` action.
-
-For Excalidraw files, use the Excalidraw extension if it is available: inspect
-its \`help\` action, then open the file with its documented \`openFile\` action.
-When creating, updating, or repairing a \`.excalidraw\` file before opening it,
-write valid Excalidraw scene JSON. Do not quote numeric geometry values:
-element \`x\`, \`y\`, \`width\`, \`height\`, \`angle\`, \`strokeWidth\`,
-\`roughness\`, \`opacity\`, \`seed\`, \`version\`, \`versionNonce\`,
-\`fontSize\`, \`fontFamily\`, \`baseline\`, \`lineHeight\`, and all numeric
-point coordinates must be JSON numbers, not strings. \`appState.scrollX\`,
-\`appState.scrollY\`, and \`appState.zoom.value\` must also be numbers when
-present. Before invoking \`openFile\` for an agent-authored or agent-repaired
-\`.excalidraw\` file, validate that \`type\` is \`"excalidraw"\`, \`elements\`
-is an array, and these numeric fields are actually numbers. If validation finds
-string geometry in an existing file, repair the file first instead of reporting
-that Ousia or the Excalidraw extension opened it successfully.
-
-## Author Runtime Extensions
-
-Use this section when creating, updating, debugging, or removing Ousia runtime
-extensions. Trigger this for user wording such as extension, plugin, addon,
-add-on, component, dashboard, inspector, tool panel, workspace app, custom UI, or
-an agent-authored Ousia surface.
-
-Hard boundary: runtime extension authoring writes only under
-\`~/.ousia/extensions/<extension-id>/\`. Do not modify Ousia app source code from
-this workflow.
-
-Allowed write targets:
-
-- \`~/.ousia/extensions/<extension-id>/package.json\`
-- \`~/.ousia/extensions/<extension-id>/App.tsx\`
-- Other files inside \`~/.ousia/extensions/<extension-id>/\` only when directly
-  used by that extension
-
-Forbidden write targets for runtime extension authoring:
-
-- \`src/\`
-- \`src/electron/\`
-- Ousia app \`package.json\`, lockfiles, Vite/Forge/TypeScript/ESLint config, or
-  other build/runtime config
-- \`docs/\`, \`agents.md\`, \`ref/\`, or other project documentation/reference
-  files
-- Any Ousia compiled app registry, runtime loader, preload API, IPC handler, or
-  host-side permission surface
-
-If the requested extension appears to need new host APIs, IPC APIs, package
-dependencies, runtime imports, backend execution, or changes to Ousia itself,
-stop and explain the missing host API. Ask the user for a separate explicit
-source-code task if they want to change Ousia itself.
-
-Runtime extension package shape:
-
-\`\`\`text
-~/.ousia/extensions/<extension-id>/
-  package.json
-  App.tsx
-\`\`\`
-
-\`package.json\` declares Ousia metadata under \`ousia.app\`:
-
-\`\`\`json
-{
-  "name": "project-health",
-  "version": "0.1.0",
-  "ousia": {
-    "app": {
-      "title": "Project Health",
-      "slot": "workspace.tab",
-      "entry": "App.tsx"
-    }
-  }
-}
-\`\`\`
-
-Current runtime contract:
-
-- Supported slot: \`workspace.tab\`.
-- \`ousia.app.distribution\` may be omitted or set to \`user-local\`.
-- Frontend entries can be \`.tsx\` or \`.ts\`.
-- Export a React component as default or named \`App\`.
-- Runtime import allowlist: \`react\`.
-- Relative imports inside the extension directory are bundled by Ousia.
-- Runtime extensions receive \`context.project\`, \`context.conversation\`, and
-  theme context.
-- Use plain CSS in a scoped \`<style>\` tag. Do not rely on Tailwind utilities
-  for runtime extension layout or visual styling.
-- The root element must fill the workspace tab with \`width: 100%\` and
-  \`min-height: 100%\`.
-
-Validation:
-
-1. Validate only the extension files you changed.
-2. Do not run Ousia source-code fixes, dependency installs, or build-system
-   changes from this runtime-extension workflow.
-3. Tell the user the extension will appear automatically in Ousia while the app
-   is running.
-`
-
-function ensureOusiaUsageSkill(agentDir: string) {
-  const userData = app.getPath("userData")
-  mkdirSync(userData, { recursive: true })
-  const installMarkerPath = join(
-    userData,
-    "ousia-usage-skill-installed"
-  )
-  const skillDir = join(agentDir, "skills", "ousia")
-  const skillPath = join(skillDir, "SKILL.md")
-  if (existsSync(installMarkerPath)) {
-    return
-  }
-  if (existsSync(skillPath)) {
-    writeFileSync(installMarkerPath, "installed\n")
-    return
-  }
-  mkdirSync(skillDir, { recursive: true })
-  writeFileSync(skillPath, OUSIA_USAGE_SKILL)
-  writeFileSync(installMarkerPath, "installed\n")
-}
-
-function getAdditionalPiSkillPaths() {
-  const skillsDir = join(getAgentDir(), "skills")
-  if (!existsSync(skillsDir)) {
-    return []
-  }
-  return readdirSync(skillsDir, { withFileTypes: true })
-    .filter((entry) => {
-      if (entry.name === OUSIA_SKILL_NAME) {
-        return false
-      }
-      return entry.isDirectory() || entry.name.endsWith(".md")
-    })
-    .map((entry) => join(skillsDir, entry.name))
+type AgentStreamState = {
+  textId: string
+  thinkingId: string
+  currentAssistantMessageId: string
+  toolDisplayIdsByContentIndex: Map<number, string>
+  toolDisplayIdsByProviderId: Map<string, string>
+  startedToolIds: Set<string>
 }
 
 function now() {
@@ -253,6 +55,27 @@ function now() {
 
 function randomId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function createStreamState(): AgentStreamState {
+  return {
+    textId: "",
+    thinkingId: "",
+    currentAssistantMessageId: "",
+    toolDisplayIdsByContentIndex: new Map(),
+    toolDisplayIdsByProviderId: new Map(),
+    startedToolIds: new Set(),
+  }
+}
+
+function displayToolCallId(
+  state: AgentStreamState,
+  providerToolCallId: string | undefined
+) {
+  if (!providerToolCallId) {
+    return undefined
+  }
+  return state.toolDisplayIdsByProviderId.get(providerToolCallId) ?? providerToolCallId
 }
 
 function stringifyUnknown(value: unknown) {
@@ -589,7 +412,7 @@ export function createAgentConversationModule({
   emitChatEvent,
 }: AgentConversationModuleOptions) {
   const sessionPromises = new Map<string, Promise<AgentSessionBundle>>()
-  const streamState = new Map<string, { textId: string; thinkingId: string }>()
+  const streamState = new Map<string, AgentStreamState>()
   const interruptGenerations = new Map<string, number>()
 
   function translateAgentEvent(
@@ -598,7 +421,7 @@ export function createAgentConversationModule({
     key: string
   ) {
     const timestamp = now()
-    const state = streamState.get(key) ?? { textId: "", thinkingId: "" }
+    const state = streamState.get(key) ?? createStreamState()
     streamState.set(key, state)
 
     if (event.type === "agent_start") {
@@ -622,6 +445,25 @@ export function createAgentConversationModule({
       )
       state.textId = ""
       state.thinkingId = ""
+      state.currentAssistantMessageId = ""
+      state.toolDisplayIdsByContentIndex.clear()
+      state.toolDisplayIdsByProviderId.clear()
+      state.startedToolIds.clear()
+      return
+    }
+    if (event.type === "message_start") {
+      const source = event as unknown as {
+        message?: Record<string, unknown>
+      }
+      if (source.message?.role === "assistant") {
+        state.currentAssistantMessageId =
+          typeof source.message.id === "string"
+            ? source.message.id
+            : randomId("assistant-message")
+        state.toolDisplayIdsByContentIndex.clear()
+        state.toolDisplayIdsByProviderId.clear()
+        state.startedToolIds.clear()
+      }
       return
     }
     if (event.type === "message_end") {
@@ -652,27 +494,34 @@ export function createAgentConversationModule({
         toolName?: string
         args?: unknown
       }
+      const displayId =
+        displayToolCallId(state, source.toolCallId) ?? randomId("tool")
       emitChatEvent(
         {
           type: "tool_start",
-          id: source.toolCallId ?? randomId("tool"),
+          id: displayId,
           name: source.toolName ?? "tool",
           args: source.args,
           timestamp,
         },
         context
       )
+      state.startedToolIds.add(displayId)
       return
     }
     if (event.type === "tool_execution_update") {
       const source = event as unknown as {
         toolCallId?: string
         partialResult?: unknown
+        toolName?: string
       }
+      const displayId =
+        displayToolCallId(state, source.toolCallId) ?? randomId("tool")
       emitChatEvent(
         {
           type: "tool_update",
-          id: source.toolCallId ?? randomId("tool"),
+          id: displayId,
+          name: source.toolName,
           value: source.partialResult,
           timestamp,
         },
@@ -687,10 +536,12 @@ export function createAgentConversationModule({
         result?: unknown
         isError?: boolean
       }
+      const displayId =
+        displayToolCallId(state, source.toolCallId) ?? randomId("tool")
       emitChatEvent(
         {
           type: "tool_end",
-          id: source.toolCallId ?? randomId("tool"),
+          id: displayId,
           name: source.toolName,
           result: source.result,
           isError: source.isError,
@@ -706,6 +557,11 @@ export function createAgentConversationModule({
 
     const messageEvent = (
       event as unknown as {
+        message?: {
+          role?: string
+          id?: string
+          content?: unknown
+        }
         assistantMessageEvent?: {
           type?: string
           contentIndex?: number
@@ -717,9 +573,67 @@ export function createAgentConversationModule({
         }
       }
     ).assistantMessageEvent
+    const message = (
+      event as unknown as {
+        message?: {
+          role?: string
+          id?: string
+          content?: unknown
+        }
+      }
+    ).message
 
     if (!messageEvent) {
       return
+    }
+
+    if (message?.role === "assistant" && Array.isArray(message.content)) {
+      message.content.forEach((part, index) => {
+        if (!part || typeof part !== "object") {
+          return
+        }
+        const block = part as Record<string, unknown>
+        if (block.type !== "toolCall") {
+          return
+        }
+        const providerToolCallId =
+          typeof block.id === "string" && block.id ? block.id : undefined
+        const existingDisplayId = state.toolDisplayIdsByContentIndex.get(index)
+        const toolCallId =
+          existingDisplayId ??
+          providerToolCallId ??
+          `${state.currentAssistantMessageId || message.id || "tool"}-${index}`
+        state.toolDisplayIdsByContentIndex.set(index, toolCallId)
+        if (providerToolCallId) {
+          state.toolDisplayIdsByProviderId.set(providerToolCallId, toolCallId)
+        }
+        const toolName = typeof block.name === "string" ? block.name : "tool"
+        if (!state.startedToolIds.has(toolCallId)) {
+          state.startedToolIds.add(toolCallId)
+          emitChatEvent(
+            {
+              type: "tool_start",
+              id: toolCallId,
+              name: toolName,
+              args: block.arguments,
+              timestamp,
+            },
+            context
+          )
+          return
+        }
+        emitChatEvent(
+          {
+            type: "tool_update",
+            id: toolCallId,
+            name: toolName,
+            value: block.arguments,
+            phase: "input",
+            timestamp,
+          },
+          context
+        )
+      })
     }
 
     if (messageEvent.type === "text_start") {
@@ -825,11 +739,9 @@ export function createAgentConversationModule({
       join(agentDir, "models.json")
     )
     const settingsManager = SettingsManager.create(cwd, agentDir)
-    ensureOusiaUsageSkill(agentDir)
     const resourceLoader = new DefaultResourceLoader({
       cwd,
       agentDir,
-      additionalSkillPaths: getAdditionalPiSkillPaths(),
       settingsManager,
     })
     await resourceLoader.reload()
@@ -867,7 +779,7 @@ export function createAgentConversationModule({
       )
     }
 
-    streamState.set(key, { textId: "", thinkingId: "" })
+    streamState.set(key, createStreamState())
     session.subscribe((event) => translateAgentEvent(event, context, key))
     return {
       authStorage,
@@ -976,10 +888,12 @@ export function createAgentConversationModule({
         return { ok: true }
       }
       if (session.isStreaming) {
+        const streamingBehavior =
+          payload.sendBehavior === "followUp" ? "followUp" : "steer"
         await session.prompt(text || "请查看附件图片。", {
           images,
           source: "interactive",
-          streamingBehavior: "steer",
+          streamingBehavior,
         })
       } else {
         void session

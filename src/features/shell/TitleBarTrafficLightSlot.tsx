@@ -11,7 +11,7 @@ export function TitleBarTrafficLightSlot({
     return null
   }
 
-  return <div className="w-[54px] shrink-0" aria-hidden="true" />
+  return <div className="w-[70px] shrink-0" aria-hidden="true" />
 }
 
 export function TitleBarSidebarToggle({
@@ -30,6 +30,7 @@ export function TitleBarSidebarToggle({
         type="button"
         variant="ghost"
         size="icon-sm"
+        className="window-no-drag"
         aria-label={label}
         onClick={onClick}
       >

@@ -7,11 +7,10 @@ import {
   shell,
 } from "electron"
 import { existsSync } from "node:fs"
-import { env, platform } from "node:process"
+import { platform } from "node:process"
 import { join } from "node:path"
 
 import type {
-  OusiaEnsureWindowWidthPayload,
   OusiaThemePreference,
   OusiaWindowState,
 } from "./chat-types.js"
@@ -144,20 +143,6 @@ function installApplicationMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-function getWebAuthnKeychainAccessGroup() {
-  const configuredGroup = env.OUSIA_WEBAUTHN_KEYCHAIN_ACCESS_GROUP?.trim()
-  if (configuredGroup) {
-    return configuredGroup
-  }
-
-  const teamId = env.OUSIA_APPLE_TEAM_ID?.trim() || env.APPLE_TEAM_ID?.trim()
-  if (!teamId) {
-    return undefined
-  }
-
-  return `${teamId}.com.ousia.desktop.webauthn`
-}
-
 export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOptions) {
   let mainWindow: BrowserWindow | undefined
   let lastEmittedFullscreen: boolean | undefined
@@ -198,24 +183,6 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     return {
       isFullscreen: Boolean(mainWindow?.isFullScreen()),
     }
-  }
-
-  function ensureWindowWidth(payload: OusiaEnsureWindowWidthPayload) {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      return { ok: false, width: 0 }
-    }
-
-    const bounds = mainWindow.getBounds()
-    const minWidth = Math.max(MAIN_WINDOW_MIN_WIDTH, Math.ceil(payload.minWidth))
-    if (bounds.width >= minWidth || mainWindow.isFullScreen()) {
-      return { ok: true, width: bounds.width }
-    }
-
-    const delta = minWidth - bounds.width
-    const x = payload.anchor === "right" ? bounds.x - delta : bounds.x
-    mainWindow.setBounds({ ...bounds, x, width: minWidth }, true)
-    scheduleWindowStateSave()
-    return { ok: true, width: minWidth }
   }
 
   function getCurrentWindowState(): OusiaWindowState | null {
@@ -260,27 +227,6 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     saveWindowStateTimer = setTimeout(saveCurrentWindowState, 350)
   }
 
-  function configureBrowserWebAuthn() {
-    if (platform !== "darwin") {
-      return
-    }
-
-    const keychainAccessGroup = getWebAuthnKeychainAccessGroup()
-    if (!keychainAccessGroup) {
-      console.warn(
-        "Skipping macOS WebAuthn platform authenticator: set OUSIA_WEBAUTHN_KEYCHAIN_ACCESS_GROUP or OUSIA_APPLE_TEAM_ID."
-      )
-      return
-    }
-
-    app.configureWebAuthn({
-      touchID: {
-        keychainAccessGroup,
-        promptReason: "登录 $1",
-      },
-    })
-  }
-
   async function createWindow() {
     installApplicationMenu()
     const appState = await loadAppState()
@@ -292,7 +238,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       minHeight: 600,
       title: "Ousia",
       titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 14, y: 12 },
+      trafficLightPosition: { x: 14, y: 13 },
       backgroundColor: resolveInitialWindowBackground(appState.settings.theme),
       webPreferences: {
         contextIsolation: true,
@@ -407,9 +353,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
   }
 
   return {
-    configureBrowserWebAuthn,
     createWindow,
-    ensureWindowWidth,
     getWindowFullscreenState,
     getMainWindow,
   }

@@ -70,21 +70,44 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
       item.status = "finished"
     })
   } else if (event.type === "tool_start") {
-    next.push({
-      id: event.id,
-      role: "tool",
-      name: event.name,
-      text: formatToolPayload(event.args),
-      input: formatToolPayload(event.args),
-      status: "running",
-    })
-  } else if (event.type === "tool_update") {
+    const input = formatToolPayload(event.args)
     const index = next.findIndex((item) => item.id === event.id)
     if (index >= 0 && next[index].role === "tool") {
       next[index] = {
         ...next[index],
-        text: formatToolPayload(event.value) || next[index].text,
-        output: formatToolPayload(event.value) || next[index].output,
+        name: event.name,
+        text: input || next[index].text,
+        input: input || next[index].input,
+        status: "running",
+      }
+    } else {
+      next.push({
+        id: event.id,
+        role: "tool",
+        name: event.name,
+        text: input,
+        input,
+        status: "running",
+      })
+    }
+  } else if (event.type === "tool_update") {
+    const index = next.findIndex((item) => item.id === event.id)
+    if (index >= 0 && next[index].role === "tool") {
+      const value = formatToolPayload(event.value)
+      if (event.phase === "input") {
+        next[index] = {
+          ...next[index],
+          name: event.name ?? next[index].name,
+          text: value || next[index].text,
+          input: value || next[index].input,
+        }
+        return next
+      }
+      next[index] = {
+        ...next[index],
+        name: event.name ?? next[index].name,
+        text: value || next[index].text,
+        output: value || next[index].output,
       }
     }
   } else if (event.type === "tool_end") {

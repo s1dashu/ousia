@@ -24,12 +24,12 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { AnimatePresence, motion } from "framer-motion"
 import { Folder, FolderOpen, Plus, Settings, Trash2 } from "lucide-react"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
+import { getMessages, type I18nMessages } from "@/app/i18n"
 import { Button } from "@/components/ui/button"
-import type { OusiaSidebarSectionId } from "@/electron/chat-types"
+import type { OusiaLanguage, OusiaSidebarSectionId } from "@/electron/chat-types"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 
 const sidebarAddIconSize = 19
@@ -40,9 +40,9 @@ const sidebarActionButtonClass = "size-7 justify-self-end"
 const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_28px]"
 const sidebarProjectActionButtonClass = "size-6 justify-self-center"
 const sidebarProjectLeadGridClass =
-  "grid-cols-[26px_minmax(0,1fr)_24px_4px_24px]"
+  "grid-cols-[26px_minmax(0,1fr)_28px_4px_28px]"
 const sidebarProjectSessionGridClass = "grid-cols-[26px_minmax(0,1fr)_28px]"
-const sidebarRowXClass = "px-2"
+const sidebarRowXClass = "pl-2 pr-0"
 const sidebarListGapClass = "flex flex-col gap-px"
 const sidebarSectionHeaderXClass = "pl-2 pr-0"
 const sidebarProjectSessionCompactCount = 5
@@ -88,6 +88,7 @@ type SidebarProps = {
   sessionRunStatusById: Record<string, "idle" | "working">
   sessions: SessionRecord[]
   isWindowFullscreen: boolean
+  language: OusiaLanguage
   style: CSSProperties
 }
 
@@ -106,6 +107,7 @@ type SortableSessionRowProps = {
   selectedSessionId: string
   session: SessionRecord
   sessionRunStatus: "idle" | "working"
+  t: I18nMessages
 }
 
 type SortableProjectSectionProps = {
@@ -115,6 +117,7 @@ type SortableProjectSectionProps = {
   onDeleteProject: (projectId: string) => void
   onToggleProject: (projectId: string) => void
   project: ProjectRecord
+  t: I18nMessages
 }
 
 type SortableSidebarSectionProps = {
@@ -218,6 +221,7 @@ function SortableSessionRow({
   selectedSessionId,
   session,
   sessionRunStatus,
+  t,
 }: SortableSessionRowProps) {
   const {
     attributes,
@@ -225,7 +229,6 @@ function SortableSessionRow({
     listeners,
     setNodeRef,
     transform,
-    transition,
   } = useSortable({
     id: session.id,
     data: {
@@ -237,7 +240,6 @@ function SortableSessionRow({
   })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
   }
   const isSessionWorking = sessionRunStatus === "working"
 
@@ -271,7 +273,7 @@ function SortableSessionRow({
       {editingSessionId === session.id ? (
         <input
           ref={editingInputRef}
-          aria-label="重命名会话"
+          aria-label={t.sidebar.renameSession}
           className="min-w-0 bg-transparent text-left outline-none"
           value={editingSessionTitle}
           onChange={(event) => onRenameTitleChange(event.target.value)}
@@ -304,8 +306,8 @@ function SortableSessionRow({
               "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
               "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
             ].join(" ")}
-            aria-label={`${session.title} 运行中`}
-            title="运行中"
+            aria-label={`${session.title} ${t.sidebar.running}`}
+            title={t.sidebar.running}
           >
             <span className="size-3.5 animate-spin rounded-full border-2 border-sidebar-accent-foreground/20 border-t-sidebar-accent-foreground" />
           </div>
@@ -320,7 +322,7 @@ function SortableSessionRow({
             sidebarGhostActionClass,
             "opacity-0 transition-opacity group-hover/session:opacity-100 group-focus-within/session:opacity-100",
           ].join(" ")}
-          aria-label={`删除 ${session.title}`}
+          aria-label={t.sidebar.deleteSession(session.title)}
           onClick={(event) => {
             event.stopPropagation()
             onDeleteSession(session.id)
@@ -345,6 +347,7 @@ function SortableProjectSection({
   onDeleteProject,
   onToggleProject,
   project,
+  t,
 }: SortableProjectSectionProps) {
   const {
     attributes,
@@ -352,7 +355,6 @@ function SortableProjectSection({
     listeners,
     setNodeRef,
     transform,
-    transition,
   } = useSortable({
     id: project.id,
     data: {
@@ -362,7 +364,6 @@ function SortableProjectSection({
   })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
   }
 
   return (
@@ -406,7 +407,7 @@ function SortableProjectSection({
           variant="ghost"
           size="icon-sm"
           className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action opacity-0 transition-opacity`}
-          aria-label={`从 Ousia 移除 ${project.name}`}
+          aria-label={t.sidebar.removeProject(project.name)}
           onClick={(event) => {
             event.stopPropagation()
             onDeleteProject(project.id)
@@ -425,7 +426,7 @@ function SortableProjectSection({
           variant="ghost"
           size="icon-sm"
           className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action opacity-0 transition-opacity`}
-          aria-label={`在 ${project.name} 下新建会话`}
+          aria-label={t.sidebar.newProjectSession(project.name)}
           onClick={(event) => {
             event.stopPropagation()
             onCreateProjectSession(project.id)
@@ -457,7 +458,6 @@ function SortableSidebarSection({
     listeners,
     setNodeRef,
     transform,
-    transition,
   } = useSortable({
     id,
     data: {
@@ -467,7 +467,6 @@ function SortableSidebarSection({
   })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
   }
 
   return (
@@ -533,8 +532,10 @@ export function Sidebar({
   sessionRunStatusById,
   sessions,
   isWindowFullscreen,
+  language,
   style,
 }: SidebarProps) {
+  const t = getMessages(language)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingSessionTitle, setEditingSessionTitle] = useState("")
   const [compactProjectSessionIds, setCompactProjectSessionIds] = useState<
@@ -659,6 +660,7 @@ export function Sidebar({
         selectedSessionId={selectedSessionId}
         session={session}
         sessionRunStatus={sessionRunStatusById[session.id] ?? "idle"}
+        t={t}
       />
     )
   }
@@ -668,8 +670,8 @@ export function Sidebar({
       <SortableSidebarSection
         key="sessions"
         id="sessions"
-        label="会话"
-        actionLabel="新建会话"
+        label={t.sidebar.sessions}
+        actionLabel={t.sidebar.newSession}
         onAction={onCreateSession}
       >
         <SortableContext
@@ -685,7 +687,7 @@ export function Sidebar({
               )
             ) : (
               <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                无会话
+                {t.sidebar.noSessions}
               </div>
             )}
           </div>
@@ -699,8 +701,8 @@ export function Sidebar({
       <SortableSidebarSection
         key="projects"
         id="projects"
-        label="项目"
-        actionLabel="创建项目"
+        label={t.sidebar.projects}
+        actionLabel={t.sidebar.createProject}
         onAction={onOpenProject}
       >
         <SortableContext
@@ -730,75 +732,62 @@ export function Sidebar({
                   onDeleteProject={onDeleteProject}
                   onToggleProject={toggleProject}
                   project={project}
+                  t={t}
                 >
-                  <AnimatePresence initial={false}>
-                    {isExpanded ? (
-                      <motion.div
-                        key={`${project.id}-sessions`}
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{
-                          duration: 0.16,
-                          ease: [0.2, 0, 0, 1],
-                        }}
-                        className="overflow-hidden"
+                  {isExpanded ? (
+                    <div className="overflow-hidden">
+                      <SortableContext
+                        items={visibleProjectSessions.map((session) => session.id)}
+                        strategy={verticalListSortingStrategy}
                       >
-                        <SortableContext
-                          items={visibleProjectSessions.map(
-                            (session) => session.id
+                        <div className={`${sidebarListGapClass} pt-px`}>
+                          {projectSessions.length ? (
+                            visibleProjectSessions.map((session) =>
+                              renderSessionRow(session, {
+                                groupId: project.id,
+                                projectChild: true,
+                              })
+                            )
+                          ) : (
+                            <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+                              {t.sidebar.noSessions}
+                            </div>
                           )}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          <div className={`${sidebarListGapClass} pt-px`}>
-                            {projectSessions.length ? (
-                              visibleProjectSessions.map((session) =>
-                                renderSessionRow(session, {
-                                  groupId: project.id,
-                                  projectChild: true,
-                                })
-                              )
-                            ) : (
-                              <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                                无会话
-                              </div>
-                            )}
-                            {canCompactProjectSessions ? (
-                              <button
-                                type="button"
-                                className={[
-                                  "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
-                                  sidebarProjectSessionGridClass,
-                                  sidebarRowXClass,
-                                ].join(" ")}
-                                onMouseDown={handleTextButtonMouseDown}
-                                onClick={() => {
-                                  setCompactProjectSessionIds((current) =>
-                                    isProjectSessionListCompact
-                                      ? current.filter((id) => id !== project.id)
-                                      : [...current, project.id]
-                                  )
-                                }}
-                              >
-                                <span aria-hidden="true" />
-                                <span>
-                                  {isProjectSessionListCompact
-                                    ? "展示更多"
-                                    : "展示更少"}
-                                </span>
-                              </button>
-                            ) : null}
-                          </div>
-                        </SortableContext>
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
+                          {canCompactProjectSessions ? (
+                            <button
+                              type="button"
+                              className={[
+                                "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
+                                sidebarProjectSessionGridClass,
+                                sidebarRowXClass,
+                              ].join(" ")}
+                              onMouseDown={handleTextButtonMouseDown}
+                              onClick={() => {
+                                setCompactProjectSessionIds((current) =>
+                                  isProjectSessionListCompact
+                                    ? current.filter((id) => id !== project.id)
+                                    : [...current, project.id]
+                                )
+                              }}
+                            >
+                              <span aria-hidden="true" />
+                              <span>
+                                {isProjectSessionListCompact
+                                  ? t.sidebar.showMore
+                                  : t.sidebar.showLess}
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
+                      </SortableContext>
+                    </div>
+                  ) : null}
                 </SortableProjectSection>
               )
             })}
             {!projects.length ? (
               <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                无项目
+                {t.sidebar.noProjects}
               </div>
             ) : null}
           </div>
@@ -821,7 +810,7 @@ export function Sidebar({
       <div className="window-drag flex h-10 shrink-0 items-center border-b px-4">
         <TitleBarSidebarToggle
           isFullscreen={isWindowFullscreen}
-          label="收起侧边栏"
+          label={t.sidebar.collapse}
           onClick={onToggleSidebar}
         />
       </div>
@@ -842,7 +831,7 @@ export function Sidebar({
           </SortableContext>
           <DragOverlay
             dropAnimation={{
-              duration: 150,
+              duration: 0,
               easing: "cubic-bezier(0.2, 0, 0, 1)",
             }}
           >
@@ -864,7 +853,7 @@ export function Sidebar({
           onClick={onOpenSettings}
         >
           <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />
-          <span>设置</span>
+          <span>{t.sidebar.settings}</span>
         </Button>
       </div>
     </aside>

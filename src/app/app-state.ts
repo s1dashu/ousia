@@ -1,4 +1,3 @@
-import type { WorkspaceTabsState } from "@/extensions/workspace-tabs"
 import {
   createDefaultOusiaAppState,
   createDefaultOusiaProject,
@@ -76,5 +75,3 @@ export async function saveAppState(state: InitialAppState) {
   }
   return window.ousia.saveAppState(state)
 }
-
-export type { WorkspaceTabsState }

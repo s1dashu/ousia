@@ -1,160 +1,45 @@
 # Design Context
 
-## Visual Direction
+The `simple-gui` branch keeps the interface quiet and direct: sidebar, chat, and
+a right-side terminal. Avoid reintroducing app-launcher, marketplace, tabbed
+workspace, or extension-management UI.
 
-The current UI should feel closer to Codex desktop in density and seriousness, but not copy Codex exactly.
+## Shell
 
-Typography follows Codex desktop's system-first choice: UI text uses
-`-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`, so Chinese falls
-back to the platform UI font such as PingFang SC on macOS. Code, terminal,
-paths, logs, and other monospaced surfaces use Codex's default mono stack:
-`ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`.
-The workspace terminal is the exception: it loads the bundled Ousia Terminal
-Mono first, then falls back to the system mono stack, so powerline and Nerd Font
-prompt glyphs render correctly without changing the rest of the UI.
-
-The app uses a shadcn preset as the visual base. The user explicitly asked not to keep the earlier Pie-client styling. The light color theme uses a warm tea/coffee neutral palette inspired by Radix Sand, but pushed warmer than stock Sand so bubbles and controls do not read as cold gray.
-The settings UI also exposes the broader Radix light color scales for quick
-appearance tinting, while keeping `Tea` as the default Ousia-specific neutral.
-
-Light mode uses pure white for primary work canvases: chat, workspace, settings,
-and other main detail surfaces. `background`, `card`, `popover`, `muted`, and
-sidebar tokens intentionally use slightly different warm neutral lightness
-values for secondary surfaces, controls, message bubbles, active states, borders,
-and nested UI. The selected Radix-style color scale should tint those supporting
-layers without washing the main reading/work areas.
-Panel and header separators should stay low-contrast and slightly translucent
-so they divide areas without becoming muddy lines on warm surfaces. Inputs can
-keep a firmer border than shell separators.
-
-Generated shadcn/ui reference files live under `ref/`; see `docs/shadcn-reference.md`. Before changing shared UI primitives in `src/components/ui/`, compare against the reference component so state styles, menu padding, focus rings, and radius choices stay intentional.
+- Left sidebar: projects, sessions, and settings.
+- Center: chat and model controls.
+- Right: terminal only.
+- The chat header shows a terminal icon when the right panel is collapsed. Click
+  opens the terminal directly.
+- Keep resize handles thin and unobtrusive.
+- Preserve current shadcn theme direction and compact desktop density.
 
 ## Icon Policy
 
-Ousia intentionally uses two primary icon families:
+- Use Lucide for ordinary utility icons and controls.
+- Use Solar icons only for high-expression navigation or major workspace-level
+  signals.
+- Use the Lucide `SquareTerminal` icon for the right-panel open/collapse
+  action.
 
-- Lucide icons: use for ordinary, quiet, utility-style UI controls that should
-  feel familiar and not visually loud, such as sidebar actions, attach/send
-  controls, collapse controls, search, delete, rename, and similar tool actions.
-- Solar icons: use for areas that need stronger expression or heavier visual
-  identity, especially workspace extension/tab signals such as Browser, Editor,
-  Terminal, Extensions, and other major navigation-level icons.
+## Terminal Panel
 
-Avoid adding new icon families for routine UI beyond Lucide and Solar. If an
-icon currently comes from another set, prefer replacing it with Lucide unless it
-is intentionally acting as a high-expression Solar signal.
+- No tab strip, picker, or separate "Workspace" title row.
+- The panel should fill the available right-side area edge to edge.
+- Terminal colors must track the resolved light/dark theme.
+- Terminal text should use the bundled terminal mono font stack and avoid
+  viewport-scaled font sizing.
 
-## Layout
+## Settings
 
-The shell has three primary sections:
-
-- Sidebar: sessions, followed by projects.
-- Chat area: conversation with the agent.
-- Workspace: open extension surface.
-
-The three sections support horizontal resize. The sidebar and workspace can be
-collapsed; when the workspace is collapsed, the chat header shows an expand
-icon. The app's minimum window width matches the chat area's minimum width; as
-the window narrows, the workspace collapses first, then the sidebar collapses,
-leaving a single-column chat surface. Sidebar and workspace expand/collapse are
-immediate, without panel animation. If the user expands a collapsed workspace
-while the window is too narrow to show it, the native window grows in the needed
-direction only enough to keep the chat at or above its minimum width. Workspace
-responsive reopen also preserves the current chat column width when possible
-and uses a 448px minimum so the extension picker can show at least three icon
-columns.
-
-Electron uses a hidden inset title bar. The macOS traffic lights sit directly in the top-left content area. The app provides its own draggable top rows via `.window-drag`.
-
-All regular scroll containers use Ousia's weak scrollbar treatment: thin,
-low-contrast tracks/thumbs that stay visually quiet until hover or focus.
-Purposefully hidden scrollers, such as overflowing tab rows, may still opt out
-with `scrollbar-none`.
-
-The sidebar has a quiet title-bar collapse/expand icon that matches the workspace
-collapse control style. `Command+B` also toggles it, and dragging the sidebar
-resize handle below the collapse threshold folds the sidebar away. When the
-sidebar is collapsed, the chat header keeps a traffic-light spacer so the title
-does not sit under the macOS window controls. In macOS fullscreen, the
-traffic-light spacer is removed so the sidebar expand/collapse icon stays pinned
-to the far-left edge in both expanded and collapsed states.
+- Settings sections are vertically stacked.
+- Do not add a left settings navigation rail.
+- Appearance settings include mode and Radix color scale.
+- Model settings manage provider API keys; model and thinking level selection
+  stay in the chat input controls.
 
 ## Sidebar
 
-Sidebar requirements:
-
-- High information density.
-- `会话` is the primary sidebar list and has a new-session action on the right.
-- Newly created default sessions are unassigned and use the default work dir.
-- `项目` defaults below the conversation list and has a create-project action
-  on the right.
-- The `会话` and `项目` section headers are sortable, so the user can drag
-  either top-level section above the other.
-- Project creation opens the native folder picker and supports creating a new
-  folder from that picker.
-- Project rows are expandable containers, not selectable conversation targets.
-  Clicking a project row only expands or collapses the project sessions under it.
-- Project rows use small folder icons.
-- Project sessions use the same left-aligned text position as the primary
-  session list, with a subtle left rail to show hierarchy.
-- Sessions support rename and delete.
-- Sessions with an active agent run show a small right-aligned spinner in the
-  row action position.
-- The active background state belongs only to session rows, never project rows.
-- Deleting all sessions shows a muted `无会话` fallback.
-- The sidebar can be collapsed with `Command+B` or by dragging below the
-  collapse threshold.
-- The sidebar title bar shows the sidebar collapse control after the macOS
-  traffic-light area; in fullscreen, the same control moves to the far-left
-  title-bar position. When collapsed, the expand control appears before the chat
-  session title.
-- Settings lives at bottom left.
-- Settings use a single centered vertical column. `通用设置`, `外观设置`, and
-  `模型设置` appear in sequence without a left navigation rail. Settings do not
-  have a save button: selects apply immediately, while text inputs apply on blur.
-
-## Chat
-
-Chat requirements:
-
-- Header title is the current session name.
-- Current default session title is `新会话`.
-- New default sessions are automatically renamed after the first user message
-  with a lightweight model-generated title capped at 16 characters.
-- User message bubbles hug content width.
-- Agent messages render Markdown through Vercel Streamdown.
-- Chat typography favors compact reading density: tighter message spacing,
-  tighter line-height, and reduced Markdown paragraph/list margins.
-- Streamdown's default external-link confirmation modal is disabled; links should not show the extra Streamdown modal.
-- Thinking is a weak quote-style block: left vertical line, muted italic text.
-- Thinking collapses after completion.
-- Message role labels like "You" and "Agent" are not shown.
-- The chat transcript auto-follows new messages only while the user is at the
-  latest message. Scrolling upward pauses auto-follow and shows a centered
-  circular down-arrow above the input; clicking it or manually returning to the
-  bottom resumes auto-follow. If the user sends a new message while auto-follow
-  is paused, the transcript resumes auto-follow for the new user message and the
-  agent response that follows.
-
-## Workspace
-
-Workspace requirements:
-
-- No separate "Workspace" title row.
-- Top row is open extension tabs directly.
-- The tab row supports multiple open tab instances. Hovering a tab swaps the
-  tab icon to a close icon, and clicking it closes that tab.
-- A new-tab button is always visible at the right edge of the tab row. When tab
-  overflow scrolls horizontally, the new-tab button stays fixed in the visible
-  header controls.
-- A new workspace tab opens an extension picker page with an app-launcher-style
-  adaptive grid of all available workspace extensions: large rounded-square icon
-  above, centered extension name below. The picker grid is centered and sized so
-  the default workspace view shows four large extension entries per row, then
-  automatically reduces columns as the workspace narrows. Choosing an extension
-  turns that tab into the selected extension page.
-- Horizontal tab overflow must not consume header height.
-- The workspace is not a fixed review/code surface. It stays open/free for browser, editor, terminal, runtime extensions, and future surfaces.
-- If the editor workspace has no selected file or the current project contains
-  no editable source files, it should show a VS Code-like empty state with a
-  clear folder-opening action instead of a blank editor buffer.
+- `会话` and `项目` are top-level sortable sections.
+- Section drag overlays should cover the full section row area, including the
+  empty-state row when present.

@@ -38,8 +38,32 @@ type ProjectTerminalModuleOptions = {
 }
 
 type TerminalSession = {
-  cleanup: () => void
+  cleanup: (mode?: TerminalCleanupMode) => void
   process: pty.IPty
+}
+
+type TerminalCleanupMode = "defer" | "now"
+
+const deferredTerminalTempDirs = new Set<string>()
+
+function removeTerminalTempDir(tempDir: string) {
+  try {
+    rmSync(tempDir, {
+      force: true,
+      maxRetries: 5,
+      recursive: true,
+      retryDelay: 100,
+    })
+  } catch {
+    // Temporary terminal bootstrap files are best-effort cleanup.
+  }
+}
+
+function cleanupDeferredTerminalTempDirs() {
+  for (const tempDir of deferredTerminalTempDirs) {
+    removeTerminalTempDir(tempDir)
+  }
+  deferredTerminalTempDirs.clear()
 }
 
 function terminalKey(context: OusiaTerminalDisposePayload) {
@@ -72,13 +96,13 @@ function zshDoubleQuote(value: string) {
     .replaceAll("`", "\\`")
 }
 
-function terminalExtensionResourceRoot() {
+function terminalResourceRoot() {
   const packagedRoot = join(process.resourcesPath, "terminal")
   if (existsSync(packagedRoot)) {
     return packagedRoot
   }
 
-  return join(process.cwd(), "src/extensions/system/terminal")
+  return join(process.cwd(), "src/features/terminal/resources")
 }
 
 function bundledStarshipBinDir() {
@@ -88,7 +112,7 @@ function bundledStarshipBinDir() {
 
   const binName = "starship"
   const binDir = join(
-    terminalExtensionResourceRoot(),
+    terminalResourceRoot(),
     "vendor/starship",
     `${platform}-${process.arch}`
   )
@@ -114,15 +138,19 @@ function createShellLaunch(shellPath: string, cwd: string) {
 
   const shellName = basename(shellPath)
   const tempDir = mkdtempSync(join(tmpdir(), "ousia-terminal-"))
-  const cleanup = () => {
-    rmSync(tempDir, { force: true, recursive: true })
+  const cleanup = (mode: TerminalCleanupMode = "defer") => {
+    if (mode === "defer") {
+      deferredTerminalTempDirs.add(tempDir)
+      return
+    }
+    removeTerminalTempDir(tempDir)
   }
   const projectName = basename(cwd) || "project"
   const quotedProjectName = shellQuote(projectName)
   const zshProjectName = zshDoubleQuote(projectName)
   const starshipConfigPath = join(tempDir, "starship.toml")
   const starshipPresetPath = join(
-    terminalExtensionResourceRoot(),
+    terminalResourceRoot(),
     "presets/plain-text-symbols.toml"
   )
   const starshipBinDir = bundledStarshipBinDir()
@@ -264,7 +292,7 @@ function createShellLaunch(shellPath: string, cwd: string) {
     }
   }
 
-  cleanup()
+  cleanup("now")
   return { args: [] as string[], cleanup: () => {}, env: {} }
 }
 
@@ -370,9 +398,10 @@ export function createProjectTerminalModule({
   function disposeAllTerminals() {
     terminalSessions.forEach((terminal) => {
       terminal.process.kill()
-      terminal.cleanup()
+      terminal.cleanup("now")
     })
     terminalSessions.clear()
+    cleanupDeferredTerminalTempDirs()
   }
 
   return {

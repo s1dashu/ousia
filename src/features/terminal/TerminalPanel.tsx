@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef } from "react"
 import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
-import { Terminal, type ITheme } from "@xterm/xterm"
+import { Terminal as XtermTerminal, type ITheme } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
+import { SquareTerminal } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import type { ResolvedTheme } from "@/components/theme-provider"
-import type { ExtensionProps } from "@/extensions/types"
+import { getMessages } from "@/app/i18n"
+import type { OusiaLanguage } from "@/electron/chat-types"
 
 const TERMINAL_FONT_FAMILY =
   '"Ousia Terminal Mono", "Symbols Nerd Font Mono", ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace'
@@ -13,6 +16,15 @@ const TERMINAL_FONT_SIZE = 14
 const TERMINAL_FONT_WEIGHT = "400"
 const TERMINAL_LINE_HEIGHT = 16 / 14
 const TERMINAL_STYLE_REAPPLY_DELAY_MS = 80
+
+type TerminalPanelProps = {
+  projectPath: string
+  sessionId: string
+  isVisible: boolean
+  language: OusiaLanguage
+  resolvedTheme: ResolvedTheme
+  onCollapse: () => void
+}
 
 function createTerminalId(projectPath: string, sessionId: string) {
   const scope =
@@ -79,7 +91,7 @@ async function loadTerminalFont() {
   await document.fonts.load(`${TERMINAL_FONT_SIZE}px "Ousia Terminal Mono"`)
 }
 
-function applyOusiaTerminalStyle(terminal: Terminal, theme: ResolvedTheme) {
+function applyOusiaTerminalStyle(terminal: XtermTerminal, theme: ResolvedTheme) {
   terminal.options.fontFamily = TERMINAL_FONT_FAMILY
   terminal.options.fontSize = TERMINAL_FONT_SIZE
   terminal.options.fontWeight = TERMINAL_FONT_WEIGHT
@@ -92,18 +104,23 @@ function applyOusiaTerminalStyle(terminal: Terminal, theme: ResolvedTheme) {
   terminal.refresh(0, terminal.rows - 1)
 }
 
-export function TerminalExtension({ context }: ExtensionProps) {
+export function TerminalPanel({
+  projectPath,
+  sessionId,
+  isVisible,
+  language,
+  resolvedTheme,
+  onCollapse,
+}: TerminalPanelProps) {
+  const t = getMessages(language)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const terminalRef = useRef<Terminal | null>(null)
+  const terminalRef = useRef<XtermTerminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
-  const resolvedThemeRef = useRef<ResolvedTheme>(context.theme.resolved)
-  const projectPath = context.project.path
-  const sessionId = context.conversation.id
+  const resolvedThemeRef = useRef<ResolvedTheme>(resolvedTheme)
   const terminalId = useMemo(
     () => createTerminalId(projectPath, sessionId),
     [projectPath, sessionId]
   )
-  const resolvedTheme = context.theme.resolved
 
   useEffect(() => {
     resolvedThemeRef.current = resolvedTheme
@@ -111,6 +128,17 @@ export function TerminalExtension({ context }: ExtensionProps) {
       applyOusiaTerminalStyle(terminalRef.current, resolvedTheme)
     }
   }, [resolvedTheme])
+
+  useEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    const frameId = requestAnimationFrame(() => {
+      fitAddonRef.current?.fit()
+      terminalRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(frameId)
+  }, [isVisible])
 
   useEffect(() => {
     const container = containerRef.current
@@ -122,7 +150,7 @@ export function TerminalExtension({ context }: ExtensionProps) {
     let isDisposed = false
     let resizeFrame = 0
     let styleReapplyTimer = 0
-    let terminal: Terminal | null = null
+    let terminal: XtermTerminal | null = null
     let resizeObserver: ResizeObserver | null = null
     let removeTerminalListener: (() => void) | null = null
     let dataSubscription: { dispose: () => void } | null = null
@@ -144,7 +172,7 @@ export function TerminalExtension({ context }: ExtensionProps) {
       }
 
       const fitAddon = new FitAddon()
-      const activeTerminal = new Terminal({
+      const activeTerminal = new XtermTerminal({
         allowProposedApi: false,
         cursorBlink: true,
         cursorInactiveStyle: "none",
@@ -197,7 +225,7 @@ export function TerminalExtension({ context }: ExtensionProps) {
         } else if (event.type === "exit") {
           activeTerminal.writeln("")
           activeTerminal.writeln(
-            `[进程已退出：${event.exitCode ?? event.signal ?? "未知"}]`
+            t.terminal.exited(event.exitCode ?? event.signal ?? t.terminal.unknown)
           )
         } else {
           activeTerminal.writeln(`\r\n${event.message}`)
@@ -223,8 +251,7 @@ export function TerminalExtension({ context }: ExtensionProps) {
         })
         .then(scheduleStyleReapply)
         .catch((error: unknown) => {
-          const message =
-            error instanceof Error ? error.message : "终端启动失败"
+          const message = error instanceof Error ? error.message : t.terminal.startFailed
           activeTerminal.writeln(message)
         })
     }
@@ -248,7 +275,7 @@ export function TerminalExtension({ context }: ExtensionProps) {
         terminalId,
       })
     }
-  }, [projectPath, sessionId, terminalId])
+  }, [projectPath, sessionId, t.terminal, terminalId])
 
   const shellThemeClass =
     resolvedTheme === "light"
@@ -256,10 +283,27 @@ export function TerminalExtension({ context }: ExtensionProps) {
       : "bg-[#111111] text-white"
 
   return (
-    <div className={`h-full min-h-0 overflow-hidden ${shellThemeClass}`}>
+    <div
+      className={`flex h-full min-h-0 flex-col overflow-hidden ${shellThemeClass}`}
+    >
+      <header className="window-drag flex h-10 shrink-0 items-center justify-between border-b border-border pr-4 pl-3 text-foreground">
+        <div className="window-drag flex min-w-0 items-center text-sm font-medium">
+          <span className="window-drag truncate">{t.terminal.title}</span>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="window-no-drag size-7 rounded-md"
+          aria-label={t.terminal.collapse}
+          onClick={onCollapse}
+        >
+          <SquareTerminal size={18} />
+        </Button>
+      </header>
       <div
         ref={containerRef}
-        className="h-full min-h-0 overflow-hidden p-3"
+        className="min-h-0 flex-1 overflow-hidden p-3"
         onMouseDown={() => terminalRef.current?.focus()}
       />
     </div>

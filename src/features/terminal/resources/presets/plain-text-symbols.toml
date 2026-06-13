@@ -1,5 +1,7 @@
 "$schema" = 'https://starship.rs/config-schema.json'
 
+add_newline = false
+format = "$directory$git_branch$git_status$character"
 continuation_prompt = "[.](bright-black) "
 
 [character]

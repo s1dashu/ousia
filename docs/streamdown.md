@@ -2,7 +2,8 @@
 
 ## Usage
 
-Assistant messages are rendered in `src/App.tsx` with Vercel Streamdown.
+Assistant messages are rendered in `src/features/chat/ChatArea.tsx` with Vercel
+Streamdown.
 
 Current renderer configuration:
 
@@ -23,7 +24,7 @@ Streamdown enables its link safety modal by default. The modal asks the user to 
 
 Ousia disables this modal with `linkSafety={{ enabled: false }}` because chat links should behave like normal Markdown links without the extra Streamdown confirmation UI.
 
-Streamdown itself does not provide an Electron default-browser integration. In Electron, Streamdown links create a new-window request through `target="_blank"` or `window.open()`. Ousia handles that as a general main-process window policy in `src/electron/main.ts`:
+Streamdown itself does not provide an Electron default-browser integration. In Electron, Streamdown links create a new-window request through `target="_blank"` or `window.open()`. Ousia handles that as a general main-process window policy in `src/electron/window-host.ts`:
 
 ```ts
 mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -38,7 +39,7 @@ Do not add a renderer-to-main IPC API only for Streamdown links. If link behavio
 
 ## Styling
 
-Streamdown styles are imported in `src/App.tsx`:
+Streamdown styles are imported in `src/features/chat/ChatArea.tsx`:
 
 ```ts
 import "streamdown/styles.css"

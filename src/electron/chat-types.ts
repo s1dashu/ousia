@@ -47,26 +47,10 @@ export const OUSIA_APPEARANCE_COLOR_SCALES = [
 export type OusiaAppearanceColorScale =
   (typeof OUSIA_APPEARANCE_COLOR_SCALES)[number]
 
-export type OusiaWorkspaceTab = {
-  id: string
-  extensionId: string | null
-  resource?: OusiaWorkspaceTabResource
-}
-
-export type OusiaWorkspaceTabResource = {
-  kind: "file"
-  path: string
-  name?: string
-  projectPath?: string
-}
-
-export type OusiaWorkspaceTabsState = {
-  activeTabId: string
-  tabs: OusiaWorkspaceTab[]
-}
-
 export type OusiaAppStateSchemaVersion = 2
 export type OusiaThemePreference = "dark" | "light" | "system"
+export type OusiaSendDuringRunMode = "steer" | "queue"
+export type OusiaLanguage = "zh" | "en"
 
 export type OusiaSessionRecord = {
   id: string
@@ -84,16 +68,13 @@ export type OusiaProjectRecord = {
 export type OusiaAppSettings = {
   appearanceColorScale: OusiaAppearanceColorScale
   theme: OusiaThemePreference
+  language: OusiaLanguage
   defaultWorkDir: string
+  sendDuringRunMode: OusiaSendDuringRunMode
   thinkingLevel: OusiaThinkingLevel
   modelProvider: string
   modelId: string
   modelProviders: OusiaModelProviderConfig[]
-  /**
-   * Legacy single-provider key. Kept for app-state migration and older
-   * renderer fallbacks; new code should read modelProviders instead.
-   */
-  modelApiKey: string
 }
 
 export type OusiaModelProviderConfig = {
@@ -124,19 +105,16 @@ export type OusiaModelRegistryResult = {
 
 export type OusiaAppSelectionState = {
   expandedProjectIds: string[]
-  selectedProjectId: string
   selectedSessionId: string
-  selectedWorkspaceExtensionId: string
-  workspaceTabs: OusiaWorkspaceTabsState
 }
 
 export type OusiaSidebarSectionId = "sessions" | "projects"
 
 export type OusiaShellLayoutState = {
   sidebarWidth: number
-  chatWidth: number
+  terminalPanelWidth: number
   isSidebarCollapsed: boolean
-  isWorkspaceCollapsed: boolean
+  isTerminalPanelCollapsed: boolean
   sidebarSectionOrder: OusiaSidebarSectionId[]
 }
 
@@ -161,202 +139,14 @@ export type OusiaAppStateSaveResult = {
   ok: boolean
 }
 
-export type OusiaExtensionStateScope =
-  | "global"
-  | "project"
-  | "tab"
-  | "resource"
-
-export type OusiaExtensionStatePayload = {
-  extensionId: string
-  scope: OusiaExtensionStateScope
-  key: string
-}
-
-export type OusiaExtensionStateGetPayload = OusiaExtensionStatePayload
-
-export type OusiaExtensionStateSetPayload = OusiaExtensionStatePayload & {
-  value: unknown
-}
-
-export type OusiaExtensionStateDeletePayload = OusiaExtensionStatePayload
-
-export type OusiaExtensionStateResult = {
-  value: unknown
-}
-
-export type OusiaExtensionStateSaveResult = {
-  ok: boolean
-}
-
-export type OusiaWindowResizeAnchor = "left" | "right"
-
-export type OusiaEnsureWindowWidthPayload = {
-  anchor: OusiaWindowResizeAnchor
-  minWidth: number
-}
-
-export type OusiaEnsureWindowWidthResult = {
-  ok: boolean
-  width: number
-}
-
-export type OusiaBrowserProfileMode = "global" | "project" | "temporary"
-
-export type OusiaBrowserSecurityState =
-  | "secure"
-  | "insecure"
-  | "local"
-  | "internal"
-  | "error"
-  | "unknown"
-
-export type OusiaBrowserBounds = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export type OusiaBrowserCreatePayload = {
-  tabId: string
-  initialUrl: string
-  profileMode: OusiaBrowserProfileMode
-  projectId?: string
-  projectPath?: string
-}
-
-export type OusiaBrowserBoundsPayload = {
-  tabId: string
-  bounds: OusiaBrowserBounds
-  visible: boolean
-}
-
-export type OusiaBrowserTabPayload = {
-  tabId: string
-}
-
-export type OusiaBrowserNavigatePayload = OusiaBrowserTabPayload & {
-  url: string
-}
-
-export type OusiaBrowserFindPayload = OusiaBrowserTabPayload & {
-  text: string
-  forward?: boolean
-  findNext?: boolean
-  matchCase?: boolean
-}
-
-export type OusiaBrowserStopFindPayload = OusiaBrowserTabPayload & {
-  action?: "clearSelection" | "keepSelection" | "activateSelection"
-}
-
-export type OusiaBrowserZoomPayload = OusiaBrowserTabPayload & {
-  delta?: number
-  level?: number
-}
-
-export type OusiaBrowserAuthResponsePayload = {
-  requestId: string
-  username?: string
-  password?: string
-  canceled?: boolean
-}
-
-export type OusiaBrowserSelectionResult = {
-  html: string
-  text: string
-  title: string
-  url: string
-}
-
-export type OusiaBrowserFindState = {
-  activeMatchOrdinal: number
-  finalUpdate: boolean
-  matches: number
-  requestId: number
-  selectionArea?: {
-    height: number
-    width: number
-    x: number
-    y: number
-  }
-}
-
-export type OusiaBrowserDownloadState = {
-  id: string
-  filename: string
-  receivedBytes: number
-  savePath: string
-  state: "started" | "progressing" | "completed" | "cancelled" | "interrupted"
-  totalBytes: number
-  url: string
-}
-
-export type OusiaBrowserState = {
-  canGoBack: boolean
-  canGoForward: boolean
-  certificateError?: string
-  error: string
-  faviconUrl?: string
-  isCrashed: boolean
-  isLoading: boolean
-  profileMode: OusiaBrowserProfileMode
-  securityState: OusiaBrowserSecurityState
-  title: string
-  url: string
-  zoomLevel: number
-  zoomPercent: number
-}
-
-export type OusiaBrowserEvent =
-  | {
-      type: "state"
-      tabId: string
-      state: OusiaBrowserState
-    }
-  | {
-      type: "find"
-      tabId: string
-      find: OusiaBrowserFindState
-    }
-  | {
-      type: "download"
-      download: OusiaBrowserDownloadState
-    }
-  | {
-      type: "auth"
-      request: {
-        host: string
-        isProxy: boolean
-        realm?: string
-        requestId: string
-        tabId: string
-      }
-    }
-  | {
-      type: "open-tab"
-      tabId: string
-      url: string
-    }
-  | {
-      type: "quote-selection"
-      tabId: string
-    }
-
-export type OusiaBrowserOperationResult = {
-  ok: boolean
-  state?: OusiaBrowserState
-}
-
 export const OUSIA_APP_STATE_SCHEMA_VERSION = 2
-export const OUSIA_DEFAULT_WORKSPACE_EXTENSION_ID =
-  "extension.firstParty.browser"
 
 export const defaultOusiaAppSettings: OusiaAppSettings = {
   appearanceColorScale: "tea",
   theme: "light",
+  language: "zh",
   defaultWorkDir: "~/.ousia/workspace",
+  sendDuringRunMode: "steer",
   thinkingLevel: "medium",
   modelProvider: "deepseek",
   modelId: "deepseek-v4-flash",
@@ -366,7 +156,6 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
       apiKey: "",
     },
   ],
-  modelApiKey: "",
 }
 
 export function normalizeOusiaModelProviders(
@@ -384,14 +173,6 @@ export function normalizeOusiaModelProviders(
     providers.set(id, {
       id,
       apiKey: provider.apiKey.trim(),
-    })
-  }
-
-  if (settings.modelApiKey?.trim()) {
-    const existing = providers.get(selectedProvider)
-    providers.set(selectedProvider, {
-      id: selectedProvider,
-      apiKey: existing?.apiKey || settings.modelApiKey.trim(),
     })
   }
 
@@ -423,11 +204,13 @@ export function normalizeOusiaAppSettings(
   return {
     ...merged,
     appearanceColorScale,
+    language: merged.language === "en" ? "en" : "zh",
     defaultWorkDir:
       merged.defaultWorkDir.trim() || defaultOusiaAppSettings.defaultWorkDir,
+    sendDuringRunMode:
+      merged.sendDuringRunMode === "queue" ? "queue" : "steer",
     modelProvider,
     modelId: merged.modelId.trim() || defaultOusiaAppSettings.modelId,
-    modelApiKey: merged.modelApiKey.trim(),
     modelProviders: normalizeOusiaModelProviders({
       ...merged,
       modelProvider,
@@ -469,32 +252,12 @@ export function ousiaProjectNameFromPath(path: string) {
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 }
 
-export function createDefaultOusiaWorkspaceTabs(): OusiaWorkspaceTabsState {
-  return {
-    activeTabId: OUSIA_DEFAULT_WORKSPACE_EXTENSION_ID,
-    tabs: [
-      {
-        id: "extension.firstParty.browser",
-        extensionId: "extension.firstParty.browser",
-      },
-      {
-        id: "extension.firstParty.editor",
-        extensionId: "extension.firstParty.editor",
-      },
-      {
-        id: "extension.firstParty.terminal",
-        extensionId: "extension.firstParty.terminal",
-      },
-    ],
-  }
-}
-
 export function createDefaultOusiaShellLayout(): OusiaShellLayoutState {
   return {
     sidebarWidth: 256,
-    chatWidth: 520,
+    terminalPanelWidth: 448,
     isSidebarCollapsed: false,
-    isWorkspaceCollapsed: false,
+    isTerminalPanelCollapsed: false,
     sidebarSectionOrder: ["sessions", "projects"],
   }
 }
@@ -528,10 +291,7 @@ export function createDefaultOusiaAppState(): OusiaAppState {
     shellLayout: createDefaultOusiaShellLayout(),
     windowState: createDefaultOusiaWindowState(),
     expandedProjectIds: [],
-    selectedProjectId: "",
     selectedSessionId: sessions[0].id,
-    selectedWorkspaceExtensionId: OUSIA_DEFAULT_WORKSPACE_EXTENSION_ID,
-    workspaceTabs: createDefaultOusiaWorkspaceTabs(),
   }
 }
 
@@ -641,7 +401,9 @@ export type OusiaChatEvent = {
   | {
       type: "tool_update"
       id: string
+      name?: string
       value?: unknown
+      phase?: "input" | "output"
       timestamp: string
     }
   | {
@@ -692,6 +454,7 @@ export type OusiaChatInterruptResult = {
 export type OusiaChatSendPayload = OusiaChatContext & {
   prompt: string
   attachments?: OusiaChatAttachment[]
+  sendBehavior?: "normal" | "steer" | "followUp"
   thinkingLevel: OusiaThinkingLevel
   model: OusiaModelSettings
 }
@@ -718,94 +481,6 @@ export type OusiaSelectDirectoryResult =
       canceled: false
       path: string
     }
-
-export type OusiaEditorFileEntry = {
-  path: string
-  name: string
-  depth: number
-  extension: string
-  kind: "directory" | "file"
-}
-
-export type OusiaEditorListFilesPayload = {
-  projectPath: string
-}
-
-export type OusiaEditorListFilesResult = {
-  files: OusiaEditorFileEntry[]
-}
-
-export type OusiaEditorReadFilePayload = {
-  projectPath: string
-  path: string
-}
-
-export type OusiaEditorReadFileResult = {
-  content: string
-  path: string
-}
-
-export type OusiaEditorSaveFilePayload = {
-  projectPath: string
-  path: string
-  content: string
-}
-
-export type OusiaEditorSaveFileResult = {
-  ok: boolean
-}
-
-export type OusiaPdfFileEntry = {
-  path: string
-  name: string
-  depth: number
-  extension: "pdf"
-  size: number
-  mtimeMs: number
-}
-
-export type OusiaPdfListFilesPayload = {
-  projectPath: string
-}
-
-export type OusiaPdfListFilesResult = {
-  files: OusiaPdfFileEntry[]
-}
-
-export type OusiaPdfReadFilePayload = {
-  projectPath: string
-  path: string
-}
-
-export type OusiaPdfReadFileResult = {
-  contentBase64: string
-  path: string
-  size: number
-  mtimeMs: number
-}
-
-export type OusiaPdfSaveFilePayload = {
-  projectPath: string
-  path: string
-  contentBase64: string
-}
-
-export type OusiaPdfSaveFileResult = {
-  ok: boolean
-  path: string
-  size: number
-  mtimeMs: number
-}
-
-export type OusiaExtensionActionName = "openAndFocus" | "openFile" | string
-
-export type OusiaWorkspaceAction = {
-  type: "extension.invoke"
-  extensionId: string
-  action: OusiaExtensionActionName
-  args?: unknown
-  requestId: string
-}
 
 export type OusiaTerminalContext = OusiaChatContext & {
   terminalId: string
@@ -852,48 +527,6 @@ export type OusiaTerminalEvent =
       terminalId: string
       message: string
     }
-
-export type OusiaRuntimeExtensionSlot = "workspace.tab"
-
-export type OusiaRuntimeExtension = {
-  id: string
-  title: string
-  slot: OusiaRuntimeExtensionSlot
-  distribution: "user-local"
-  trust: "local-user"
-  extensionDir: string
-  sourcePath: string
-  code: string
-}
-
-export type OusiaRuntimeExtensionError = {
-  id: string
-  title: string
-  distribution: "user-local"
-  trust: "local-user"
-  extensionDir?: string
-  sourcePath?: string
-  message: string
-}
-
-export type OusiaRuntimeExtensionDeletePayload = {
-  extensionDir: string
-}
-
-export type OusiaRuntimeExtensionDeleteResult = {
-  ok: boolean
-}
-
-export type OusiaRuntimeExtensionsChangedEvent = {
-  extensionDirs: string[]
-}
-
-export type OusiaRuntimeExtensionsResult = {
-  extensionsDir: string
-  extensionDirs: string[]
-  extensions: OusiaRuntimeExtension[]
-  errors: OusiaRuntimeExtensionError[]
-}
 
 export type OusiaWindowFullscreenEvent = {
   isFullscreen: boolean

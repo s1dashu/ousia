@@ -1,17 +1,6 @@
 import type {
   OusiaAppState,
   OusiaAppStateSaveResult,
-  OusiaBrowserAuthResponsePayload,
-  OusiaBrowserBoundsPayload,
-  OusiaBrowserCreatePayload,
-  OusiaBrowserEvent,
-  OusiaBrowserFindPayload,
-  OusiaBrowserNavigatePayload,
-  OusiaBrowserOperationResult,
-  OusiaBrowserSelectionResult,
-  OusiaBrowserStopFindPayload,
-  OusiaBrowserTabPayload,
-  OusiaBrowserZoomPayload,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatGenerateTitlePayload,
@@ -20,31 +9,8 @@ import type {
   OusiaChatInterruptResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
-  OusiaEditorListFilesPayload,
-  OusiaEditorListFilesResult,
-  OusiaEditorReadFilePayload,
-  OusiaEditorReadFileResult,
-  OusiaEditorSaveFilePayload,
-  OusiaEditorSaveFileResult,
-  OusiaEnsureWindowWidthPayload,
-  OusiaEnsureWindowWidthResult,
-  OusiaExtensionStateDeletePayload,
-  OusiaExtensionStateGetPayload,
-  OusiaExtensionStateResult,
-  OusiaExtensionStateSaveResult,
-  OusiaExtensionStateSetPayload,
   OusiaModelRegistryResult,
   OusiaOpenProjectResult,
-  OusiaPdfListFilesPayload,
-  OusiaPdfListFilesResult,
-  OusiaPdfReadFilePayload,
-  OusiaPdfReadFileResult,
-  OusiaPdfSaveFilePayload,
-  OusiaPdfSaveFileResult,
-  OusiaRuntimeExtensionDeletePayload,
-  OusiaRuntimeExtensionDeleteResult,
-  OusiaRuntimeExtensionsChangedEvent,
-  OusiaRuntimeExtensionsResult,
   OusiaSelectDirectoryResult,
   OusiaTerminalCreatePayload,
   OusiaTerminalCreateResult,
@@ -53,7 +19,6 @@ import type {
   OusiaTerminalOperationResult,
   OusiaTerminalResizePayload,
   OusiaTerminalWritePayload,
-  OusiaWorkspaceAction,
   OusiaWindowFullscreenEvent,
   OusiaWindowFullscreenResult,
 } from "./chat-types.js"
@@ -98,21 +63,6 @@ const api = {
   saveAppState(payload: OusiaAppState): Promise<OusiaAppStateSaveResult> {
     return ipcRenderer.invoke("ousia:app-state:save", payload)
   },
-  getExtensionState(
-    payload: OusiaExtensionStateGetPayload
-  ): Promise<OusiaExtensionStateResult> {
-    return ipcRenderer.invoke("ousia:extension-state:get", payload)
-  },
-  setExtensionState(
-    payload: OusiaExtensionStateSetPayload
-  ): Promise<OusiaExtensionStateSaveResult> {
-    return ipcRenderer.invoke("ousia:extension-state:set", payload)
-  },
-  deleteExtensionState(
-    payload: OusiaExtensionStateDeletePayload
-  ): Promise<OusiaExtensionStateSaveResult> {
-    return ipcRenderer.invoke("ousia:extension-state:delete", payload)
-  },
   sendChatMessage(payload: OusiaChatSendPayload): Promise<OusiaChatSendResult> {
     return ipcRenderer.invoke("ousia:chat:send", payload)
   },
@@ -136,73 +86,8 @@ const api = {
   selectDirectory(): Promise<OusiaSelectDirectoryResult> {
     return ipcRenderer.invoke("ousia:directory:select")
   },
-  ensureWindowWidth(
-    payload: OusiaEnsureWindowWidthPayload
-  ): Promise<OusiaEnsureWindowWidthResult> {
-    return ipcRenderer.invoke("ousia:window:ensure-width", payload)
-  },
   getWindowFullscreenState(): Promise<OusiaWindowFullscreenResult> {
     return ipcRenderer.invoke("ousia:window:fullscreen-state")
-  },
-  listEditorFiles(
-    payload: OusiaEditorListFilesPayload
-  ): Promise<OusiaEditorListFilesResult> {
-    return ipcRenderer.invoke("ousia:host:project-files:list", payload)
-  },
-  readEditorFile(
-    payload: OusiaEditorReadFilePayload
-  ): Promise<OusiaEditorReadFileResult> {
-    return ipcRenderer.invoke("ousia:host:project-files:read", payload)
-  },
-  saveEditorFile(
-    payload: OusiaEditorSaveFilePayload
-  ): Promise<OusiaEditorSaveFileResult> {
-    return ipcRenderer.invoke("ousia:host:project-files:save", payload)
-  },
-  listPdfFiles(
-    payload: OusiaPdfListFilesPayload
-  ): Promise<OusiaPdfListFilesResult> {
-    return ipcRenderer.invoke("ousia:host:project-pdfs:list", payload)
-  },
-  readPdfFile(payload: OusiaPdfReadFilePayload): Promise<OusiaPdfReadFileResult> {
-    return ipcRenderer.invoke("ousia:host:project-pdfs:read", payload)
-  },
-  savePdfFile(payload: OusiaPdfSaveFilePayload): Promise<OusiaPdfSaveFileResult> {
-    return ipcRenderer.invoke("ousia:host:project-pdfs:save", payload)
-  },
-  listRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult> {
-    return ipcRenderer.invoke("ousia:extensions:list")
-  },
-  watchRuntimeExtensions(): Promise<OusiaRuntimeExtensionsResult> {
-    return ipcRenderer.invoke("ousia:extensions:watch")
-  },
-  unwatchRuntimeExtensions(): Promise<void> {
-    return ipcRenderer.invoke("ousia:extensions:unwatch")
-  },
-  deleteRuntimeExtension(
-    payload: OusiaRuntimeExtensionDeletePayload
-  ): Promise<OusiaRuntimeExtensionDeleteResult> {
-    return ipcRenderer.invoke("ousia:extensions:delete", payload)
-  },
-  onRuntimeExtensionsChanged(
-    callback: (event: OusiaRuntimeExtensionsChangedEvent) => void
-  ): () => void {
-    const listener = (
-      _event: IpcRendererEvent,
-      payload: OusiaRuntimeExtensionsChangedEvent
-    ) => callback(payload)
-    ipcRenderer.on("ousia:extensions:changed", listener)
-    return () => {
-      ipcRenderer.off("ousia:extensions:changed", listener)
-    }
-  },
-  onWorkspaceAction(callback: (event: OusiaWorkspaceAction) => void): () => void {
-    const listener = (_event: IpcRendererEvent, payload: OusiaWorkspaceAction) =>
-      callback(payload)
-    ipcRenderer.on("ousia:workspace:action", listener)
-    return () => {
-      ipcRenderer.off("ousia:workspace:action", listener)
-    }
   },
   createTerminal(
     payload: OusiaTerminalCreatePayload
@@ -223,89 +108,6 @@ const api = {
     payload: OusiaTerminalDisposePayload
   ): Promise<OusiaTerminalOperationResult> {
     return ipcRenderer.invoke("ousia:host:project-pty:dispose", payload)
-  },
-  createBrowser(
-    payload: OusiaBrowserCreatePayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:create", payload)
-  },
-  setBrowserBounds(
-    payload: OusiaBrowserBoundsPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:set-bounds", payload)
-  },
-  destroyBrowser(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:destroy", payload)
-  },
-  navigateBrowser(
-    payload: OusiaBrowserNavigatePayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:navigate", payload)
-  },
-  browserBack(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:back", payload)
-  },
-  browserForward(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:forward", payload)
-  },
-  reloadBrowser(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:reload", payload)
-  },
-  stopBrowser(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:stop", payload)
-  },
-  focusBrowser(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:focus", payload)
-  },
-  openBrowserExternal(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:open-external", payload)
-  },
-  readBrowserSelection(
-    payload: OusiaBrowserTabPayload
-  ): Promise<OusiaBrowserSelectionResult | null> {
-    return ipcRenderer.invoke("ousia:browser:read-selection", payload)
-  },
-  findInBrowser(
-    payload: OusiaBrowserFindPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:find", payload)
-  },
-  stopBrowserFind(
-    payload: OusiaBrowserStopFindPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:stop-find", payload)
-  },
-  setBrowserZoom(
-    payload: OusiaBrowserZoomPayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:zoom", payload)
-  },
-  respondToBrowserAuth(
-    payload: OusiaBrowserAuthResponsePayload
-  ): Promise<OusiaBrowserOperationResult> {
-    return ipcRenderer.invoke("ousia:browser:auth-response", payload)
-  },
-  onBrowserEvent(callback: (event: OusiaBrowserEvent) => void): () => void {
-    const listener = (_event: IpcRendererEvent, payload: OusiaBrowserEvent) =>
-      callback(payload)
-    ipcRenderer.on("ousia:browser:event", listener)
-    return () => {
-      ipcRenderer.off("ousia:browser:event", listener)
-    }
   },
   onTerminalEvent(callback: (event: OusiaTerminalEvent) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: OusiaTerminalEvent) =>
