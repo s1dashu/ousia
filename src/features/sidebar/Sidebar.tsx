@@ -807,7 +807,7 @@ export function Sidebar({
       className="flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
       style={style}
     >
-      <div className="window-drag flex h-10 shrink-0 items-center border-b px-4">
+      <div className="window-drag flex h-10 shrink-0 items-center px-4">
         <TitleBarSidebarToggle
           isFullscreen={isWindowFullscreen}
           label={t.sidebar.collapse}

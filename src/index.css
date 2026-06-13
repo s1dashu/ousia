@@ -75,6 +75,8 @@
     --font-weight-regular: 400;
     --font-weight-medium: 500;
     --font-weight-bold: 700;
+    --ousia-window-radius: 14px;
+    --ousia-panel-radius: 12px;
     --background: #fdfbf9;
     --foreground: #241f1b;
     --card: #f2ebe7;

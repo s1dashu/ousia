@@ -690,7 +690,12 @@ export function ChatArea({
 
   return (
     <section
-      className="@container/chat flex min-w-0 shrink-0 flex-col bg-background"
+      className={cn(
+        "@container/chat flex min-w-0 shrink-0 flex-col overflow-hidden border border-border/60 bg-white dark:bg-card",
+        isTerminalPanelCollapsed
+          ? "rounded-[var(--ousia-panel-radius)]"
+          : "rounded-l-[var(--ousia-panel-radius)] rounded-r-none border-r-0"
+      )}
       style={style}
       onKeyDownCapture={handleEscapeKey}
     >
@@ -764,8 +769,10 @@ export function ChatArea({
           ) : null}
           <div
             className={cn(
-              "bg-popover px-3 pt-2 pb-2 ring-1 ring-border/80 outline outline-0 outline-transparent transition-[outline-color,outline-width,ring-color] focus-within:ring-ring/45 focus-within:outline-[5px] focus-within:outline-ring/20",
-              queuedMessages.length ? "rounded-t-md rounded-b-xl" : "rounded-xl"
+              "border border-transparent bg-popover px-3 pt-2 pb-2 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+              queuedMessages.length
+                ? "rounded-t-md rounded-b-[10px]"
+                : "rounded-[10px]"
             )}
           >
             <input

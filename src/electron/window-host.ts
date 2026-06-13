@@ -16,8 +16,10 @@ import type {
 } from "./chat-types.js"
 import { loadAppState, saveWindowState } from "./app-state-store.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
-
-const MAIN_WINDOW_MIN_WIDTH = 340
+import {
+  MAIN_WINDOW_MIN_HEIGHT,
+  MAIN_WINDOW_MIN_WIDTH,
+} from "./window-constants.js"
 
 type WindowHostOptions = {
   onClosed: () => void
@@ -46,7 +48,7 @@ function resolveInitialWindowBackground(theme: OusiaThemePreference) {
 
 function resolveInitialWindowBounds(windowState: OusiaWindowState) {
   const width = Math.max(MAIN_WINDOW_MIN_WIDTH, Math.round(windowState.width))
-  const height = Math.max(600, Math.round(windowState.height))
+  const height = Math.max(MAIN_WINDOW_MIN_HEIGHT, Math.round(windowState.height))
   const bounds =
     typeof windowState.x === "number" && typeof windowState.y === "number"
       ? {
@@ -235,7 +237,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     mainWindow = new BrowserWindow({
       ...initialBounds,
       minWidth: MAIN_WINDOW_MIN_WIDTH,
-      minHeight: 600,
+      minHeight: MAIN_WINDOW_MIN_HEIGHT,
       title: "Ousia",
       titleBarStyle: "hiddenInset",
       trafficLightPosition: { x: 14, y: 13 },

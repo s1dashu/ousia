@@ -21,6 +21,7 @@ type TerminalPanelProps = {
   projectPath: string
   sessionId: string
   isVisible: boolean
+  isJoinedToChat: boolean
   language: OusiaLanguage
   resolvedTheme: ResolvedTheme
   onCollapse: () => void
@@ -108,6 +109,7 @@ export function TerminalPanel({
   projectPath,
   sessionId,
   isVisible,
+  isJoinedToChat,
   language,
   resolvedTheme,
   onCollapse,
@@ -284,7 +286,11 @@ export function TerminalPanel({
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-col overflow-hidden ${shellThemeClass}`}
+      className={`flex h-full min-h-0 flex-col overflow-hidden border border-border/60 ${
+        isJoinedToChat
+          ? "rounded-l-none rounded-r-[var(--ousia-panel-radius)] border-l-0"
+          : "rounded-[var(--ousia-panel-radius)]"
+      } ${shellThemeClass}`}
     >
       <header className="window-drag flex h-10 shrink-0 items-center justify-between border-b border-border pr-4 pl-3 text-foreground">
         <div className="window-drag flex min-w-0 items-center text-sm font-medium">

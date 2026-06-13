@@ -18,6 +18,10 @@ import {
   type OusiaWindowState,
 } from "./chat-types.js"
 import { expandHomePath } from "./host-paths.js"
+import {
+  MAIN_WINDOW_MIN_HEIGHT,
+  MAIN_WINDOW_MIN_WIDTH,
+} from "./window-constants.js"
 
 const appStateFileName = "app-state.json"
 
@@ -83,8 +87,12 @@ function normalizeWindowState(value: unknown): OusiaWindowState {
     ...(typeof value.y === "number" && Number.isFinite(value.y)
       ? { y: Math.round(value.y) }
       : {}),
-    width: Math.round(clampNumber(value.width, fallback.width, 340, 10000)),
-    height: Math.round(clampNumber(value.height, fallback.height, 600, 10000)),
+    width: Math.round(
+      clampNumber(value.width, fallback.width, MAIN_WINDOW_MIN_WIDTH, 10000)
+    ),
+    height: Math.round(
+      clampNumber(value.height, fallback.height, MAIN_WINDOW_MIN_HEIGHT, 10000)
+    ),
     isMaximized:
       typeof value.isMaximized === "boolean"
         ? value.isMaximized

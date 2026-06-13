@@ -125,12 +125,16 @@ function normalizeSidebarSectionOrder(
 function ResizeHandle({
   label,
   onPointerDown,
+  showLine = false,
 }: {
   label: string
   onPointerDown: (event: PointerEvent<HTMLDivElement>) => void
+  showLine?: boolean
 }) {
   return (
-    <div className="relative z-10 flex w-px shrink-0 flex-col bg-border">
+    <div
+      className={`relative z-10 flex w-px shrink-0 flex-col ${showLine ? "bg-border/80" : "bg-transparent"}`}
+    >
       <div
         aria-hidden="true"
         className="window-drag h-10 shrink-0"
@@ -855,7 +859,7 @@ export function App() {
     <main
       ref={shellRef}
       data-shell-resizing={isShellResizing ? "true" : undefined}
-      className="relative flex h-svh overflow-hidden bg-background text-foreground"
+      className="relative flex h-svh overflow-hidden rounded-[var(--ousia-window-radius)] bg-sidebar text-foreground"
     >
       {isSidebarCollapsed ? null : (
         <div className="flex shrink-0 overflow-hidden">
@@ -889,80 +893,90 @@ export function App() {
           />
         </div>
       )}
-      {isSettingsOpen ? (
-        <SettingsPage
-          modelRegistry={modelRegistry}
-          settings={settings}
-          onClose={() => setIsSettingsOpen(false)}
-          onSettingsChange={handleSettingsChange}
-        />
-      ) : (
-        <>
-          {shouldShowChatArea ? (
-            <ChatArea
-              key={selectedChatKey}
-              currentProject={selectedSession ? currentProject : undefined}
-              currentSession={selectedSession}
-              items={selectedItems}
-              isAgentWorking={
-                selectedChatKey
-                  ? runStatusBySession[selectedChatKey] === "working"
-                  : false
-              }
-              isSidebarCollapsed={isSidebarCollapsed}
-              isWindowFullscreen={isWindowFullscreen}
-              isTerminalPanelCollapsed={!shouldShowTerminalPanel}
-              onLocalEvent={appendLocalEvent}
-              onGenerateSessionTitle={handleGenerateSessionTitle}
-              onExpandTerminalPanel={() => {
-                expandTerminalPanel()
-              }}
-              onSettingsChange={handleSettingsChange}
-              onToggleSidebar={() => {
-                expandSidebar()
-              }}
+      <div className="min-w-0 flex-1 bg-sidebar">
+        <div className="flex h-full min-w-0 overflow-hidden">
+          {isSettingsOpen ? (
+            <SettingsPage
               modelRegistry={modelRegistry}
               settings={settings}
-              language={settings.language}
-              style={
-                !shouldShowTerminalPanel
-                  ? { flex: "1 1 0", width: "auto" }
-                  : { flex: "1 1 0", minWidth: MIN_CHAT_WIDTH, width: "auto" }
-              }
+              onClose={() => setIsSettingsOpen(false)}
+              onSettingsChange={handleSettingsChange}
             />
-          ) : null}
-          {shouldRenderTerminalPanel ? (
-            <div
-              aria-hidden={!shouldShowTerminalPanel}
-              className={
-                shouldShowTerminalPanel
-                  ? "flex h-full max-h-full min-h-0 shrink-0 overflow-hidden"
-                  : "hidden"
-              }
-              style={
-                shouldShowTerminalPanel
-                  ? { width: effectiveTerminalPanelWidth }
-                  : undefined
-              }
-            >
-              {isTerminalPanelSolo ? null : (
-                <ResizeHandle
-                  label={t.shell.resizeTerminal}
-                  onPointerDown={beginTerminalPanelResize}
+          ) : (
+            <>
+              {shouldShowChatArea ? (
+                <ChatArea
+                  key={selectedChatKey}
+                  currentProject={selectedSession ? currentProject : undefined}
+                  currentSession={selectedSession}
+                  items={selectedItems}
+                  isAgentWorking={
+                    selectedChatKey
+                      ? runStatusBySession[selectedChatKey] === "working"
+                      : false
+                  }
+                  isSidebarCollapsed={isSidebarCollapsed}
+                  isWindowFullscreen={isWindowFullscreen}
+                  isTerminalPanelCollapsed={!shouldShowTerminalPanel}
+                  onLocalEvent={appendLocalEvent}
+                  onGenerateSessionTitle={handleGenerateSessionTitle}
+                  onExpandTerminalPanel={() => {
+                    expandTerminalPanel()
+                  }}
+                  onSettingsChange={handleSettingsChange}
+                  onToggleSidebar={() => {
+                    expandSidebar()
+                  }}
+                  modelRegistry={modelRegistry}
+                  settings={settings}
+                  language={settings.language}
+                  style={
+                    !shouldShowTerminalPanel
+                      ? { flex: "1 1 0", width: "auto" }
+                      : {
+                          flex: "1 1 0",
+                          minWidth: MIN_CHAT_WIDTH,
+                          width: "auto",
+                        }
+                  }
                 />
-              )}
-              <TerminalPanel
-                projectPath={selectedSession ? currentProject.path : ""}
-                sessionId={selectedSession?.id ?? ""}
-                isVisible={shouldShowTerminalPanel}
-                language={settings.language}
-                resolvedTheme={resolvedTheme}
-                onCollapse={() => setIsTerminalPanelCollapsed(true)}
-              />
-            </div>
-          ) : null}
-        </>
-      )}
+              ) : null}
+              {shouldRenderTerminalPanel ? (
+                <div
+                  aria-hidden={!shouldShowTerminalPanel}
+                  className={
+                    shouldShowTerminalPanel
+                      ? "flex h-full max-h-full min-h-0 shrink-0 overflow-hidden"
+                      : "hidden"
+                  }
+                  style={
+                    shouldShowTerminalPanel
+                      ? { width: effectiveTerminalPanelWidth }
+                      : undefined
+                  }
+                >
+                  {isTerminalPanelSolo ? null : (
+                    <ResizeHandle
+                      label={t.shell.resizeTerminal}
+                      onPointerDown={beginTerminalPanelResize}
+                      showLine
+                    />
+                  )}
+                  <TerminalPanel
+                    projectPath={selectedSession ? currentProject.path : ""}
+                    sessionId={selectedSession?.id ?? ""}
+                    isVisible={shouldShowTerminalPanel}
+                    isJoinedToChat={!isTerminalPanelSolo && shouldShowChatArea}
+                    language={settings.language}
+                    resolvedTheme={resolvedTheme}
+                    onCollapse={() => setIsTerminalPanelCollapsed(true)}
+                  />
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
     </main>
   )
 }

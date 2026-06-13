@@ -263,7 +263,7 @@ export function SettingsPage({
   )?.description
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-background">
+    <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
       <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pr-4 pl-4">
         <div className="window-drag flex min-w-0 items-center self-stretch">
           <h1 className="window-drag truncate text-sm leading-none font-normal">

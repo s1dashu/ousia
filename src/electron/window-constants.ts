@@ -1,0 +1,2 @@
+export const MAIN_WINDOW_MIN_WIDTH = 340
+export const MAIN_WINDOW_MIN_HEIGHT = 400
