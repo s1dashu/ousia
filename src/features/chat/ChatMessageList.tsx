@@ -27,7 +27,7 @@ export function ChatMessageList({
   t,
 }: ChatMessageListProps) {
   return (
-    <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-5")}>
+    <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-6")}>
       {items.length ? (
         <>
           {items.map((item) => (

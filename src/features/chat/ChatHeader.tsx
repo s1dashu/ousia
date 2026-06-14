@@ -50,7 +50,7 @@ export function ChatHeader({
             onClick={onToggleSidebar}
           />
         ) : null}
-        <div className="window-drag flex min-w-0 flex-1 items-center self-stretch">
+        <div className="window-drag flex min-w-0 flex-1 items-center self-stretch pl-2">
           <h1 className="window-drag truncate text-sm leading-none font-normal">
             {currentSession?.title ?? t.app.newSession}
           </h1>

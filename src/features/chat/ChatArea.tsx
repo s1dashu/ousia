@@ -692,10 +692,8 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat flex min-w-0 shrink-0 flex-col overflow-hidden border border-border/60 bg-white dark:bg-card",
-        isTerminalPanelCollapsed
-          ? "rounded-[var(--ousia-panel-radius)]"
-          : "rounded-l-[var(--ousia-panel-radius)] rounded-r-none border-r-0"
+        "@container/chat ousia-squircle-corners flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-none border border-border/60 bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.035)] dark:bg-card dark:shadow-[-8px_0_24px_rgba(0,0,0,0.18)]",
+        isTerminalPanelCollapsed ? "" : "border-r-0"
       )}
       style={style}
       onKeyDownCapture={handleEscapeKey}
@@ -750,7 +748,7 @@ export function ChatArea({
       ) : null}
 
       <form
-        className={cn("shrink-0 pt-2 pb-5", CHAT_HORIZONTAL_PADDING_CLASS)}
+        className={cn("shrink-0 pt-2 pb-6", CHAT_HORIZONTAL_PADDING_CLASS)}
         onSubmit={handleSubmit}
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
@@ -770,10 +768,10 @@ export function ChatArea({
           ) : null}
           <div
             className={cn(
-              "border border-transparent bg-popover px-3 pt-2 pb-2 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+              "ousia-squircle-corners border-[0.5px] border-foreground/10 bg-popover px-4 pt-3 pb-3 shadow-[0_6px_22px_rgba(0,0,0,0.04),0_1px_8px_rgba(0,0,0,0.022),inset_0_1px_0_rgba(255,255,255,0.42)] transition-shadow focus-within:border-foreground/10 focus-within:shadow-[0_8px_26px_rgba(0,0,0,0.06),0_2px_10px_rgba(0,0,0,0.032),inset_0_1px_0_rgba(255,255,255,0.46)] focus-within:ring-0 dark:border-foreground/10 dark:shadow-[0_6px_22px_rgba(0,0,0,0.22),0_1px_8px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-within:shadow-[0_8px_26px_rgba(0,0,0,0.28),0_2px_10px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.045)]",
               queuedMessages.length
-                ? "rounded-t-md rounded-b-[10px]"
-                : "rounded-[10px]"
+                ? "rounded-t-xl rounded-b-[var(--ousia-chat-composer-radius)]"
+                : "rounded-[var(--ousia-chat-composer-radius)]"
             )}
           >
             <input
@@ -824,7 +822,7 @@ export function ChatArea({
                     : t.chat.inputPlaceholder
               }
             />
-            <div className="mt-2 flex items-center justify-between gap-3">
+            <div className="mt-3 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-2">
                 <Button
                   type="button"

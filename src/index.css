@@ -28,14 +28,14 @@
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans-default);
     --font-mono: var(--font-mono-default);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-ring: var(--ousia-sidebar-ring);
+    --color-sidebar-border: var(--ousia-sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-accent: var(--ousia-sidebar-accent);
     --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
     --color-sidebar-primary: var(--sidebar-primary);
     --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
+    --color-sidebar: var(--ousia-sidebar);
     --color-chart-5: var(--chart-5);
     --color-chart-4: var(--chart-4);
     --color-chart-3: var(--chart-3);
@@ -77,6 +77,15 @@
     --font-weight-bold: 700;
     --ousia-window-radius: 14px;
     --ousia-panel-radius: 12px;
+    --ousia-grid-unit: 4px;
+    --ousia-baseline: 8px;
+    --ousia-leading: 24px;
+    --ousia-chat-content-max-width: 64rem;
+    --ousia-chat-gutter: 20px;
+    --ousia-chat-panel-radius: 24px;
+    --ousia-chat-composer-radius: 32px;
+    --ousia-settings-content-max-width: 44rem;
+    --ousia-settings-gutter: 32px;
     --background: #fdfbf9;
     --foreground: #241f1b;
     --card: #f2ebe7;
@@ -109,6 +118,56 @@
     --sidebar-accent-foreground: #241f1b;
     --sidebar-border: color-mix(in srgb, #b7aaa2 34%, transparent);
     --sidebar-ring: #9b8f87;
+    --ousia-sidebar: color-mix(in srgb, var(--sidebar) 72%, var(--background));
+    --ousia-sidebar-accent: color-mix(in srgb, var(--sidebar-accent) 68%, var(--sidebar));
+    --ousia-sidebar-border: color-mix(in srgb, var(--sidebar-border) 72%, transparent);
+    --ousia-sidebar-ring: color-mix(in srgb, var(--sidebar-ring) 78%, var(--sidebar));
+}
+
+@media (max-width: 560px) {
+    :root {
+        --ousia-chat-gutter: 16px;
+        --ousia-settings-gutter: 16px;
+    }
+}
+
+@media (min-width: 920px) {
+    :root {
+        --ousia-chat-gutter: 32px;
+    }
+}
+
+:root[data-radix-color-scale="paper"] {
+    --background: #fffefb;
+    --foreground: #1f1f1b;
+    --card: #f4f4ef;
+    --card-foreground: #1f1f1b;
+    --popover: #fbfbf7;
+    --popover-foreground: #1f1f1b;
+    --primary: #1f1f1b;
+    --primary-foreground: #fffefb;
+    --secondary: #ecece6;
+    --secondary-foreground: #1f1f1b;
+    --muted: #ecece6;
+    --muted-foreground: #68685f;
+    --accent: #ecece6;
+    --accent-foreground: #1f1f1b;
+    --border: color-mix(in srgb, #a8a89a 30%, transparent);
+    --input: #e3e3dd;
+    --ring: #8c8c80;
+    --chart-1: #ecece6;
+    --chart-2: #8c8c80;
+    --chart-3: #68685f;
+    --chart-4: #3b3b34;
+    --chart-5: #1f1f1b;
+    --sidebar: #fafaf8;
+    --sidebar-foreground: #1f1f1b;
+    --sidebar-primary: #1f1f1b;
+    --sidebar-primary-foreground: #fffefb;
+    --sidebar-accent: #eeeeea;
+    --sidebar-accent-foreground: #1f1f1b;
+    --sidebar-border: color-mix(in srgb, #a8a89a 26%, transparent);
+    --sidebar-ring: #8c8c80;
 }
 
 :root[data-radix-color-scale="sand"] {
@@ -697,6 +756,39 @@
     --sidebar-ring: #8f8177;
 }
 
+.dark[data-radix-color-scale="paper"] {
+    --background: #111110;
+    --foreground: #f2f2ee;
+    --card: #1d1d1b;
+    --card-foreground: #f2f2ee;
+    --popover: #1b1b19;
+    --popover-foreground: #f2f2ee;
+    --primary: #f2f2ee;
+    --primary-foreground: #1b1b19;
+    --secondary: #282824;
+    --secondary-foreground: #f2f2ee;
+    --muted: #282824;
+    --muted-foreground: #b2b2aa;
+    --accent: #30302b;
+    --accent-foreground: #f4f4ef;
+    --border: color-mix(in srgb, #eeeee6 12%, transparent);
+    --input: color-mix(in srgb, #eeeee6 16%, transparent);
+    --ring: #8c8c82;
+    --chart-1: #eeeeea;
+    --chart-2: #a0a096;
+    --chart-3: #73736b;
+    --chart-4: #46463f;
+    --chart-5: #292926;
+    --sidebar: #161614;
+    --sidebar-foreground: #f4f4ef;
+    --sidebar-primary: #f4f4ef;
+    --sidebar-primary-foreground: #161614;
+    --sidebar-accent: #252521;
+    --sidebar-accent-foreground: #f4f4ef;
+    --sidebar-border: color-mix(in srgb, #eeeee6 12%, transparent);
+    --sidebar-ring: #8c8c82;
+}
+
 .dark[data-radix-color-scale="sand"] {
     --background: #11110f;
     --foreground: #f2f0ea;
@@ -965,6 +1057,12 @@
 }
 
 @layer utilities {
+  @supports (corner-shape: squircle) {
+    .ousia-squircle-corners {
+      corner-shape: squircle;
+    }
+  }
+
   .font-radix-light {
     font-weight: var(--font-weight-light);
   }

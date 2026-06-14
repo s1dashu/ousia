@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { FolderOpen, Plus, Trash2, X } from "lucide-react"
+import { Eye, EyeOff, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react"
 
 import { getMessages, languageOptions } from "@/app/i18n"
 import { modelsForProvider, providerLabel } from "@/app/model-presets"
@@ -38,6 +38,7 @@ const appearanceColorScales: Array<{
   description: string
 }> = [
   { label: "Tea", value: "tea", description: "" },
+  { label: "Paper", value: "paper", description: "#FAFAF8 paper surfaces" },
   { label: "Sand", value: "sand", description: "" },
   { label: "Gray", value: "gray", description: "" },
   { label: "Slate", value: "slate", description: "" },
@@ -76,6 +77,14 @@ type SettingsPageProps = {
   settings: AppSettings
 }
 
+const settingsContentClass =
+  "mx-auto grid w-full max-w-[var(--ousia-settings-content-max-width)] gap-8"
+const settingsSectionClass = "grid gap-4"
+const settingsFieldClass = "grid gap-2"
+const settingsLabelClass = "text-xs font-medium text-muted-foreground"
+const settingsHelpClass = "text-xs leading-5 text-muted-foreground"
+const settingsControlClass = "w-full rounded-md"
+
 export function SettingsPage({
   modelRegistry,
   onClose,
@@ -86,6 +95,13 @@ export function SettingsPage({
   const [isAddProviderDialogOpen, setIsAddProviderDialogOpen] = useState(false)
   const [newProviderId, setNewProviderId] = useState("")
   const [newProviderApiKey, setNewProviderApiKey] = useState("")
+  const [newProviderUsesEnvironment, setNewProviderUsesEnvironment] =
+    useState(false)
+  const [visibleProviderApiKeyIds, setVisibleProviderApiKeyIds] = useState<
+    Set<string>
+  >(() => new Set())
+  const [editingEnvironmentProviderIds, setEditingEnvironmentProviderIds] =
+    useState<Set<string>>(() => new Set())
   const { setTheme } = useTheme()
   const t = getMessages(draft.language)
   const themeOptions: Array<{
@@ -186,7 +202,8 @@ export function SettingsPage({
     const provider = modelRegistry?.providers.find((item) => item.id === id)
     if (
       !provider ||
-      settings.modelProviders.some((configured) => configured.id === id)
+      settings.modelProviders.some((configured) => configured.id === id) ||
+      (!newProviderUsesEnvironment && !newProviderApiKey.trim())
     ) {
       return
     }
@@ -198,12 +215,13 @@ export function SettingsPage({
         ...settings.modelProviders,
         {
           id,
-          apiKey: newProviderApiKey.trim(),
+          apiKey: newProviderUsesEnvironment ? "" : newProviderApiKey.trim(),
         },
       ],
     })
     setNewProviderId("")
     setNewProviderApiKey("")
+    setNewProviderUsesEnvironment(false)
     setIsAddProviderDialogOpen(false)
   }
 
@@ -217,6 +235,13 @@ export function SettingsPage({
     applySettings({
       modelProviders: nextModelProviders,
     })
+    if (!apiKey.trim()) {
+      setVisibleProviderApiKeyIds((current) => {
+        const nextIds = new Set(current)
+        nextIds.delete(providerId)
+        return nextIds
+      })
+    }
   }
 
   function commitProviderApiKey(providerId: string) {
@@ -257,6 +282,45 @@ export function SettingsPage({
       modelId:
         nextProviderModel?.modelId ?? nextDefaultModel?.modelId ?? settings.modelId,
     })
+    setVisibleProviderApiKeyIds((current) => {
+      const nextIds = new Set(current)
+      nextIds.delete(providerId)
+      return nextIds
+    })
+    setEditingEnvironmentProviderIds((current) => {
+      const nextIds = new Set(current)
+      nextIds.delete(providerId)
+      return nextIds
+    })
+  }
+
+  function toggleProviderApiKeyVisibility(providerId: string) {
+    setVisibleProviderApiKeyIds((current) => {
+      const nextIds = new Set(current)
+      if (nextIds.has(providerId)) {
+        nextIds.delete(providerId)
+      } else {
+        nextIds.add(providerId)
+      }
+      return nextIds
+    })
+  }
+
+  function editEnvironmentProviderApiKey(providerId: string) {
+    setEditingEnvironmentProviderIds((current) => {
+      const nextIds = new Set(current)
+      nextIds.add(providerId)
+      return nextIds
+    })
+  }
+
+  function cancelEnvironmentProviderApiKeyEdit(providerId: string) {
+    updateProviderDraft(providerId, "")
+    setEditingEnvironmentProviderIds((current) => {
+      const nextIds = new Set(current)
+      nextIds.delete(providerId)
+      return nextIds
+    })
   }
 
   const addableProviders =
@@ -269,13 +333,17 @@ export function SettingsPage({
     label: provider.name,
     value: provider.id,
   }))
-  const canAddProvider = addableProviders.some(
+  const hasAddableProvider = addableProviders.some(
     (provider) => provider.id === newProviderId
   )
+  const canAddProvider =
+    hasAddableProvider &&
+    (newProviderUsesEnvironment || Boolean(newProviderApiKey.trim()))
 
   function openAddProviderDialog() {
     setNewProviderId(addableProviders[0]?.id ?? "")
     setNewProviderApiKey("")
+    setNewProviderUsesEnvironment(false)
     setIsAddProviderDialogOpen(true)
   }
 
@@ -304,46 +372,48 @@ export function SettingsPage({
           </Button>
         </div>
       </header>
-      <div className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-8 py-7">
-        <div className="mx-auto flex w-full max-w-2xl flex-col gap-10">
-          <section>
+      <div className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-[var(--ousia-settings-gutter)] py-8">
+        <div className={settingsContentClass}>
+          <section className={settingsSectionClass}>
             <h2 className="text-sm font-semibold">{t.settings.general}</h2>
-            <label className="mt-4 block text-xs font-medium text-muted-foreground">
-              {t.settings.defaultWorkDir}
-            </label>
-            <div className="mt-2 flex items-center gap-2">
-              <Input
-                className="flex-1 rounded-md bg-card/40"
-                value={draft.defaultWorkDir}
-                onChange={(event) =>
-                  updateDraft({
-                    defaultWorkDir: event.target.value,
-                  })
-                }
-                onBlur={() => commitRequiredTextSetting("defaultWorkDir")}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.currentTarget.blur()
+            <div className={settingsFieldClass}>
+              <label className={settingsLabelClass}>
+                {t.settings.defaultWorkDir}
+              </label>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <Input
+                  className="flex-1 rounded-md border-border/70 bg-input/30"
+                  value={draft.defaultWorkDir}
+                  onChange={(event) =>
+                    updateDraft({
+                      defaultWorkDir: event.target.value,
+                    })
                   }
-                }}
-                placeholder="~/.ousia/workspace"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 rounded-md"
-                onClick={chooseDefaultWorkDir}
-              >
-                <FolderOpen size={18} />
-                {t.settings.choose}
-              </Button>
+                  onBlur={() => commitRequiredTextSetting("defaultWorkDir")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur()
+                    }
+                  }}
+                  placeholder="~/.ousia/workspace"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 rounded-md border-border/70 bg-input/30 hover:bg-input/45"
+                  onClick={chooseDefaultWorkDir}
+                >
+                  <FolderOpen size={18} />
+                  {t.settings.choose}
+                </Button>
+              </div>
+              <div className={settingsHelpClass}>
+                {t.settings.defaultWorkDirHelp}
+              </div>
             </div>
-            <div className="mt-2 text-xs leading-5 text-muted-foreground">
-              {t.settings.defaultWorkDirHelp}
-            </div>
-            <div className="mt-4">
-              <span className="text-xs font-medium text-muted-foreground">
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
                 {t.settings.language}
               </span>
               <Select
@@ -355,7 +425,7 @@ export function SettingsPage({
               >
                 <SelectTrigger
                   aria-label={t.settings.language}
-                  className="mt-2 w-full rounded-md"
+                  className={settingsControlClass}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -372,10 +442,10 @@ export function SettingsPage({
             </div>
           </section>
 
-          <section>
+          <section className={settingsSectionClass}>
             <h2 className="text-sm font-semibold">{t.settings.appearance}</h2>
-            <div className="mt-4">
-              <span className="text-xs font-medium text-muted-foreground">
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
                 {t.settings.appearanceMode}
               </span>
               <Select
@@ -385,7 +455,7 @@ export function SettingsPage({
               >
                 <SelectTrigger
                   aria-label={t.settings.appearanceMode}
-                  className="mt-2 w-full rounded-md"
+                  className={settingsControlClass}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -401,8 +471,8 @@ export function SettingsPage({
               </Select>
             </div>
 
-            <div className="mt-4">
-              <span className="text-xs font-medium text-muted-foreground">
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
                 {t.settings.colorScale}
               </span>
               <Select
@@ -416,7 +486,7 @@ export function SettingsPage({
               >
                 <SelectTrigger
                   aria-label={t.settings.colorScale}
-                  className="mt-2 w-full rounded-md"
+                  className={settingsControlClass}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -432,16 +502,16 @@ export function SettingsPage({
               </Select>
             </div>
             {selectedColorScaleDescription ? (
-              <div className="mt-2 text-xs leading-5 text-muted-foreground">
+              <div className={settingsHelpClass}>
                 {selectedColorScaleDescription}
               </div>
             ) : null}
           </section>
 
-          <section>
+          <section className={settingsSectionClass}>
             <h2 className="text-sm font-semibold">{t.settings.agent}</h2>
-            <div className="mt-4">
-              <span className="text-xs font-medium text-muted-foreground">
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
                 {t.settings.agentMode}
               </span>
               <Select
@@ -453,7 +523,7 @@ export function SettingsPage({
               >
                 <SelectTrigger
                   aria-label={t.settings.agentMode}
-                  className="mt-2 w-full rounded-md"
+                  className={settingsControlClass}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -467,7 +537,7 @@ export function SettingsPage({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              <div className="mt-2 text-xs leading-5 text-muted-foreground">
+              <div className={settingsHelpClass}>
                 {
                   agentModeOptions.find(
                     (option) => option.value === draft.agentMode
@@ -475,8 +545,8 @@ export function SettingsPage({
                 }
               </div>
             </div>
-            <div className="mt-4">
-              <span className="text-xs font-medium text-muted-foreground">
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
                 {t.settings.appendMessages}
               </span>
               <Select
@@ -490,7 +560,7 @@ export function SettingsPage({
               >
                 <SelectTrigger
                   aria-label={t.settings.appendMessages}
-                  className="mt-2 w-full rounded-md"
+                  className={settingsControlClass}
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -507,11 +577,11 @@ export function SettingsPage({
             </div>
           </section>
 
-          <section>
+          <section className={settingsSectionClass}>
             <h2 className="text-sm font-semibold">{t.settings.model}</h2>
-            <div className="mt-4">
+            <div className="grid gap-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs font-medium text-muted-foreground">
+                <span className={settingsLabelClass}>
                   {t.settings.providerKeys}
                 </span>
                 <Button
@@ -526,46 +596,136 @@ export function SettingsPage({
                   {t.app.add}
                 </Button>
               </div>
-              <div className="mt-3 -mx-1 flex min-w-0 flex-col gap-2 px-1 py-1">
-                {draft.modelProviders.map((provider) => (
-                  <div
-                    key={provider.id}
-                    className="grid min-w-0 grid-cols-[minmax(0,1fr)_40px] items-center gap-x-3 gap-y-2 py-1 @min-[560px]:grid-cols-[minmax(0,160px)_minmax(0,1fr)_40px]"
-                  >
-                    <div className="flex h-9 min-w-0 items-center text-sm font-medium text-foreground/75">
-                      <span className="block truncate">
-                        {providerLabel(modelRegistry, provider.id)}
-                      </span>
-                    </div>
-                    <Input
-                      aria-label={`${provider.id} API Key`}
-                      className="min-w-0 rounded-md border-transparent bg-background/85 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)] focus-visible:bg-background dark:bg-input/45 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] dark:focus-visible:bg-input/60 @max-[559px]:col-span-1"
-                      value={provider.apiKey}
-                      onChange={(event) =>
-                        updateProviderDraft(provider.id, event.target.value)
-                      }
-                      onBlur={() => commitProviderApiKey(provider.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.currentTarget.blur()
-                        }
-                      }}
-                      placeholder="sk-..."
-                      type="password"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="justify-self-end text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
-                      aria-label={`${t.app.delete} ${provider.id}`}
-                      disabled={draft.modelProviders.length <= 1}
-                      onClick={() => deleteProvider(provider.id)}
+              <div className="-mx-1 grid min-w-0 gap-2 px-1 py-1">
+                {draft.modelProviders.map((provider) => {
+                  const providerHasApiKey = Boolean(provider.apiKey.trim())
+                  const isProviderApiKeyVisible =
+                    visibleProviderApiKeyIds.has(provider.id)
+                  const isEditingEnvironmentProvider =
+                    editingEnvironmentProviderIds.has(provider.id)
+
+                  return (
+                    <div
+                      key={provider.id}
+                      className="grid min-w-0 grid-cols-[minmax(0,1fr)_40px] items-center gap-x-4 gap-y-2 py-1 @min-[560px]:grid-cols-[minmax(0,176px)_minmax(0,1fr)_40px]"
                     >
-                      <Trash2 size={18} />
-                    </Button>
-                  </div>
-                ))}
+                      <div className="flex min-h-10 min-w-0 items-center text-sm font-medium text-foreground/75">
+                        <span className="block truncate">
+                          {providerLabel(modelRegistry, provider.id)}
+                        </span>
+                      </div>
+                      <div className="relative min-w-0 @max-[559px]:col-span-1">
+                        <Input
+                          aria-label={`${provider.id} API Key`}
+                          className="min-w-0 rounded-md border-transparent bg-background/85 pr-10 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)] focus-visible:bg-background disabled:opacity-100 dark:bg-input/45 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] dark:focus-visible:bg-input/60"
+                          disabled={
+                            !providerHasApiKey && !isEditingEnvironmentProvider
+                          }
+                          value={
+                            providerHasApiKey || isEditingEnvironmentProvider
+                              ? provider.apiKey
+                              : ""
+                          }
+                          onChange={(event) =>
+                            updateProviderDraft(provider.id, event.target.value)
+                          }
+                          onBlur={() => {
+                            commitProviderApiKey(provider.id)
+                            if (!provider.apiKey.trim()) {
+                              setEditingEnvironmentProviderIds((current) => {
+                                const nextIds = new Set(current)
+                                nextIds.delete(provider.id)
+                                return nextIds
+                              })
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.currentTarget.blur()
+                            }
+                            if (
+                              event.key === "Escape" &&
+                              isEditingEnvironmentProvider
+                            ) {
+                              event.preventDefault()
+                              cancelEnvironmentProviderApiKeyEdit(provider.id)
+                            }
+                          }}
+                          placeholder={
+                            providerHasApiKey || isEditingEnvironmentProvider
+                              ? "sk-..."
+                              : t.settings.useEnvironmentApiKey
+                          }
+                          type={
+                            providerHasApiKey && isProviderApiKeyVisible
+                              ? "text"
+                            : "password"
+                          }
+                        />
+                        {providerHasApiKey ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                            aria-label={
+                              isProviderApiKeyVisible
+                                ? t.settings.hideApiKey
+                                : t.settings.showApiKey
+                            }
+                            onClick={() =>
+                              toggleProviderApiKeyVisibility(provider.id)
+                            }
+                          >
+                            {isProviderApiKeyVisible ? (
+                              <EyeOff size={18} />
+                            ) : (
+                              <Eye size={18} />
+                            )}
+                          </Button>
+                        ) : isEditingEnvironmentProvider ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                            aria-label={t.app.cancel}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() =>
+                              cancelEnvironmentProviderApiKeyEdit(provider.id)
+                            }
+                          >
+                            <X size={18} />
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                            aria-label={`${t.app.edit} ${provider.id} API Key`}
+                            onClick={() =>
+                              editEnvironmentProviderApiKey(provider.id)
+                            }
+                          >
+                            <Pencil size={18} />
+                          </Button>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="justify-self-end text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                        aria-label={`${t.app.delete} ${provider.id}`}
+                        disabled={draft.modelProviders.length <= 1}
+                        onClick={() => deleteProvider(provider.id)}
+                      >
+                        <Trash2 size={18} />
+                      </Button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
             <Dialog
@@ -584,7 +744,7 @@ export function SettingsPage({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                    className="mt-0.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.96]"
                     aria-label={t.app.close}
                     onClick={() => setIsAddProviderDialogOpen(false)}
                   >
@@ -599,11 +759,15 @@ export function SettingsPage({
                   <Select
                     items={addableProviderSelectItems}
                     value={newProviderId}
-                    onValueChange={(value) => setNewProviderId(value ?? "")}
+                    onValueChange={(value) => {
+                      setNewProviderId(value ?? "")
+                      setNewProviderApiKey("")
+                      setNewProviderUsesEnvironment(false)
+                    }}
                   >
                     <SelectTrigger
                       aria-label={t.settings.provider}
-                      className="mt-2 w-full rounded-md border-transparent bg-muted/45 hover:bg-muted/60"
+                      className="mt-2 w-full rounded-xl border-neutral-200 bg-white hover:bg-white"
                     >
                       <SelectValue placeholder={t.settings.chooseProvider} />
                     </SelectTrigger>
@@ -625,8 +789,9 @@ export function SettingsPage({
                   </span>
                   <Input
                     aria-label="API Key"
-                    className="mt-2 rounded-md border-transparent bg-muted/45 focus-visible:bg-background"
-                    value={newProviderApiKey}
+                    className="mt-2 rounded-xl border-neutral-200 bg-white focus-visible:bg-white disabled:cursor-default disabled:bg-neutral-50 disabled:text-neutral-500 disabled:opacity-100"
+                    disabled={newProviderUsesEnvironment}
+                    value={newProviderUsesEnvironment ? "" : newProviderApiKey}
                     onChange={(event) =>
                       setNewProviderApiKey(event.target.value)
                     }
@@ -636,17 +801,36 @@ export function SettingsPage({
                         addProvider()
                       }
                     }}
-                    placeholder="sk-..."
+                    placeholder={
+                      newProviderUsesEnvironment
+                        ? t.settings.useEnvironmentApiKey
+                        : "sk-..."
+                    }
                     type="password"
                   />
+                  <button
+                    type="button"
+                    className="mt-2 inline-flex text-xs leading-5 font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                    onClick={() => {
+                      setNewProviderApiKey("")
+                      setNewProviderUsesEnvironment(true)
+                    }}
+                  >
+                    {t.settings.useEnvironmentApiKey}
+                  </button>
+                  {!newProviderUsesEnvironment && !newProviderApiKey.trim() ? (
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      {t.settings.apiKeyRequired}
+                    </span>
+                  ) : null}
                 </label>
 
                 <DialogFooter className="mt-5">
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant="outline"
                     size="sm"
-                    className="active:scale-[0.96]"
+                    className="h-10 rounded-2xl border-neutral-200 bg-white px-5 text-neutral-950 hover:bg-neutral-50 active:scale-[0.96]"
                     onClick={() => setIsAddProviderDialogOpen(false)}
                   >
                     {t.app.cancel}
@@ -654,7 +838,7 @@ export function SettingsPage({
                   <Button
                     type="button"
                     size="sm"
-                    className="active:scale-[0.96]"
+                    className="h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800 active:scale-[0.96]"
                     disabled={!canAddProvider}
                     onClick={addProvider}
                   >

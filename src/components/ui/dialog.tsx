@@ -55,7 +55,7 @@ function DialogContent({
         <DialogPrimitive.Content
           data-slot="dialog-content"
           className={cn(
-            "w-full max-w-md rounded-xl bg-popover p-5 text-popover-foreground shadow-[0_24px_80px_rgba(0,0,0,0.18),0_0_0_1px_rgba(0,0,0,0.04)] outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 dark:shadow-[0_24px_80px_rgba(0,0,0,0.42),0_0_0_1px_rgba(255,255,255,0.08)]",
+            "w-full max-w-lg rounded-[28px] bg-white p-6 text-neutral-950 shadow-[0_28px_90px_rgba(0,0,0,0.16),0_0_0_1px_rgba(0,0,0,0.05)] outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 dark:bg-popover dark:text-popover-foreground dark:shadow-[0_28px_90px_rgba(0,0,0,0.42),0_0_0_1px_rgba(255,255,255,0.08)]",
             className
           )}
           {...props}
@@ -71,7 +71,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-1 text-left", className)}
+      className={cn("flex flex-col gap-2 text-left", className)}
       {...props}
     />
   )
@@ -94,7 +94,7 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn("text-sm font-semibold", className)}
+      className={cn("text-2xl leading-tight font-semibold", className)}
       {...props}
     />
   )
@@ -107,7 +107,7 @@ function DialogDescription({
   return (
     <DialogPrimitive.Description
       data-slot="dialog-description"
-      className={cn("text-xs leading-5 text-muted-foreground", className)}
+      className={cn("text-sm leading-6 text-muted-foreground", className)}
       {...props}
     />
   )
