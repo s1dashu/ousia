@@ -50,6 +50,7 @@ export type OusiaAppearanceColorScale =
 export type OusiaAppStateSchemaVersion = 2
 export type OusiaThemePreference = "dark" | "light" | "system"
 export type OusiaSendDuringRunMode = "steer" | "queue"
+export type OusiaAgentMode = "standard" | "readOnly" | "noTerminal"
 export type OusiaLanguage = "zh" | "en"
 
 export type OusiaSessionRecord = {
@@ -71,6 +72,7 @@ export type OusiaAppSettings = {
   language: OusiaLanguage
   defaultWorkDir: string
   sendDuringRunMode: OusiaSendDuringRunMode
+  agentMode: OusiaAgentMode
   thinkingLevel: OusiaThinkingLevel
   modelProvider: string
   modelId: string
@@ -147,6 +149,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   language: "zh",
   defaultWorkDir: "~/.ousia/workspace",
   sendDuringRunMode: "steer",
+  agentMode: "standard",
   thinkingLevel: "medium",
   modelProvider: "deepseek",
   modelId: "deepseek-v4-flash",
@@ -209,6 +212,10 @@ export function normalizeOusiaAppSettings(
       merged.defaultWorkDir.trim() || defaultOusiaAppSettings.defaultWorkDir,
     sendDuringRunMode:
       merged.sendDuringRunMode === "queue" ? "queue" : "steer",
+    agentMode:
+      merged.agentMode === "readOnly" || merged.agentMode === "noTerminal"
+        ? merged.agentMode
+        : "standard",
     modelProvider,
     modelId: merged.modelId.trim() || defaultOusiaAppSettings.modelId,
     modelProviders: normalizeOusiaModelProviders({
@@ -455,6 +462,7 @@ export type OusiaChatSendPayload = OusiaChatContext & {
   prompt: string
   attachments?: OusiaChatAttachment[]
   sendBehavior?: "normal" | "steer" | "followUp"
+  agentMode?: OusiaAgentMode
   thinkingLevel: OusiaThinkingLevel
   model: OusiaModelSettings
 }

@@ -24,7 +24,14 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Folder, FolderOpen, Plus, Settings, Trash2 } from "lucide-react"
+import {
+  ChevronDown,
+  Folder,
+  FolderOpen,
+  Plus,
+  Settings,
+  Trash2,
+} from "lucide-react"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages, type I18nMessages } from "@/app/i18n"
@@ -32,16 +39,16 @@ import { Button } from "@/components/ui/button"
 import type { OusiaLanguage, OusiaSidebarSectionId } from "@/electron/chat-types"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 
-const sidebarAddIconSize = 19
+const sidebarAddIconSize = 18
 const sidebarFolderIconSize = 18
 const sidebarMenuIconSize = 18
-const sidebarIconStrokeWidth = 1.8
-const sidebarActionButtonClass = "size-7 justify-self-end"
-const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_28px]"
+const sidebarIconStrokeWidth = 1.5
+const sidebarActionButtonClass = "size-6 justify-self-end"
+const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
 const sidebarProjectActionButtonClass = "size-6 justify-self-center"
 const sidebarProjectLeadGridClass =
-  "grid-cols-[26px_minmax(0,1fr)_28px_4px_28px]"
-const sidebarProjectSessionGridClass = "grid-cols-[26px_minmax(0,1fr)_28px]"
+  "grid-cols-[24px_minmax(0,1fr)_24px_4px_24px]"
+const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarRowXClass = "pl-2 pr-0"
 const sidebarListGapClass = "flex flex-col gap-px"
 const sidebarSectionHeaderXClass = "pl-2 pr-0"
@@ -124,8 +131,11 @@ type SortableSidebarSectionProps = {
   actionLabel: string
   children: React.ReactNode
   id: OusiaSidebarSectionId
+  isCollapsed: boolean
   label: string
   onAction: () => void
+  onToggleCollapsed: (sectionId: OusiaSidebarSectionId) => void
+  toggleLabel: string
 }
 
 function handleTextButtonMouseDown(event: MouseEvent<HTMLButtonElement>) {
@@ -299,7 +309,7 @@ function SortableSessionRow({
           {session.title}
         </button>
       )}
-      <div className="relative size-7 justify-self-end">
+      <div className="relative size-6 justify-self-end">
         {isSessionWorking ? (
           <div
             className={[
@@ -449,8 +459,11 @@ function SortableSidebarSection({
   actionLabel,
   children,
   id,
+  isCollapsed,
   label,
   onAction,
+  onToggleCollapsed,
+  toggleLabel,
 }: SortableSidebarSectionProps) {
   const {
     attributes,
@@ -479,15 +492,30 @@ function SortableSidebarSection({
     >
       <div
         className={[
-          "grid cursor-grab items-center gap-1 pt-2 pb-1.5 active:cursor-grabbing",
+          "group/section-header grid cursor-pointer items-center gap-1 pt-2 pb-1.5",
           sidebarSingleActionGridClass,
           sidebarSectionHeaderXClass,
         ].join(" ")}
+        aria-expanded={!isCollapsed}
+        onClick={() => onToggleCollapsed(id)}
         {...attributes}
         {...listeners}
       >
-        <div className="font-radix-medium text-sm text-muted-foreground">
-          {label}
+        <div className="flex min-w-0 items-center gap-1">
+          <div className="font-radix-medium min-w-0 truncate text-sm text-muted-foreground">
+            {label}
+          </div>
+          <ChevronDown
+            aria-hidden="true"
+            className={[
+              "shrink-0 text-muted-foreground transition-[opacity,transform] duration-150 group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100",
+              isCollapsed ? "opacity-100" : "opacity-0",
+              isCollapsed ? "-rotate-90" : "rotate-0",
+            ].join(" ")}
+            size={18}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+          <span className="sr-only">{toggleLabel}</span>
         </div>
         <Button
           type="button"
@@ -496,7 +524,10 @@ function SortableSidebarSection({
           className={sidebarActionButtonClass}
           aria-label={actionLabel}
           onMouseDown={handleTextButtonMouseDown}
-          onClick={onAction}
+          onClick={(event) => {
+            event.stopPropagation()
+            onAction()
+          }}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <Plus
@@ -506,7 +537,7 @@ function SortableSidebarSection({
           />
         </Button>
       </div>
-      {children}
+      {isCollapsed ? null : children}
     </section>
   )
 }
@@ -540,6 +571,9 @@ export function Sidebar({
   const [editingSessionTitle, setEditingSessionTitle] = useState("")
   const [compactProjectSessionIds, setCompactProjectSessionIds] = useState<
     string[]
+  >([])
+  const [collapsedSectionIds, setCollapsedSectionIds] = useState<
+    OusiaSidebarSectionId[]
   >([])
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
   const editingInputRef = useRef<HTMLInputElement>(null)
@@ -596,6 +630,14 @@ export function Sidebar({
       visibleExpandedProjectIds.has(projectId)
         ? expandedProjectIds.filter((id) => id !== projectId)
         : [...expandedProjectIds, projectId]
+    )
+  }
+
+  function toggleSidebarSection(sectionId: OusiaSidebarSectionId) {
+    setCollapsedSectionIds((current) =>
+      current.includes(sectionId)
+        ? current.filter((id) => id !== sectionId)
+        : [...current, sectionId]
     )
   }
 
@@ -671,8 +713,11 @@ export function Sidebar({
         key="sessions"
         id="sessions"
         label={t.sidebar.sessions}
+        isCollapsed={collapsedSectionIds.includes("sessions")}
         actionLabel={t.sidebar.newSession}
+        toggleLabel={t.sidebar.toggleSection(t.sidebar.sessions)}
         onAction={onCreateSession}
+        onToggleCollapsed={toggleSidebarSection}
       >
         <SortableContext
           items={defaultSessions.map((session) => session.id)}
@@ -702,8 +747,11 @@ export function Sidebar({
         key="projects"
         id="projects"
         label={t.sidebar.projects}
+        isCollapsed={collapsedSectionIds.includes("projects")}
         actionLabel={t.sidebar.createProject}
+        toggleLabel={t.sidebar.toggleSection(t.sidebar.projects)}
         onAction={onOpenProject}
+        onToggleCollapsed={toggleSidebarSection}
       >
         <SortableContext
           items={projects.map((project) => project.id)}

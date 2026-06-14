@@ -88,12 +88,14 @@ export function ToolCallView({
         >
           <StatusIcon
             size={12}
+            strokeWidth={1.5}
             className={status.isSpinning ? "animate-spin" : undefined}
           />
           {status.label}
         </span>
         <ChevronDown
-          size={15}
+          size={18}
+          strokeWidth={1.5}
           className={cn(
             "shrink-0 text-muted-foreground transition-transform",
             isOpen && "rotate-180"
@@ -209,24 +211,24 @@ function getToolStatus(
 function renderToolIcon(name: string) {
   const normalizedName = name.toLowerCase()
   if (normalizedName.includes("bash") || normalizedName.includes("shell")) {
-    return <Terminal size={15} />
+    return <Terminal size={18} strokeWidth={1.5} />
   }
   if (normalizedName.includes("read") || normalizedName.includes("file")) {
-    return <File size={15} />
+    return <File size={18} strokeWidth={1.5} />
   }
   if (normalizedName.includes("grep") || normalizedName.includes("find")) {
-    return <Search size={15} />
+    return <Search size={18} strokeWidth={1.5} />
   }
   if (normalizedName.includes("search")) {
-    return <Sparkles size={15} />
+    return <Sparkles size={18} strokeWidth={1.5} />
   }
   if (normalizedName.includes("database") || normalizedName.includes("sql")) {
-    return <Database size={15} />
+    return <Database size={18} strokeWidth={1.5} />
   }
   if (normalizedName.includes("code") || normalizedName.includes("edit")) {
-    return <Code size={15} />
+    return <Code size={18} strokeWidth={1.5} />
   }
-  return <Clock size={15} />
+  return <Clock size={18} strokeWidth={1.5} />
 }
 
 function formatToolPayloadForDisplay(value: string) {

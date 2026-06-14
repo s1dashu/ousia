@@ -370,6 +370,7 @@ export function ChatArea({
           prompt: text,
           attachments: outgoingAttachments,
           sendBehavior,
+          agentMode: settings.agentMode,
           projectPath: currentProject.path,
           sessionId: currentSession.id,
           thinkingLevel: selectedThinkingLevel,
@@ -739,11 +740,11 @@ export function ChatArea({
             type="button"
             variant="secondary"
             size="icon-sm"
-            className="pointer-events-auto absolute bottom-3 left-1/2 size-8 -translate-x-1/2 rounded-full border bg-popover/90 text-popover-foreground backdrop-blur dark:shadow-md"
+            className="pointer-events-auto absolute bottom-3 left-1/2 size-6 -translate-x-1/2 rounded-full border bg-popover/90 text-popover-foreground backdrop-blur dark:shadow-md"
             aria-label={t.chat.scrollToLatest}
             onClick={() => scrollToLatest("smooth")}
           >
-            <ArrowDown className="size-4" strokeWidth={2} />
+            <ArrowDown className="size-[18px]" strokeWidth={1.5} />
           </Button>
         </div>
       ) : null}
@@ -829,7 +830,7 @@ export function ChatArea({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="size-7"
+                  className="size-6"
                   aria-label={t.chat.addAttachment}
                   onClick={() => fileInputRef.current?.click()}
                 >
@@ -853,7 +854,8 @@ export function ChatArea({
                       </span>
                     ) : null}
                     <ChevronDown
-                      size={16}
+                      size={18}
+                      strokeWidth={1.5}
                       className="shrink-0 text-muted-foreground"
                     />
                   </DropdownMenuTrigger>
@@ -917,7 +919,7 @@ export function ChatArea({
               <Button
                 type="submit"
                 size="icon-sm"
-                className="size-7"
+                className="size-6"
                 disabled={isSending || !hasDraftContent}
                 aria-label={t.app.send}
               >

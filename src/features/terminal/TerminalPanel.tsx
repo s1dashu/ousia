@@ -300,7 +300,7 @@ export function TerminalPanel({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="window-no-drag size-7 rounded-md"
+          className="window-no-drag size-6 rounded-md"
           aria-label={t.terminal.collapse}
           onClick={onCollapse}
         >

@@ -333,34 +333,34 @@
 :root[data-radix-color-scale="mint"],
 :root[data-radix-color-scale="sky"] {
     --background: var(--radix-scale-1);
-    --foreground: var(--radix-scale-12);
+    --foreground: #241f1b;
     --card: var(--radix-scale-2);
-    --card-foreground: var(--radix-scale-12);
+    --card-foreground: #241f1b;
     --popover: var(--radix-scale-2);
-    --popover-foreground: var(--radix-scale-12);
-    --primary: var(--radix-scale-12);
+    --popover-foreground: #241f1b;
+    --primary: #241f1b;
     --primary-foreground: var(--radix-scale-1);
     --secondary: var(--radix-scale-2);
-    --secondary-foreground: var(--radix-scale-12);
+    --secondary-foreground: #241f1b;
     --muted: var(--radix-scale-2);
-    --muted-foreground: var(--radix-scale-11);
+    --muted-foreground: #6f645e;
     --accent: var(--radix-scale-2);
-    --accent-foreground: var(--radix-scale-12);
-    --border: color-mix(in srgb, var(--radix-scale-8) 32%, transparent);
-    --input: var(--radix-scale-4);
-    --ring: var(--radix-scale-9);
+    --accent-foreground: #241f1b;
+    --border: color-mix(in srgb, #b7aaa2 28%, transparent);
+    --input: color-mix(in srgb, var(--radix-scale-8) 22%, transparent);
+    --ring: color-mix(in srgb, var(--radix-scale-9) 72%, transparent);
     --chart-1: var(--radix-scale-5);
     --chart-2: var(--radix-scale-9);
     --chart-3: var(--radix-scale-11);
     --chart-4: var(--radix-scale-12);
     --chart-5: var(--radix-scale-8);
     --sidebar: var(--radix-scale-1);
-    --sidebar-foreground: var(--radix-scale-12);
-    --sidebar-primary: var(--radix-scale-12);
+    --sidebar-foreground: #241f1b;
+    --sidebar-primary: #241f1b;
     --sidebar-primary-foreground: var(--radix-scale-1);
     --sidebar-accent: var(--radix-scale-2);
-    --sidebar-accent-foreground: var(--radix-scale-12);
-    --sidebar-border: color-mix(in srgb, var(--radix-scale-8) 32%, transparent);
+    --sidebar-accent-foreground: #241f1b;
+    --sidebar-border: color-mix(in srgb, #b7aaa2 28%, transparent);
     --sidebar-ring: var(--radix-scale-9);
 }
 
@@ -889,34 +889,34 @@
 .dark[data-radix-color-scale="mint"],
 .dark[data-radix-color-scale="sky"] {
     --background: color-mix(in oklch, var(--radix-scale-12) 20%, #101010);
-    --foreground: color-mix(in oklch, var(--radix-scale-2) 18%, #f4f1ed);
+    --foreground: #f4f0ec;
     --card: color-mix(in oklch, var(--radix-scale-12) 26%, #191919);
-    --card-foreground: color-mix(in oklch, var(--radix-scale-2) 18%, #f4f1ed);
+    --card-foreground: #f4f0ec;
     --popover: color-mix(in oklch, var(--radix-scale-12) 24%, #171717);
-    --popover-foreground: color-mix(in oklch, var(--radix-scale-2) 18%, #f4f1ed);
-    --primary: color-mix(in oklch, var(--radix-scale-9) 68%, #ffffff);
+    --popover-foreground: #f4f0ec;
+    --primary: #f4f0ec;
     --primary-foreground: color-mix(in oklch, var(--radix-scale-12) 56%, #111111);
     --secondary: color-mix(in oklch, var(--radix-scale-12) 32%, #242424);
-    --secondary-foreground: color-mix(in oklch, var(--radix-scale-2) 18%, #f4f1ed);
+    --secondary-foreground: #f4f0ec;
     --muted: color-mix(in oklch, var(--radix-scale-12) 32%, #242424);
-    --muted-foreground: color-mix(in oklch, var(--radix-scale-8) 24%, #bdb7b0);
+    --muted-foreground: #b4aaa2;
     --accent: color-mix(in oklch, var(--radix-scale-12) 38%, #292929);
-    --accent-foreground: color-mix(in oklch, var(--radix-scale-2) 22%, #f7f3ef);
-    --border: color-mix(in oklch, var(--radix-scale-8) 22%, transparent);
-    --input: color-mix(in oklch, var(--radix-scale-8) 18%, transparent);
-    --ring: color-mix(in oklch, var(--radix-scale-9) 58%, #bdb7b0);
+    --accent-foreground: #f4f0ec;
+    --border: color-mix(in srgb, #f0e8e0 12%, transparent);
+    --input: color-mix(in oklch, var(--radix-scale-8) 12%, transparent);
+    --ring: color-mix(in oklch, var(--radix-scale-9) 48%, #bdb7b0);
     --chart-1: color-mix(in oklch, var(--radix-scale-9) 74%, #ffffff);
     --chart-2: color-mix(in oklch, var(--radix-scale-8) 62%, #bdb7b0);
     --chart-3: color-mix(in oklch, var(--radix-scale-11) 52%, #e6e0da);
     --chart-4: color-mix(in oklch, var(--radix-scale-12) 60%, #f4f1ed);
     --chart-5: color-mix(in oklch, var(--radix-scale-6) 34%, #292929);
     --sidebar: color-mix(in oklch, var(--radix-scale-12) 23%, #121212);
-    --sidebar-foreground: color-mix(in oklch, var(--radix-scale-2) 18%, #f4f1ed);
-    --sidebar-primary: color-mix(in oklch, var(--radix-scale-9) 68%, #ffffff);
+    --sidebar-foreground: #f4f0ec;
+    --sidebar-primary: #f4f0ec;
     --sidebar-primary-foreground: color-mix(in oklch, var(--radix-scale-12) 56%, #111111);
     --sidebar-accent: color-mix(in oklch, var(--radix-scale-12) 36%, #242424);
-    --sidebar-accent-foreground: color-mix(in oklch, var(--radix-scale-2) 22%, #f7f3ef);
-    --sidebar-border: color-mix(in oklch, var(--radix-scale-8) 22%, transparent);
+    --sidebar-accent-foreground: #f4f0ec;
+    --sidebar-border: color-mix(in srgb, #f0e8e0 12%, transparent);
     --sidebar-ring: color-mix(in oklch, var(--radix-scale-9) 58%, #bdb7b0);
 }
 

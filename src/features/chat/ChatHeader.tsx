@@ -59,18 +59,16 @@ export function ChatHeader({
             open={isSessionMenuOpen}
             onOpenChange={onSessionMenuOpenChange}
           >
-            <DropdownMenuTrigger
-              render={
+            <DropdownMenuTrigger asChild>
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon-sm"
                   className="window-no-drag ml-1 shrink-0"
                   aria-label={t.chat.moreSessionActions}
-                />
-              }
-            >
-              <MoreHorizontal size={19} />
+                >
+                  <MoreHorizontal size={18} />
+                </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
@@ -81,9 +79,9 @@ export function ChatHeader({
                 onClick={onCopySessionHistory}
               >
                 {copyStatus === "copied" ? (
-                  <Check size={16} className="text-muted-foreground" />
+                  <Check size={18} className="text-muted-foreground" />
                 ) : (
-                  <Copy size={16} className="text-muted-foreground" />
+                  <Copy size={18} className="text-muted-foreground" />
                 )}
                 <span className="flex-1">
                   {copyStatus === "copied"
@@ -103,7 +101,7 @@ export function ChatHeader({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="window-no-drag size-7 rounded-md"
+            className="window-no-drag size-6 rounded-md"
             aria-label={t.chat.openTerminal}
             onClick={onExpandTerminalPanel}
           >

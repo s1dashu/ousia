@@ -34,7 +34,7 @@ export function TitleBarSidebarToggle({
         aria-label={label}
         onClick={onClick}
       >
-        <PanelLeft size={19} strokeWidth={1.8} />
+        <PanelLeft size={18} strokeWidth={1.5} />
       </Button>
     </div>
   )

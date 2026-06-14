@@ -23,9 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import {
   normalizeOusiaAppSettings,
+  type OusiaAgentMode,
   type OusiaAppearanceColorScale,
   type OusiaLanguage,
   type OusiaModelRegistryResult,
@@ -102,6 +102,27 @@ export function SettingsPage({
   }> = [
     { label: t.settings.steer, value: "steer" },
     { label: t.settings.queue, value: "queue" },
+  ]
+  const agentModeOptions: Array<{
+    description: string
+    label: string
+    value: OusiaAgentMode
+  }> = [
+    {
+      description: t.settings.standardModeDescription,
+      label: t.settings.standardMode,
+      value: "standard",
+    },
+    {
+      description: t.settings.readOnlyModeDescription,
+      label: t.settings.readOnlyMode,
+      value: "readOnly",
+    },
+    {
+      description: t.settings.noTerminalModeDescription,
+      label: t.settings.noTerminalMode,
+      value: "noTerminal",
+    },
   ]
 
   useEffect(() => {
@@ -263,7 +284,7 @@ export function SettingsPage({
   )?.description
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
+    <section className="@container/settings flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
       <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pr-4 pl-4">
         <div className="window-drag flex min-w-0 items-center self-stretch">
           <h1 className="window-drag truncate text-sm leading-none font-normal">
@@ -275,7 +296,7 @@ export function SettingsPage({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="window-no-drag size-7 rounded-md"
+            className="window-no-drag size-6 rounded-md"
             aria-label={t.app.close}
             onClick={onClose}
           >
@@ -314,42 +335,12 @@ export function SettingsPage({
                 className="h-9 rounded-md"
                 onClick={chooseDefaultWorkDir}
               >
-                <FolderOpen size={15} />
+                <FolderOpen size={18} />
                 {t.settings.choose}
               </Button>
             </div>
             <div className="mt-2 text-xs leading-5 text-muted-foreground">
               {t.settings.defaultWorkDirHelp}
-            </div>
-            <div className="mt-4">
-              <span className="text-xs font-medium text-muted-foreground">
-                {t.settings.appendMessages}
-              </span>
-              <Select
-                items={sendDuringRunModeOptions}
-                value={draft.sendDuringRunMode}
-                onValueChange={(value) =>
-                  applySettings({
-                    sendDuringRunMode: value as OusiaSendDuringRunMode,
-                  })
-                }
-              >
-                <SelectTrigger
-                  aria-label={t.settings.appendMessages}
-                  className="mt-2 w-full rounded-md"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="start">
-                  <SelectGroup>
-                    {sendDuringRunModeOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
             </div>
             <div className="mt-4">
               <span className="text-xs font-medium text-muted-foreground">
@@ -448,6 +439,75 @@ export function SettingsPage({
           </section>
 
           <section>
+            <h2 className="text-sm font-semibold">{t.settings.agent}</h2>
+            <div className="mt-4">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t.settings.agentMode}
+              </span>
+              <Select
+                items={agentModeOptions}
+                value={draft.agentMode}
+                onValueChange={(value) =>
+                  applySettings({ agentMode: value as OusiaAgentMode })
+                }
+              >
+                <SelectTrigger
+                  aria-label={t.settings.agentMode}
+                  className="mt-2 w-full rounded-md"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    {agentModeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <div className="mt-2 text-xs leading-5 text-muted-foreground">
+                {
+                  agentModeOptions.find(
+                    (option) => option.value === draft.agentMode
+                  )?.description
+                }
+              </div>
+            </div>
+            <div className="mt-4">
+              <span className="text-xs font-medium text-muted-foreground">
+                {t.settings.appendMessages}
+              </span>
+              <Select
+                items={sendDuringRunModeOptions}
+                value={draft.sendDuringRunMode}
+                onValueChange={(value) =>
+                  applySettings({
+                    sendDuringRunMode: value as OusiaSendDuringRunMode,
+                  })
+                }
+              >
+                <SelectTrigger
+                  aria-label={t.settings.appendMessages}
+                  className="mt-2 w-full rounded-md"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    {sendDuringRunModeOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          </section>
+
+          <section>
             <h2 className="text-sm font-semibold">{t.settings.model}</h2>
             <div className="mt-4">
               <div className="flex items-center justify-between gap-3">
@@ -462,68 +522,50 @@ export function SettingsPage({
                   disabled={!addableProviders.length}
                   onClick={openAddProviderDialog}
                 >
-                  <Plus size={15} />
+                  <Plus size={18} />
                   {t.app.add}
                 </Button>
               </div>
-              <div className="mt-4">
-                <Table className="table-fixed">
-                  <colgroup>
-                    <col className="w-[160px]" />
-                    <col />
-                    <col className="w-10" />
-                  </colgroup>
-                  <TableBody>
-                    {draft.modelProviders.map((provider) => (
-                      <TableRow
-                        key={provider.id}
-                        className="border-0 hover:bg-transparent"
-                      >
-                        <TableCell className="max-w-[160px] overflow-hidden py-2 pr-3 pl-0 align-middle">
-                          <div className="flex h-9 min-w-0 items-center text-sm font-medium text-foreground/75">
-                            <span className="block truncate">
-                              {providerLabel(modelRegistry, provider.id)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2 px-0 align-middle">
-                          <Input
-                            aria-label={`${provider.id} API Key`}
-                            className="rounded-md border-transparent bg-background/85 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)] focus-visible:bg-background dark:bg-input/45 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] dark:focus-visible:bg-input/60"
-                            value={provider.apiKey}
-                            onChange={(event) =>
-                              updateProviderDraft(
-                                provider.id,
-                                event.target.value
-                              )
-                            }
-                            onBlur={() => commitProviderApiKey(provider.id)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") {
-                                event.currentTarget.blur()
-                              }
-                            }}
-                            placeholder="sk-..."
-                            type="password"
-                          />
-                        </TableCell>
-                        <TableCell className="w-10 py-2 pr-0 pl-3 text-right align-middle">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
-                            aria-label={`${t.app.delete} ${provider.id}`}
-                            disabled={draft.modelProviders.length <= 1}
-                            onClick={() => deleteProvider(provider.id)}
-                          >
-                            <Trash2 size={17} />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <div className="mt-3 -mx-1 flex min-w-0 flex-col gap-2 px-1 py-1">
+                {draft.modelProviders.map((provider) => (
+                  <div
+                    key={provider.id}
+                    className="grid min-w-0 grid-cols-[minmax(0,1fr)_40px] items-center gap-x-3 gap-y-2 py-1 @min-[560px]:grid-cols-[minmax(0,160px)_minmax(0,1fr)_40px]"
+                  >
+                    <div className="flex h-9 min-w-0 items-center text-sm font-medium text-foreground/75">
+                      <span className="block truncate">
+                        {providerLabel(modelRegistry, provider.id)}
+                      </span>
+                    </div>
+                    <Input
+                      aria-label={`${provider.id} API Key`}
+                      className="min-w-0 rounded-md border-transparent bg-background/85 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)] focus-visible:bg-background dark:bg-input/45 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] dark:focus-visible:bg-input/60 @max-[559px]:col-span-1"
+                      value={provider.apiKey}
+                      onChange={(event) =>
+                        updateProviderDraft(provider.id, event.target.value)
+                      }
+                      onBlur={() => commitProviderApiKey(provider.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.currentTarget.blur()
+                        }
+                      }}
+                      placeholder="sk-..."
+                      type="password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="justify-self-end text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                      aria-label={`${t.app.delete} ${provider.id}`}
+                      disabled={draft.modelProviders.length <= 1}
+                      onClick={() => deleteProvider(provider.id)}
+                    >
+                      <Trash2 size={18} />
+                    </Button>
+                  </div>
+                ))}
               </div>
             </div>
             <Dialog
@@ -546,7 +588,7 @@ export function SettingsPage({
                     aria-label={t.app.close}
                     onClick={() => setIsAddProviderDialogOpen(false)}
                   >
-                    <X size={16} />
+                    <X size={18} />
                   </Button>
                 </div>
 

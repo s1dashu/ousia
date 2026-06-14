@@ -4,25 +4,28 @@ This repo keeps a generated shadcn/ui reference project under `ref/` so agents c
 
 ## Reference Project
 
-Generated with:
+Current Radix reference generated with:
 
 ```bash
-npx shadcn@latest init --preset bIkfG5o --base base --template vite --pointer --name shadcn-bIkfG5o-base-vite --cwd ref/shadcn-bIkfG5o-base-vite --yes
-npx shadcn@latest add select --cwd ref/shadcn-bIkfG5o-base-vite/shadcn-bIkfG5o-base-vite --yes
+npx shadcn@latest init --preset bbVJxYW --template vite --pointer --name shadcn-bbVJxYW-radix-vite --cwd ref/shadcn-bbVJxYW-radix-vite --yes
+npx shadcn@latest add dialog dropdown-menu select tooltip input textarea table --cwd ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite --yes
 ```
 
 Reference root:
 
 ```text
-ref/shadcn-bIkfG5o-base-vite/shadcn-bIkfG5o-base-vite
+ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite
 ```
 
 Important reference files:
 
-- `ref/shadcn-bIkfG5o-base-vite/shadcn-bIkfG5o-base-vite/components.json`
-- `ref/shadcn-bIkfG5o-base-vite/shadcn-bIkfG5o-base-vite/src/index.css`
-- `ref/shadcn-bIkfG5o-base-vite/shadcn-bIkfG5o-base-vite/src/components/ui/select.tsx`
-- `ref/shadcn-bIkfG5o-base-vite/shadcn-bIkfG5o-base-vite/src/components/ui/button.tsx`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/components.json`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/src/index.css`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/src/components/ui/button.tsx`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/src/components/ui/dialog.tsx`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/src/components/ui/dropdown-menu.tsx`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/src/components/ui/select.tsx`
+- `ref/shadcn-bbVJxYW-radix-vite/shadcn-bbVJxYW-radix-vite/src/components/ui/tooltip.tsx`
 
 ## Usage Rules
 
@@ -32,9 +35,14 @@ Important reference files:
 - For theme-wide changes, update tokens in `src/index.css` such as `--radius` before rewriting many component classes.
 - For local product fit, small component-level overrides are acceptable because shadcn/ui components are owned in this repo.
 
+## Primitive Notes
+
+The app shadcn primitives are Radix-backed. Do not reintroduce `@base-ui/react`
+unless the branch direction changes explicitly.
+
 ## Select Notes
 
-The reference Base UI Select uses:
+The reference Radix Select uses:
 
 - `SelectContent` popup radius `rounded-md`
 - `SelectGroup` with `p-1`, which creates the gap between menu edge and hovered items

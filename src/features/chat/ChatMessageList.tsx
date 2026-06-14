@@ -128,7 +128,7 @@ function MessageAttachmentList({
             className="inline-flex max-w-52 items-center gap-1.5 rounded-md border bg-background/80 px-2 py-1 text-xs text-muted-foreground"
             title={`${attachment.name} · ${formatBytes(attachment.size)}`}
           >
-            <IconComponent size={14} className="shrink-0" />
+            <IconComponent size={18} strokeWidth={1.5} className="shrink-0" />
             <span className="truncate">{attachment.name}</span>
           </span>
         )

@@ -24,6 +24,7 @@ import type {
   OusiaChatAttachment,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaAgentMode,
   OusiaModelSettings,
   OusiaThinkingLevel,
 } from "./chat-types.js"
@@ -131,6 +132,16 @@ function normalizeModelSettings(model: OusiaModelSettings) {
   }
 }
 
+function toolsForAgentMode(mode: OusiaAgentMode | undefined) {
+  if (mode === "readOnly") {
+    return ["read", "grep", "find", "ls"]
+  }
+  if (mode === "noTerminal") {
+    return ["read", "write", "edit", "grep", "find", "ls"]
+  }
+  return ["read", "write", "edit", "bash", "grep", "find", "ls"]
+}
+
 function applyRuntimeApiKey(
   bundle: AgentSessionBundle,
   model: OusiaModelSettings
@@ -162,7 +173,8 @@ function findConfiguredModel(
 async function configureSessionBundle(
   bundle: AgentSessionBundle,
   modelSettings: OusiaModelSettings,
-  thinkingLevel: OusiaThinkingLevel
+  thinkingLevel: OusiaThinkingLevel,
+  agentMode?: OusiaAgentMode
 ) {
   const model = normalizeModelSettings(modelSettings)
   if (!model.provider || !model.modelId) {
@@ -177,6 +189,7 @@ async function configureSessionBundle(
     await bundle.session.setModel(selectedModel)
   }
   bundle.session.setThinkingLevel(thinkingLevel)
+  bundle.session.setActiveToolsByName(toolsForAgentMode(agentMode))
 }
 
 function textFromContent(content: unknown) {
@@ -723,7 +736,8 @@ export function createAgentConversationModule({
     context: OusiaChatContext,
     key: string,
     modelSettings: OusiaModelSettings,
-    thinkingLevel: OusiaThinkingLevel
+    thinkingLevel: OusiaThinkingLevel,
+    agentMode?: OusiaAgentMode
   ) {
     const cwd = expandHomePath(context.projectPath)
     const userData = app.getPath("userData")
@@ -764,7 +778,9 @@ export function createAgentConversationModule({
       settingsManager,
       model: selectedModel,
       thinkingLevel,
-      tools: enabledTools,
+      tools: toolsForAgentMode(agentMode).filter((tool) =>
+        enabledTools.includes(tool)
+      ),
     })
 
     if (modelFallbackMessage) {
@@ -792,18 +808,23 @@ export function createAgentConversationModule({
   async function getAgentSession(
     context: OusiaChatContext,
     model: OusiaModelSettings,
-    thinkingLevel: OusiaThinkingLevel
+    thinkingLevel: OusiaThinkingLevel,
+    agentMode?: OusiaAgentMode
   ) {
     const key = sessionKey(context)
     if (!sessionPromises.has(key)) {
-      const promise = createSession(context, key, model, thinkingLevel).catch(
-        (error) => {
-          if (sessionPromises.get(key) === promise) {
-            sessionPromises.delete(key)
-          }
-          throw error
+      const promise = createSession(
+        context,
+        key,
+        model,
+        thinkingLevel,
+        agentMode
+      ).catch((error) => {
+        if (sessionPromises.get(key) === promise) {
+          sessionPromises.delete(key)
         }
-      )
+        throw error
+      })
       sessionPromises.set(key, promise)
     }
     return sessionPromises.get(key)!
@@ -877,9 +898,15 @@ export function createAgentConversationModule({
       const bundle = await getAgentSession(
         context,
         payload.model,
-        payload.thinkingLevel
+        payload.thinkingLevel,
+        payload.agentMode
       )
-      await configureSessionBundle(bundle, payload.model, payload.thinkingLevel)
+      await configureSessionBundle(
+        bundle,
+        payload.model,
+        payload.thinkingLevel,
+        payload.agentMode
+      )
       const { session } = bundle
       if (images.length && !session.model?.input.includes("image")) {
         throw new Error("当前模型不支持图片输入，请切换到支持识图的模型后重试。")

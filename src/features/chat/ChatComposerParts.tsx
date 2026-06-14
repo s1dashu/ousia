@@ -74,7 +74,11 @@ export function QueuedMessageList({
               editingId === message.id && "bg-ring/15 text-foreground"
             )}
           >
-            <GripVertical size={14} className="shrink-0 cursor-grab" />
+            <GripVertical
+              size={18}
+              strokeWidth={1.5}
+              className="shrink-0 cursor-grab"
+            />
             <span className="shrink-0 tabular-nums text-muted-foreground/75">
               {index + 1}
             </span>
@@ -95,7 +99,7 @@ export function QueuedMessageList({
                 className="size-6 rounded-md text-muted-foreground hover:text-foreground"
                 onClick={() => onSendNow(message.id)}
               >
-                <SendHorizontal size={14} />
+                <SendHorizontal size={18} />
               </Button>
               <Button
                 type="button"
@@ -105,7 +109,7 @@ export function QueuedMessageList({
                 className="size-6 rounded-md text-muted-foreground hover:text-foreground"
                 onClick={() => onEdit(message.id)}
               >
-                <Pencil size={14} />
+                <Pencil size={18} />
               </Button>
               <Button
                 type="button"
@@ -115,7 +119,7 @@ export function QueuedMessageList({
                 className="size-6 rounded-md text-muted-foreground hover:text-foreground"
                 onClick={() => onDelete(message.id)}
               >
-                <Trash2 size={14} />
+                <Trash2 size={18} />
               </Button>
             </div>
           </div>
@@ -150,9 +154,9 @@ export function AttachmentStrip({
           ) : (
             <span className="flex size-8 shrink-0 items-center justify-center rounded bg-background text-muted-foreground">
               {attachment.kind === "text" ? (
-                <FileText size={17} />
+                <FileText size={18} strokeWidth={1.5} />
               ) : (
-                <File size={17} />
+                <File size={18} strokeWidth={1.5} />
               )}
             </span>
           )}
@@ -172,7 +176,7 @@ export function AttachmentStrip({
             aria-label={t.chat.removeAttachment(attachment.name)}
             onClick={() => onRemove(attachment.id)}
           >
-            <X size={14} />
+            <X size={18} />
           </Button>
         </div>
       ))}
