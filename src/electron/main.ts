@@ -14,7 +14,9 @@ import type {
   OusiaAppState,
   OusiaChatContext,
   OusiaChatEvent,
+  OusiaChatExportPayload,
   OusiaChatGenerateTitlePayload,
+  OusiaChatInterruptPayload,
   OusiaChatSendPayload,
   OusiaSelectDirectoryResult,
   OusiaTerminalCreatePayload,
@@ -85,7 +87,51 @@ ipcMain.handle("ousia:chat:history", (_event, payload: OusiaChatContext) =>
   agentConversations.getChatHistory(payload)
 )
 
-ipcMain.handle("ousia:chat:interrupt", (_event, payload: OusiaChatContext) =>
+ipcMain.handle(
+  "ousia:chat:context-usage",
+  (_event, payload: OusiaChatContext) =>
+    agentConversations.getContextUsage(payload)
+)
+
+ipcMain.handle(
+  "ousia:chat:export",
+  async (_event, payload: OusiaChatExportPayload) => {
+    const extensions = {
+      markdown: ["md"],
+      html: ["html"],
+      jsonl: ["jsonl"],
+    }[payload.format]
+    const defaultPath = `${basename(payload.sessionId || "chat")}.${extensions[0]}`
+    const result = mainWindow
+      ? await dialog.showSaveDialog(mainWindow, {
+          defaultPath,
+          filters: [{ name: payload.format.toUpperCase(), extensions }],
+        })
+      : await dialog.showSaveDialog({
+          defaultPath,
+          filters: [{ name: payload.format.toUpperCase(), extensions }],
+        })
+    if (result.canceled || !result.filePath) {
+      return { ok: false, canceled: true }
+    }
+    const exportResult = await agentConversations.exportChat(
+      payload,
+      result.filePath
+    )
+    writeRuntimeLog(
+      "chat.export",
+      exportResult.ok ? "info" : "error",
+      {
+        format: payload.format,
+        requestedPath: result.filePath,
+        result: exportResult,
+      }
+    )
+    return exportResult
+  }
+)
+
+ipcMain.handle("ousia:chat:interrupt", (_event, payload: OusiaChatInterruptPayload) =>
   agentConversations.interruptChat(payload)
 )
 
@@ -125,6 +171,8 @@ ipcMain.handle("ousia:project:open", async () => {
 ipcMain.handle("ousia:window:fullscreen-state", () =>
   windowHost.getWindowFullscreenState()
 )
+
+ipcMain.handle("ousia:window:zoom-state", () => windowHost.getWindowZoomState())
 
 ipcMain.handle("ousia:app-state:load", () => loadAppState())
 

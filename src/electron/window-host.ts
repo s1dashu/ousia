@@ -78,7 +78,35 @@ function resolveInitialWindowBounds(windowState: OusiaWindowState) {
   }
 }
 
-function installApplicationMenu() {
+function zoomPercentForWindow(window: BrowserWindow | undefined) {
+  return Math.round((window?.webContents.getZoomFactor() ?? 1) * 100)
+}
+
+function emitWindowZoomState(window: BrowserWindow | undefined) {
+  window?.webContents.send("ousia:window:zoom", {
+    zoomPercent: zoomPercentForWindow(window),
+  })
+}
+
+function setWindowZoomLevel(
+  window: BrowserWindow | undefined,
+  zoomLevel: number
+) {
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  window.webContents.setZoomLevel(zoomLevel)
+  emitWindowZoomState(window)
+}
+
+function adjustWindowZoomLevel(window: BrowserWindow | undefined, delta: number) {
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  setWindowZoomLevel(window, window.webContents.getZoomLevel() + delta)
+}
+
+function installApplicationMenu(getWindow: () => BrowserWindow | undefined) {
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(platform === "darwin"
       ? [
@@ -120,9 +148,21 @@ function installApplicationMenu() {
         { role: "forceReload" },
         { role: "toggleDevTools" },
         { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        {
+          label: "Actual Size",
+          accelerator: "CmdOrCtrl+0",
+          click: () => setWindowZoomLevel(getWindow(), 0),
+        },
+        {
+          label: "Zoom In",
+          accelerator: "CmdOrCtrl+Plus",
+          click: () => adjustWindowZoomLevel(getWindow(), 0.5),
+        },
+        {
+          label: "Zoom Out",
+          accelerator: "CmdOrCtrl+-",
+          click: () => adjustWindowZoomLevel(getWindow(), -0.5),
+        },
         { type: "separator" },
         { role: "togglefullscreen" },
       ],
@@ -187,6 +227,12 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     }
   }
 
+  function getWindowZoomState() {
+    return {
+      zoomPercent: zoomPercentForWindow(mainWindow),
+    }
+  }
+
   function getCurrentWindowState(): OusiaWindowState | null {
     if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isFullScreen()) {
       return null
@@ -230,7 +276,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
   }
 
   async function createWindow() {
-    installApplicationMenu()
+    installApplicationMenu(getMainWindow)
     const appState = await loadAppState()
     const initialBounds = resolveInitialWindowBounds(appState.windowState)
 
@@ -240,7 +286,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       minHeight: MAIN_WINDOW_MIN_HEIGHT,
       title: "Ousia",
       titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 14, y: 13 },
+      trafficLightPosition: { x: 14, y: 15 },
       backgroundColor: resolveInitialWindowBackground(appState.settings.theme),
       webPreferences: {
         contextIsolation: true,
@@ -276,6 +322,26 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
         writeRuntimeLog("renderer.load", "error", { code, description, url })
       }
     )
+
+    mainWindow.webContents.on("before-input-event", (event, input) => {
+      if (!input.control && !input.meta) {
+        return
+      }
+      if (input.alt) {
+        return
+      }
+      const key = input.key.toLowerCase()
+      if (key === "+" || key === "=") {
+        event.preventDefault()
+        adjustWindowZoomLevel(mainWindow, 0.5)
+      } else if (key === "-" || key === "_") {
+        event.preventDefault()
+        adjustWindowZoomLevel(mainWindow, -0.5)
+      } else if (key === "0") {
+        event.preventDefault()
+        setWindowZoomLevel(mainWindow, 0)
+      }
+    })
 
     mainWindow.on("unresponsive", () => {
       writeRuntimeLog("window", "warn", "Main window became unresponsive")
@@ -313,6 +379,9 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
 
     mainWindow.webContents.once("did-finish-load", () =>
       emitWindowFullscreenState()
+    )
+    mainWindow.webContents.once("did-finish-load", () =>
+      emitWindowZoomState(mainWindow)
     )
     mainWindow.on("resize", () => {
       emitInferredWindowFullscreenState()
@@ -357,6 +426,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
   return {
     createWindow,
     getWindowFullscreenState,
+    getWindowZoomState,
     getMainWindow,
   }
 }

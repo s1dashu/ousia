@@ -1,6 +1,6 @@
-import { completeSimple } from "@mariozechner/pi-ai"
-import type { Api, AssistantMessage, Model } from "@mariozechner/pi-ai"
-import { AuthStorage, ModelRegistry } from "@mariozechner/pi-coding-agent"
+import { completeSimple } from "@earendil-works/pi-ai"
+import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai"
+import { AuthStorage, ModelRegistry } from "@earendil-works/pi-coding-agent"
 import { join } from "node:path"
 
 import type {
@@ -8,7 +8,12 @@ import type {
   OusiaChatGenerateTitleResult,
   OusiaModelSettings,
 } from "./chat-types.js"
+import { normalizeProviderModelId } from "./model-compat.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
+import {
+  getVercelAiGatewayModelIds,
+  isVercelAiGatewayModelAvailable,
+} from "./vercel-ai-gateway-models.js"
 
 type UtilityModelCandidate = {
   provider: string
@@ -90,15 +95,21 @@ function modelCost(model: Model<Api>) {
   return (model.cost?.input ?? 0) + (model.cost?.output ?? 0)
 }
 
-function findCheapestTextModel(
+async function findCheapestTextModel(
   modelRegistry: ModelRegistry,
   candidate: UtilityModelCandidate
 ) {
+  const vercelModelIds =
+    candidate.provider === "vercel-ai-gateway"
+      ? await getVercelAiGatewayModelIds()
+      : undefined
   const providerModels = modelRegistry
     .getAll()
     .filter(
       (model) =>
-        model.provider === candidate.provider && model.input?.includes("text")
+        model.provider === candidate.provider &&
+        model.input?.includes("text") &&
+        (!vercelModelIds || vercelModelIds.has(model.id))
     )
 
   for (const modelId of candidate.preferredModelIds) {
@@ -134,17 +145,40 @@ function candidateForProvider(provider: string) {
   )
 }
 
+async function findConfiguredTitleModel(
+  modelRegistry: ModelRegistry,
+  provider: string,
+  modelId: string
+) {
+  if (
+    provider === "vercel-ai-gateway" &&
+    !(await isVercelAiGatewayModelAvailable(modelId))
+  ) {
+    return undefined
+  }
+  return modelRegistry.find(provider, modelId)
+}
+
 async function selectTitleModel(
   modelRegistry: ModelRegistry,
   chatModel: OusiaModelSettings
 ): Promise<SelectedTitleModel | undefined> {
-  for (const provider of uniqueProviders(chatModel.provider.trim())) {
+  const chatProvider = chatModel.provider.trim()
+  const chatModelId = normalizeProviderModelId(
+    chatProvider,
+    chatModel.modelId.trim()
+  )
+  for (const provider of uniqueProviders(chatProvider)) {
     const candidate = candidateForProvider(provider)
     const model =
-      provider === chatModel.provider
-        ? findCheapestTextModel(modelRegistry, candidate) ??
-          modelRegistry.find(chatModel.provider, chatModel.modelId)
-        : findCheapestTextModel(modelRegistry, candidate)
+      provider === chatProvider
+        ? (await findCheapestTextModel(modelRegistry, candidate)) ??
+          (await findConfiguredTitleModel(
+            modelRegistry,
+            chatProvider,
+            chatModelId
+          ))
+        : await findCheapestTextModel(modelRegistry, candidate)
     if (!model) {
       continue
     }
@@ -158,7 +192,7 @@ async function selectTitleModel(
       auth,
       model,
       reason:
-        provider === chatModel.provider
+        provider === chatProvider
           ? "current-chat-provider"
           : "available-utility-provider",
     }

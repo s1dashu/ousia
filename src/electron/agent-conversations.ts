@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync } from "node:fs"
-import { join } from "node:path"
+import { createRequire } from "node:module"
+import { dirname, join } from "node:path"
 import { homedir } from "node:os"
 import { app } from "electron"
-import type { ImageContent } from "@mariozechner/pi-ai"
+import type { ImageContent } from "@earendil-works/pi-ai"
 import {
   AuthStorage,
   createAgentSession,
@@ -13,21 +14,29 @@ import {
   type AgentSession,
   type AgentSessionEvent,
   type SessionMessageEntry,
-} from "@mariozechner/pi-coding-agent"
+} from "@earendil-works/pi-coding-agent"
 
 import type {
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatHistoryItem,
   OusiaChatHistoryResult,
+  OusiaChatInterruptPayload,
   OusiaChatInterruptResult,
   OusiaChatAttachment,
+  OusiaAgentToolName,
+  OusiaChatContextUsageResult,
+  OusiaChatExportPayload,
+  OusiaChatExportResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
   OusiaAgentMode,
   OusiaModelSettings,
   OusiaThinkingLevel,
 } from "./chat-types.js"
+import { normalizeProviderModelId } from "./model-compat.js"
+import { isVercelAiGatewayModelAvailable } from "./vercel-ai-gateway-models.js"
+import { writeRuntimeLog } from "./runtime-logger.js"
 
 type AgentSessionBundle = {
   authStorage: AuthStorage
@@ -40,6 +49,8 @@ type AgentConversationModuleOptions = {
   enabledTools: string[]
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
 }
+
+const require = createRequire(__filename)
 
 type AgentStreamState = {
   textId: string
@@ -93,6 +104,67 @@ function stringifyUnknown(value: unknown) {
   }
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+}
+
+function markdownToFallbackHtml(markdown: string) {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ousia Chat Export</title>
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      background: #fff;
+      color: #1f1f1d;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.7;
+    }
+    main {
+      box-sizing: border-box;
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 48px 28px;
+    }
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: inherit;
+    }
+  </style>
+</head>
+<body>
+  <main><pre>${escapeHtml(markdown)}</pre></main>
+</body>
+</html>
+`
+}
+
+function ensurePiPackageDirForHtmlExport() {
+  if (process.env.PI_PACKAGE_DIR) {
+    return
+  }
+  try {
+    const packageEntry = require.resolve("@earendil-works/pi-coding-agent")
+    process.env.PI_PACKAGE_DIR = dirname(dirname(packageEntry))
+  } catch (error) {
+    writeRuntimeLog("chat.export", "warn", {
+      reason: "resolve-pi-package-dir-failed",
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
 function safePathSegment(value: string) {
   return (
     value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") ||
@@ -125,14 +197,22 @@ function getConversationDir(context: OusiaChatContext) {
 }
 
 function normalizeModelSettings(model: OusiaModelSettings) {
+  const provider = model.provider.trim()
+  const modelId = model.modelId.trim()
   return {
-    provider: model.provider.trim(),
-    modelId: model.modelId.trim(),
+    provider,
+    modelId: normalizeProviderModelId(provider, modelId),
     apiKey: model.apiKey?.trim(),
   }
 }
 
-function toolsForAgentMode(mode: OusiaAgentMode | undefined) {
+function toolsForAgentMode(
+  mode: OusiaAgentMode | undefined,
+  customTools?: OusiaAgentToolName[]
+) {
+  if (mode === "custom") {
+    return customTools?.length ? customTools : ["read", "grep", "find", "ls"]
+  }
   if (mode === "readOnly") {
     return ["read", "grep", "find", "ls"]
   }
@@ -159,10 +239,18 @@ function applyRuntimeApiKey(
   bundle.runtimeApiKeyProvider = nextProvider
 }
 
-function findConfiguredModel(
+async function findConfiguredModel(
   modelRegistry: ModelRegistry,
   model: OusiaModelSettings
 ) {
+  if (
+    model.provider === "vercel-ai-gateway" &&
+    !(await isVercelAiGatewayModelAvailable(model.modelId))
+  ) {
+    throw new Error(
+      `Vercel AI Gateway 当前不支持模型：${model.modelId}。请重新选择一个模型。`
+    )
+  }
   const selected = modelRegistry.find(model.provider, model.modelId)
   if (!selected) {
     throw new Error(`未知模型：${model.provider}/${model.modelId}`)
@@ -174,14 +262,16 @@ async function configureSessionBundle(
   bundle: AgentSessionBundle,
   modelSettings: OusiaModelSettings,
   thinkingLevel: OusiaThinkingLevel,
-  agentMode?: OusiaAgentMode
+  agentMode?: OusiaAgentMode,
+  customAgentTools?: OusiaAgentToolName[],
+  autoCompactContext?: boolean
 ) {
   const model = normalizeModelSettings(modelSettings)
   if (!model.provider || !model.modelId) {
     throw new Error("模型服务商和模型 ID 不能为空。")
   }
   applyRuntimeApiKey(bundle, model)
-  const selectedModel = findConfiguredModel(bundle.modelRegistry, model)
+  const selectedModel = await findConfiguredModel(bundle.modelRegistry, model)
   if (
     bundle.session.model?.provider !== selectedModel.provider ||
     bundle.session.model?.id !== selectedModel.id
@@ -189,7 +279,12 @@ async function configureSessionBundle(
     await bundle.session.setModel(selectedModel)
   }
   bundle.session.setThinkingLevel(thinkingLevel)
-  bundle.session.setActiveToolsByName(toolsForAgentMode(agentMode))
+  bundle.session.setActiveToolsByName(
+    toolsForAgentMode(agentMode, customAgentTools)
+  )
+  if (typeof autoCompactContext === "boolean") {
+    bundle.session.setAutoCompactionEnabled(autoCompactContext)
+  }
 }
 
 function textFromContent(content: unknown) {
@@ -209,7 +304,7 @@ function textFromContent(content: unknown) {
         return typeof block.text === "string" ? block.text : ""
       }
       if (block.type === "image") {
-        return "[image]"
+        return ""
       }
       return ""
     })
@@ -227,7 +322,53 @@ function attachmentSummary(attachments: OusiaChatAttachment[] | undefined) {
     mediaType: attachment.mediaType,
     name: attachment.name,
     size: attachment.size,
+    ...(attachment.kind === "image"
+      ? { dataBase64: attachment.dataBase64 }
+      : {}),
   }))
+}
+
+function imageExtension(mediaType: string) {
+  if (mediaType === "image/jpeg") {
+    return "jpg"
+  }
+  return mediaType.split("/")[1]?.split("+")[0] || "png"
+}
+
+function base64ByteLength(data: string) {
+  const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0
+  return Math.max(0, Math.floor((data.length * 3) / 4) - padding)
+}
+
+function attachmentSummaryFromContent(content: unknown) {
+  if (!Array.isArray(content)) {
+    return []
+  }
+
+  return content.flatMap((part, index) => {
+    if (!part || typeof part !== "object") {
+      return []
+    }
+    const block = part as Record<string, unknown>
+    if (block.type !== "image") {
+      return []
+    }
+    const mediaType =
+      typeof block.mimeType === "string" && block.mimeType
+        ? block.mimeType
+        : "image/png"
+    const data = typeof block.data === "string" ? block.data : ""
+    return [
+      {
+        id: `history-image-${index}`,
+        kind: "image" as const,
+        mediaType,
+        name: `image.${imageExtension(mediaType)}`,
+        size: base64ByteLength(data),
+        dataBase64: data,
+      },
+    ]
+  })
 }
 
 function formatBytes(size: number) {
@@ -300,11 +441,14 @@ function messageEntryToHistoryItems(
   const message = entry.message as unknown as Record<string, unknown>
   const role = message.role
   if (role === "user") {
+    const attachments = attachmentSummaryFromContent(message.content)
     items.push({
       id: entry.id,
       role: "user",
       text: textFromContent(message.content),
+      attachments: attachments.length ? attachments : undefined,
       status: "finished",
+      timestamp: entry.timestamp,
     })
     return
   }
@@ -323,6 +467,7 @@ function messageEntryToHistoryItems(
             role: "thinking",
             text,
             status: "finished",
+            timestamp: entry.timestamp,
           })
         }
       } else if (block.type === "text") {
@@ -333,6 +478,7 @@ function messageEntryToHistoryItems(
             role: "assistant",
             text,
             status: "finished",
+            timestamp: entry.timestamp,
           })
         }
       } else if (block.type === "toolCall") {
@@ -405,6 +551,7 @@ function messageEntryToHistoryItems(
         role: "system",
         text,
         status: "finished",
+        timestamp: entry.timestamp,
       })
     }
   }
@@ -427,6 +574,32 @@ export function createAgentConversationModule({
   const sessionPromises = new Map<string, Promise<AgentSessionBundle>>()
   const streamState = new Map<string, AgentStreamState>()
   const interruptGenerations = new Map<string, number>()
+
+  async function emitContextUsage(context: OusiaChatContext, key: string) {
+    const promise = sessionPromises.get(key)
+    if (!promise) {
+      return
+    }
+    try {
+      const bundle = await promise
+      const contextUsage = bundle.session.getContextUsage()
+      if (!contextUsage) {
+        return
+      }
+      emitChatEvent(
+        {
+          type: "context_usage",
+          tokens: contextUsage.tokens,
+          contextWindow: contextUsage.contextWindow,
+          percent: contextUsage.percent,
+          timestamp: now(),
+        },
+        context
+      )
+    } catch {
+      // Context usage is informative only; chat errors are emitted elsewhere.
+    }
+  }
 
   function translateAgentEvent(
     event: AgentSessionEvent,
@@ -451,11 +624,24 @@ export function createAgentConversationModule({
       )
       return
     }
+    if (event.type === "queue_update") {
+      emitChatEvent(
+        {
+          type: "queue_update",
+          steering: [...event.steering],
+          followUp: [...event.followUp],
+          timestamp,
+        },
+        context
+      )
+      return
+    }
     if (event.type === "agent_end") {
       emitChatEvent(
         { type: "run_status", status: "finished", timestamp },
         context
       )
+      void emitContextUsage(context, key)
       state.textId = ""
       state.thinkingId = ""
       state.currentAssistantMessageId = ""
@@ -737,7 +923,9 @@ export function createAgentConversationModule({
     key: string,
     modelSettings: OusiaModelSettings,
     thinkingLevel: OusiaThinkingLevel,
-    agentMode?: OusiaAgentMode
+    agentMode?: OusiaAgentMode,
+    customAgentTools?: OusiaAgentToolName[],
+    autoCompactContext?: boolean
   ) {
     const cwd = expandHomePath(context.projectPath)
     const userData = app.getPath("userData")
@@ -765,7 +953,7 @@ export function createAgentConversationModule({
     }
     const selectedModel =
       model.provider && model.modelId
-        ? findConfiguredModel(modelRegistry, model)
+        ? await findConfiguredModel(modelRegistry, model)
         : undefined
 
     const { session, modelFallbackMessage } = await createAgentSession({
@@ -778,10 +966,14 @@ export function createAgentConversationModule({
       settingsManager,
       model: selectedModel,
       thinkingLevel,
-      tools: toolsForAgentMode(agentMode).filter((tool) =>
+      tools: toolsForAgentMode(agentMode, customAgentTools).filter((tool) =>
         enabledTools.includes(tool)
       ),
     })
+
+    if (typeof autoCompactContext === "boolean") {
+      session.setAutoCompactionEnabled(autoCompactContext)
+    }
 
     if (modelFallbackMessage) {
       emitChatEvent(
@@ -809,7 +1001,9 @@ export function createAgentConversationModule({
     context: OusiaChatContext,
     model: OusiaModelSettings,
     thinkingLevel: OusiaThinkingLevel,
-    agentMode?: OusiaAgentMode
+    agentMode?: OusiaAgentMode,
+    customAgentTools?: OusiaAgentToolName[],
+    autoCompactContext?: boolean
   ) {
     const key = sessionKey(context)
     if (!sessionPromises.has(key)) {
@@ -818,7 +1012,9 @@ export function createAgentConversationModule({
         key,
         model,
         thinkingLevel,
-        agentMode
+        agentMode,
+        customAgentTools,
+        autoCompactContext
       ).catch((error) => {
         if (sessionPromises.get(key) === promise) {
           sessionPromises.delete(key)
@@ -899,13 +1095,17 @@ export function createAgentConversationModule({
         context,
         payload.model,
         payload.thinkingLevel,
-        payload.agentMode
+        payload.agentMode,
+        payload.customAgentTools,
+        payload.autoCompactContext
       )
       await configureSessionBundle(
         bundle,
         payload.model,
         payload.thinkingLevel,
-        payload.agentMode
+        payload.agentMode,
+        payload.customAgentTools,
+        payload.autoCompactContext
       )
       const { session } = bundle
       if (images.length && !session.model?.input.includes("image")) {
@@ -963,7 +1163,7 @@ export function createAgentConversationModule({
   }
 
   async function interruptChat(
-    context: OusiaChatContext
+    context: OusiaChatInterruptPayload
   ): Promise<OusiaChatInterruptResult> {
     const key = sessionKey(context)
     interruptGenerations.set(key, (interruptGenerations.get(key) ?? 0) + 1)
@@ -977,7 +1177,7 @@ export function createAgentConversationModule({
         session.isStreaming ||
         session.pendingMessageCount > 0 ||
         session.isBashRunning
-      session.clearQueue()
+      const queuedMessages = session.clearQueue()
       await session.abort()
       if (hadActiveWork) {
         emitChatEvent(
@@ -988,6 +1188,31 @@ export function createAgentConversationModule({
             timestamp: now(),
           },
           context
+        )
+      }
+      const messagesToContinue = [
+        ...queuedMessages.steering,
+        ...queuedMessages.followUp,
+      ].filter((message) => message.trim())
+      if (context.continueQueuedMessages && messagesToContinue.length) {
+        const combinedMessage = messagesToContinue.join("\n\n")
+        void session.prompt(combinedMessage, { source: "interactive" }).catch(
+          (error) => {
+            const timestamp = now()
+            emitChatEvent(
+              {
+                type: "error",
+                id: randomId("error"),
+                text: error instanceof Error ? error.message : String(error),
+                timestamp,
+              },
+              context
+            )
+            emitChatEvent(
+              { type: "run_status", status: "error", timestamp },
+              context
+            )
+          }
         )
       }
       return { ok: true }
@@ -1005,7 +1230,100 @@ export function createAgentConversationModule({
     }
   }
 
+  async function getContextUsage(
+    context: OusiaChatContext
+  ): Promise<OusiaChatContextUsageResult> {
+    const promise = sessionPromises.get(sessionKey(context))
+    if (!promise) {
+      return { ok: true }
+    }
+    try {
+      const bundle = await promise
+      return { ok: true, usage: bundle.session.getContextUsage() }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  async function exportChat(
+    payload: OusiaChatExportPayload,
+    outputPath: string
+  ): Promise<OusiaChatExportResult> {
+    try {
+      if (payload.format === "markdown") {
+        const { writeFile } = await import("node:fs/promises")
+        await writeFile(outputPath, payload.markdown ?? "", "utf8")
+        return { ok: true, path: outputPath }
+      }
+
+      const context = {
+        projectPath: payload.projectPath,
+        sessionId: payload.sessionId,
+      }
+      const bundle = await getAgentSession(
+        context,
+        payload.model,
+        payload.thinkingLevel,
+        payload.agentMode,
+        payload.customAgentTools,
+        payload.autoCompactContext
+      )
+      await configureSessionBundle(
+        bundle,
+        payload.model,
+        payload.thinkingLevel,
+        payload.agentMode,
+        payload.customAgentTools,
+        payload.autoCompactContext
+      )
+      if (payload.format === "html") {
+        ensurePiPackageDirForHtmlExport()
+      }
+      const path =
+        payload.format === "html"
+          ? await bundle.session.exportToHtml(outputPath)
+          : bundle.session.exportToJsonl(outputPath)
+      return { ok: true, path }
+    } catch (error) {
+      if (payload.format === "html" && payload.markdown !== undefined) {
+        try {
+          const { writeFile } = await import("node:fs/promises")
+          await writeFile(outputPath, markdownToFallbackHtml(payload.markdown), "utf8")
+          writeRuntimeLog("chat.export", "warn", {
+            fallback: "html-from-markdown",
+            outputPath,
+            originalError: error instanceof Error ? error.message : String(error),
+            projectPath: payload.projectPath,
+            sessionId: payload.sessionId,
+          })
+          return { ok: true, path: outputPath }
+        } catch (fallbackError) {
+          writeRuntimeLog("chat.export", "error", {
+            fallback: "html-from-markdown",
+            outputPath,
+            originalError: error instanceof Error ? error.message : String(error),
+            fallbackError:
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : String(fallbackError),
+            projectPath: payload.projectPath,
+            sessionId: payload.sessionId,
+          })
+        }
+      }
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
   return {
+    exportChat,
+    getContextUsage,
     getChatHistory,
     interruptChat,
     sendChatMessage,

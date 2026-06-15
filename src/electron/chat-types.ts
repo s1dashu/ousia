@@ -19,30 +19,6 @@ export const OUSIA_APPEARANCE_COLOR_SCALES = [
   "slate",
   "mauve",
   "sage",
-  "olive",
-  "tomato",
-  "red",
-  "ruby",
-  "crimson",
-  "pink",
-  "plum",
-  "purple",
-  "violet",
-  "iris",
-  "indigo",
-  "blue",
-  "cyan",
-  "teal",
-  "jade",
-  "green",
-  "grass",
-  "brown",
-  "orange",
-  "amber",
-  "yellow",
-  "lime",
-  "mint",
-  "sky",
 ] as const
 
 export type OusiaAppearanceColorScale =
@@ -51,8 +27,25 @@ export type OusiaAppearanceColorScale =
 export type OusiaAppStateSchemaVersion = 2
 export type OusiaThemePreference = "dark" | "light" | "system"
 export type OusiaSendDuringRunMode = "steer" | "queue"
-export type OusiaAgentMode = "standard" | "readOnly" | "noTerminal"
+export type OusiaAgentMode = "standard" | "readOnly" | "noTerminal" | "custom"
+export type OusiaAgentToolName =
+  | "read"
+  | "write"
+  | "edit"
+  | "bash"
+  | "grep"
+  | "find"
+  | "ls"
 export type OusiaLanguage = "zh" | "en"
+export const OUSIA_FONT_FAMILIES = [
+  "system",
+  "pingfang",
+  "microsoftYaHei",
+  "sourceHanSans",
+  "zhuqueFangsong",
+  "lxgwWenkai",
+] as const
+export type OusiaFontFamily = (typeof OUSIA_FONT_FAMILIES)[number]
 
 export type OusiaSessionRecord = {
   id: string
@@ -70,10 +63,16 @@ export type OusiaProjectRecord = {
 export type OusiaAppSettings = {
   appearanceColorScale: OusiaAppearanceColorScale
   theme: OusiaThemePreference
+  appFontFamily: OusiaFontFamily
+  chatFontFamily: OusiaFontFamily
   language: OusiaLanguage
   defaultWorkDir: string
   sendDuringRunMode: OusiaSendDuringRunMode
   agentMode: OusiaAgentMode
+  customAgentTools: OusiaAgentToolName[]
+  autoCompactContext: boolean
+  showContextUsage: boolean
+  continueQueuedMessagesAfterInterrupt: boolean
   thinkingLevel: OusiaThinkingLevel
   modelProvider: string
   modelId: string
@@ -145,12 +144,18 @@ export type OusiaAppStateSaveResult = {
 export const OUSIA_APP_STATE_SCHEMA_VERSION = 2
 
 export const defaultOusiaAppSettings: OusiaAppSettings = {
-  appearanceColorScale: "tea",
+  appearanceColorScale: "paper",
   theme: "light",
+  appFontFamily: "system",
+  chatFontFamily: "system",
   language: "zh",
-  defaultWorkDir: "~/.ousia/workspace",
+  defaultWorkDir: "~/.ousia/chat",
   sendDuringRunMode: "steer",
   agentMode: "standard",
+  customAgentTools: ["read", "write", "edit", "bash", "grep", "find", "ls"],
+  autoCompactContext: true,
+  showContextUsage: false,
+  continueQueuedMessagesAfterInterrupt: true,
   thinkingLevel: "medium",
   modelProvider: "deepseek",
   modelId: "deepseek-v4-flash",
@@ -190,9 +195,31 @@ export function normalizeOusiaModelProviders(
   return [...providers.values()]
 }
 
+type LegacyOusiaFontSettings = {
+  fontFamily?: OusiaFontFamily
+}
+
+type LegacyOusiaSessionInfoSettings = {
+  showContextUsage?: boolean
+  showSessionInfo?: boolean
+}
+
+function normalizeOusiaFontFamily(
+  fontFamily: OusiaFontFamily | undefined
+): OusiaFontFamily | undefined {
+  return fontFamily && OUSIA_FONT_FAMILIES.includes(fontFamily)
+    ? fontFamily
+    : undefined
+}
+
 export function normalizeOusiaAppSettings(
-  settings: Partial<OusiaAppSettings> = {}
+  settings: (
+    Partial<OusiaAppSettings> &
+      LegacyOusiaFontSettings &
+      LegacyOusiaSessionInfoSettings
+  ) = {}
 ): OusiaAppSettings {
+  const legacyFontFamily = normalizeOusiaFontFamily(settings.fontFamily)
   const merged = {
     ...defaultOusiaAppSettings,
     ...settings,
@@ -204,19 +231,70 @@ export function normalizeOusiaAppSettings(
   )
     ? merged.appearanceColorScale
     : defaultOusiaAppSettings.appearanceColorScale
+  const appFontFamily =
+    normalizeOusiaFontFamily(settings.appFontFamily) ??
+    legacyFontFamily ??
+    defaultOusiaAppSettings.appFontFamily
+  const chatFontFamily =
+    normalizeOusiaFontFamily(settings.chatFontFamily) ??
+    legacyFontFamily ??
+    defaultOusiaAppSettings.chatFontFamily
+  const {
+    fontFamily: _legacyFontFamily,
+    showContextUsage: _legacyShowContextUsage,
+    showSessionInfo: _legacyShowSessionInfo,
+    ...normalizedBaseSettings
+  } = merged
+  void _legacyFontFamily
+  void _legacyShowContextUsage
+  void _legacyShowSessionInfo
+
+  const allowedAgentTools = new Set<OusiaAgentToolName>([
+    "read",
+    "write",
+    "edit",
+    "bash",
+    "grep",
+    "find",
+    "ls",
+  ])
+  const customAgentTools = Array.isArray(merged.customAgentTools)
+    ? merged.customAgentTools.filter(
+        (tool): tool is OusiaAgentToolName => allowedAgentTools.has(tool)
+      )
+    : defaultOusiaAppSettings.customAgentTools
 
   return {
-    ...merged,
+    ...normalizedBaseSettings,
     appearanceColorScale,
+    appFontFamily,
+    chatFontFamily,
     language: merged.language === "en" ? "en" : "zh",
     defaultWorkDir:
       merged.defaultWorkDir.trim() || defaultOusiaAppSettings.defaultWorkDir,
     sendDuringRunMode:
       merged.sendDuringRunMode === "queue" ? "queue" : "steer",
     agentMode:
-      merged.agentMode === "readOnly" || merged.agentMode === "noTerminal"
+      merged.agentMode === "readOnly" ||
+      merged.agentMode === "noTerminal" ||
+      merged.agentMode === "custom"
         ? merged.agentMode
         : "standard",
+    customAgentTools: customAgentTools.length
+      ? [...new Set(customAgentTools)]
+      : defaultOusiaAppSettings.customAgentTools,
+    autoCompactContext:
+      typeof merged.autoCompactContext === "boolean"
+        ? merged.autoCompactContext
+        : defaultOusiaAppSettings.autoCompactContext,
+    showContextUsage:
+      typeof merged.showContextUsage === "boolean"
+        ? merged.showContextUsage
+        : defaultOusiaAppSettings.showContextUsage,
+    continueQueuedMessagesAfterInterrupt:
+      typeof merged.continueQueuedMessagesAfterInterrupt === "boolean"
+        ? merged.continueQueuedMessagesAfterInterrupt
+        : defaultOusiaAppSettings.continueQueuedMessagesAfterInterrupt,
     modelProvider,
     modelId: merged.modelId.trim() || defaultOusiaAppSettings.modelId,
     modelProviders: normalizeOusiaModelProviders({
@@ -224,6 +302,25 @@ export function normalizeOusiaAppSettings(
       modelProvider,
     }),
   }
+}
+
+export function resolveOusiaFontFamilyValue(fontFamily: OusiaFontFamily) {
+  if (fontFamily === "pingfang") {
+    return '"PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  }
+  if (fontFamily === "microsoftYaHei") {
+    return '"Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  }
+  if (fontFamily === "sourceHanSans") {
+    return '"Ousia Source Han Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+  }
+  if (fontFamily === "zhuqueFangsong") {
+    return '"Ousia Zhuque Fangsong", "Songti SC", serif'
+  }
+  if (fontFamily === "lxgwWenkai") {
+    return '"Ousia LXGW WenKai", "Kaiti SC", serif'
+  }
+  return '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 }
 
 export function getOusiaModelProviderApiKey(
@@ -328,14 +425,19 @@ export type OusiaChatAttachment = {
     }
 )
 
+export type OusiaChatAttachmentSummary = Pick<
+  OusiaChatAttachment,
+  "id" | "kind" | "mediaType" | "name" | "size"
+> & {
+  dataBase64?: string
+}
+
 export type OusiaTextChatItem = {
   id: string
   role: "user" | "assistant" | "thinking" | "system" | "error"
   text: string
-  attachments?: Pick<
-    OusiaChatAttachment,
-    "id" | "kind" | "mediaType" | "name" | "size"
-  >[]
+  timestamp?: string
+  attachments?: OusiaChatAttachmentSummary[]
   status?: "streaming" | "finished"
 }
 
@@ -359,10 +461,7 @@ export type OusiaChatEvent = {
       type: "user_message"
       id: string
       text: string
-      attachments?: Pick<
-        OusiaChatAttachment,
-        "id" | "kind" | "mediaType" | "name" | "size"
-      >[]
+      attachments?: OusiaChatAttachmentSummary[]
       timestamp: string
     }
   | {
@@ -429,6 +528,19 @@ export type OusiaChatEvent = {
       timestamp: string
     }
   | {
+      type: "context_usage"
+      tokens: number | null
+      contextWindow: number
+      percent: number | null
+      timestamp: string
+    }
+  | {
+      type: "queue_update"
+      steering: string[]
+      followUp: string[]
+      timestamp: string
+    }
+  | {
       type: "error"
       id: string
       text: string
@@ -455,6 +567,10 @@ export type OusiaChatGenerateTitleResult =
       error: string
     }
 
+export type OusiaChatInterruptPayload = OusiaChatContext & {
+  continueQueuedMessages?: boolean
+}
+
 export type OusiaChatInterruptResult = {
   ok: boolean
 }
@@ -464,6 +580,8 @@ export type OusiaChatSendPayload = OusiaChatContext & {
   attachments?: OusiaChatAttachment[]
   sendBehavior?: "normal" | "steer" | "followUp"
   agentMode?: OusiaAgentMode
+  customAgentTools?: OusiaAgentToolName[]
+  autoCompactContext?: boolean
   thinkingLevel: OusiaThinkingLevel
   model: OusiaModelSettings
 }
@@ -471,6 +589,43 @@ export type OusiaChatSendPayload = OusiaChatContext & {
 export type OusiaChatHistoryResult = {
   items: OusiaChatHistoryItem[]
 }
+
+export type OusiaChatExportFormat = "markdown" | "html" | "jsonl"
+
+export type OusiaChatExportPayload = OusiaChatContext & {
+  format: OusiaChatExportFormat
+  markdown?: string
+  agentMode?: OusiaAgentMode
+  customAgentTools?: OusiaAgentToolName[]
+  autoCompactContext?: boolean
+  thinkingLevel: OusiaThinkingLevel
+  model: OusiaModelSettings
+}
+
+export type OusiaChatExportResult =
+  | {
+      ok: true
+      path: string
+    }
+  | {
+      ok: false
+      canceled?: boolean
+      error?: string
+    }
+
+export type OusiaChatContextUsageResult =
+  | {
+      ok: true
+      usage?: {
+        tokens: number | null
+        contextWindow: number
+        percent: number | null
+      }
+    }
+  | {
+      ok: false
+      error: string
+    }
 
 export type OusiaOpenProjectResult =
   | {
@@ -542,3 +697,9 @@ export type OusiaWindowFullscreenEvent = {
 }
 
 export type OusiaWindowFullscreenResult = OusiaWindowFullscreenEvent
+
+export type OusiaWindowZoomEvent = {
+  zoomPercent: number
+}
+
+export type OusiaWindowZoomResult = OusiaWindowZoomEvent

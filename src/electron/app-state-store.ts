@@ -24,9 +24,19 @@ import {
 } from "./window-constants.js"
 
 const appStateFileName = "app-state.json"
+let appStateWriteQueue: Promise<void> = Promise.resolve()
 
 function appStatePath() {
   return join(app.getPath("userData"), appStateFileName)
+}
+
+function enqueueAppStateWrite<T>(write: () => Promise<T>): Promise<T> {
+  const queuedWrite = appStateWriteQueue.then(write, write)
+  appStateWriteQueue = queuedWrite.then(
+    () => undefined,
+    () => undefined
+  )
+  return queuedWrite
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -169,6 +179,34 @@ function normalizeExpandedProjectIds(
     : []
 }
 
+function normalizeDefaultWorkDirProjectReferences(
+  settings: OusiaAppSettings,
+  projects: OusiaProjectRecord[],
+  sessions: OusiaSessionRecord[]
+) {
+  const defaultWorkDir = expandHomePath(settings.defaultWorkDir)
+  const defaultProjectIds = new Set(
+    projects
+      .filter((project) => expandHomePath(project.path) === defaultWorkDir)
+      .map((project) => project.id)
+  )
+  if (!defaultProjectIds.size) {
+    return { projects, sessions }
+  }
+
+  return {
+    projects: projects.filter((project) => !defaultProjectIds.has(project.id)),
+    sessions: sessions.map((session) => {
+      if (!session.projectId || !defaultProjectIds.has(session.projectId)) {
+        return session
+      }
+      const { projectId, ...defaultSession } = session
+      void projectId
+      return defaultSession
+    }),
+  }
+}
+
 function normalizeAppState(value: unknown): OusiaAppState {
   const fallback = createDefaultOusiaAppState()
   if (
@@ -179,8 +217,14 @@ function normalizeAppState(value: unknown): OusiaAppState {
     return fallback
   }
 
-  const projects = normalizeProjects(value.projects)
-  const sessions = normalizeSessions(value.sessions)
+  const settings = normalizeSettings(value.settings as OusiaAppSettings)
+  const normalizedReferences = normalizeDefaultWorkDirProjectReferences(
+    settings,
+    normalizeProjects(value.projects),
+    normalizeSessions(value.sessions)
+  )
+  const projects = normalizedReferences.projects
+  const sessions = normalizedReferences.sessions
   const selectedSessionId =
     typeof value.selectedSessionId === "string" &&
     sessions.some((session) => session.id === value.selectedSessionId)
@@ -189,7 +233,7 @@ function normalizeAppState(value: unknown): OusiaAppState {
 
   return {
     schemaVersion: OUSIA_APP_STATE_SCHEMA_VERSION,
-    settings: normalizeSettings(value.settings as OusiaAppSettings),
+    settings,
     sessions,
     projects,
     shellLayout: normalizeShellLayout(value.shellLayout),
@@ -225,29 +269,41 @@ export async function loadAppState(): Promise<OusiaAppState> {
 export async function saveAppState(
   state: OusiaAppState
 ): Promise<OusiaAppStateSaveResult> {
-  const filePath = appStatePath()
-  mkdirSync(dirname(filePath), { recursive: true })
-  const currentState = await readNormalizedAppStateFromDisk()
-  const normalizedState = normalizeAppState({
-    ...state,
-    windowState: currentState?.windowState ?? state.windowState,
+  return enqueueAppStateWrite(async () => {
+    const filePath = appStatePath()
+    mkdirSync(dirname(filePath), { recursive: true })
+    const currentState = await readNormalizedAppStateFromDisk()
+    const normalizedState = normalizeAppState({
+      ...state,
+      windowState: currentState?.windowState ?? state.windowState,
+    })
+    await writeFile(
+      filePath,
+      `${JSON.stringify(normalizedState, null, 2)}\n`,
+      "utf8"
+    )
+    return { ok: true }
   })
-  await writeFile(filePath, `${JSON.stringify(normalizedState, null, 2)}\n`, "utf8")
-  return { ok: true }
 }
 
 export async function saveWindowState(
   windowState: OusiaWindowState
 ): Promise<OusiaAppStateSaveResult> {
-  const filePath = appStatePath()
-  mkdirSync(dirname(filePath), { recursive: true })
-  const currentState =
-    (await readNormalizedAppStateFromDisk()) ??
-    normalizeAppState(createDefaultOusiaAppState())
-  const normalizedState = normalizeAppState({
-    ...currentState,
-    windowState: normalizeWindowState(windowState),
+  return enqueueAppStateWrite(async () => {
+    const filePath = appStatePath()
+    mkdirSync(dirname(filePath), { recursive: true })
+    const currentState =
+      (await readNormalizedAppStateFromDisk()) ??
+      normalizeAppState(createDefaultOusiaAppState())
+    const normalizedState = normalizeAppState({
+      ...currentState,
+      windowState: normalizeWindowState(windowState),
+    })
+    await writeFile(
+      filePath,
+      `${JSON.stringify(normalizedState, null, 2)}\n`,
+      "utf8"
+    )
+    return { ok: true }
   })
-  await writeFile(filePath, `${JSON.stringify(normalizedState, null, 2)}\n`, "utf8")
-  return { ok: true }
 }

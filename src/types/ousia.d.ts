@@ -20,6 +20,7 @@ import type {
   OusiaTerminalResizePayload,
   OusiaTerminalWritePayload,
   OusiaWindowFullscreenEvent,
+  OusiaWindowZoomEvent,
 } from "../electron/chat-types"
 
 declare global {
@@ -41,6 +42,7 @@ declare global {
       openProjectDirectory(): Promise<OusiaOpenProjectResult>
       selectDirectory(): Promise<OusiaSelectDirectoryResult>
       getWindowFullscreenState(): Promise<OusiaWindowFullscreenEvent>
+      getWindowZoomState(): Promise<OusiaWindowZoomEvent>
       createTerminal(
         payload: OusiaTerminalCreatePayload
       ): Promise<OusiaTerminalCreateResult>
@@ -59,6 +61,9 @@ declare global {
       onChatEvent(callback: (event: OusiaChatEvent) => void): () => void
       onWindowFullscreenChange(
         callback: (event: OusiaWindowFullscreenEvent) => void
+      ): () => void
+      onWindowZoomChange(
+        callback: (event: OusiaWindowZoomEvent) => void
       ): () => void
     }
   }
