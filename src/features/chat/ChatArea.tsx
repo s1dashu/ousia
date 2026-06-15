@@ -17,7 +17,7 @@ import {
   ChevronDown,
   Plus,
   SlidersHorizontal,
-} from "@/components/icons/nucleo-icons"
+} from "@/components/icons/huge-icons"
 
 import type {
   AppSettings,
@@ -897,8 +897,10 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-none border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-chat-composer-shadow)] dark:bg-card",
-        isTerminalPanelCollapsed ? "" : "border-r-0"
+        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-tr-[var(--ousia-chat-panel-radius)] rounded-br-none border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-chat-composer-shadow)] dark:bg-card",
+        isTerminalPanelCollapsed
+          ? "rounded-br-[var(--ousia-chat-panel-radius)]"
+          : "border-r-0"
       )}
       style={style}
       onKeyDownCapture={handleEscapeKey}

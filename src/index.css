@@ -153,6 +153,8 @@
     --ousia-chat-composer-shadow: 0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.56);
     --ousia-chat-composer-shadow-focus: 0 1px 3px rgba(24, 24, 27, 0.045), 0 10px 24px -15px rgba(24, 24, 27, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.64);
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(24, 24, 27, 0.08), 0 2px 7px -5px rgba(24, 24, 27, 0.1), 0 12px 28px -18px rgba(24, 24, 27, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.56);
+    --ousia-sidebar-selected-radius: 16px;
+    --ousia-sidebar-selected-shadow: 0 0 0 0.5px rgba(24, 24, 27, 0.035), 0 1px 2px rgba(24, 24, 27, 0.035), 0 4px 10px -8px rgba(24, 24, 27, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.62);
     --ousia-settings-content-max-width: 44rem;
     --ousia-settings-gutter: 32px;
     --background: #fdfbf9;
@@ -1099,6 +1101,7 @@
     --ousia-chat-composer-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.035);
     --ousia-chat-composer-shadow-focus: 0 10px 24px -14px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.055);
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+    --ousia-sidebar-selected-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.05), 0 1px 2px rgba(0, 0, 0, 0.24), 0 4px 10px -8px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 @layer base {
@@ -1154,6 +1157,7 @@
     .ousia-chat-composer-ring::after {
       corner-shape: squircle;
     }
+
   }
 
   .ousia-chat-composer-ring::after {

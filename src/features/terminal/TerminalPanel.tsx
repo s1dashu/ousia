@@ -4,7 +4,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links"
 import { Terminal as XtermTerminal, type ITheme } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
 
-import { SquareTerminal } from "@/components/icons/nucleo-icons"
+import { SquareTerminal } from "@/components/icons/huge-icons"
 import { Button } from "@/components/ui/button"
 import type { ResolvedTheme } from "@/components/theme-provider"
 import { getMessages } from "@/app/i18n"

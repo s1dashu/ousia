@@ -285,12 +285,48 @@ export function App() {
   const selectedContextUsage = selectedChatKey
     ? contextUsageBySession[selectedChatKey]
     : undefined
+  const createAppStateSnapshot = useCallback(
+    (nextSettings: AppSettings = settings): InitialAppState => ({
+      schemaVersion: APP_STATE_SCHEMA_VERSION,
+      settings: nextSettings,
+      sessions,
+      projects,
+      shellLayout: {
+        sidebarWidth,
+        terminalPanelWidth,
+        isSidebarCollapsed,
+        isTerminalPanelCollapsed,
+        sidebarSectionOrder,
+      },
+      windowState: initialState.windowState,
+      expandedProjectIds: expandedProjectIds.filter((projectId) =>
+        projects.some((project) => project.id === projectId)
+      ),
+      selectedSessionId: selectedSession?.id ?? "",
+    }),
+    [
+      expandedProjectIds,
+      initialState.windowState,
+      isSidebarCollapsed,
+      isTerminalPanelCollapsed,
+      projects,
+      selectedSession?.id,
+      sessions,
+      settings,
+      sidebarSectionOrder,
+      sidebarWidth,
+      terminalPanelWidth,
+    ]
+  )
   const handleSettingsChange = useCallback(
     (nextSettings: AppSettings) => {
       const normalizedSettings = normalizeOusiaAppSettings(nextSettings)
       setSettings(normalizedSettings)
+      if (isAppStateLoaded) {
+        void saveAppState(createAppStateSnapshot(normalizedSettings))
+      }
     },
-    []
+    [createAppStateSnapshot, isAppStateLoaded]
   )
   const flushPendingChatEvents = useCallback(() => {
     pendingChatEventsFrameRef.current = 0
@@ -448,38 +484,8 @@ export function App() {
     if (!isAppStateLoaded) {
       return
     }
-    void saveAppState({
-      schemaVersion: APP_STATE_SCHEMA_VERSION,
-      settings,
-      sessions,
-      projects,
-      shellLayout: {
-        sidebarWidth,
-        terminalPanelWidth,
-        isSidebarCollapsed,
-        isTerminalPanelCollapsed,
-        sidebarSectionOrder,
-      },
-      windowState: initialState.windowState,
-      expandedProjectIds: expandedProjectIds.filter((projectId) =>
-        projects.some((project) => project.id === projectId)
-      ),
-      selectedSessionId: selectedSession?.id ?? "",
-    })
-  }, [
-    isAppStateLoaded,
-    expandedProjectIds,
-    isSidebarCollapsed,
-    isTerminalPanelCollapsed,
-    projects,
-    sessions,
-    settings,
-    selectedSession?.id,
-    sidebarSectionOrder,
-    sidebarWidth,
-    terminalPanelWidth,
-    initialState.windowState,
-  ])
+    void saveAppState(createAppStateSnapshot())
+  }, [createAppStateSnapshot, isAppStateLoaded])
 
   useEffect(() => {
     sessionsRef.current = sessions
@@ -859,7 +865,7 @@ export function App() {
       })
   }
 
-  function handleBranchFromMessage(messageId: string) {
+  async function handleBranchFromMessage(messageId: string) {
     if (!selectedSession || !selectedChatKey) {
       return
     }
@@ -888,11 +894,41 @@ export function App() {
             }
       )
     const branchKey = chatKey(currentProject.path, branchSession.id)
+    const branchSourceItem = selectedItems[branchIndex]
+
+    let resolvedBranchItems = branchItems
+    if (window.ousia) {
+      const result = await window.ousia
+        .branchChat({
+          projectPath: currentProject.path,
+          sessionId: selectedSession.id,
+          messageId,
+          messageText:
+            branchSourceItem.role === "assistant"
+              ? branchSourceItem.text
+              : undefined,
+          targetSessionId: branchSession.id,
+        })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      if (!result.ok) {
+        appendLocalEvent({
+          type: "error",
+          id: `branch-${Date.now()}`,
+          text: result.error,
+          timestamp: now,
+        })
+        return
+      }
+      resolvedBranchItems = result.items
+    }
 
     setSessions((current) => [branchSession, ...current])
     setItemsBySession((current) => ({
       ...current,
-      [branchKey]: branchItems,
+      [branchKey]: resolvedBranchItems,
     }))
     if (branchSession.projectId) {
       setExpandedProjectIds((current) =>
@@ -1172,6 +1208,8 @@ export function App() {
         <div className="flex h-full min-w-0 overflow-visible">
           {isSettingsOpen ? (
             <SettingsPage
+              isSidebarCollapsed={isSidebarCollapsed}
+              isWindowFullscreen={isWindowFullscreen}
               modelRegistry={modelRegistry}
               settings={settings}
               onClose={() => setIsSettingsOpen(false)}

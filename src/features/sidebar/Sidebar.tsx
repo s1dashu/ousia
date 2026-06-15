@@ -31,7 +31,7 @@ import {
   Plus,
   Settings,
   Trash2,
-} from "@/components/icons/nucleo-icons"
+} from "@/components/icons/huge-icons"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages, type I18nMessages } from "@/app/i18n"
@@ -50,14 +50,16 @@ const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_4px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarRowXClass = "pl-2 pr-0"
-const sidebarListGapClass = "flex flex-col gap-px"
+const sidebarSessionRowXClass =
+  "-mx-[5px] w-[calc(100%+10px)] pl-[13px] pr-[5px]"
+const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = "pl-2 pr-0"
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
 const sidebarRowStateClass =
-  "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)] hover:shadow-[4px_0_0_var(--sidebar-accent)]"
+  "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)]"
 const sidebarSelectedRowClass =
-  "bg-[var(--sidebar-accent)] shadow-[4px_0_0_var(--sidebar-accent)]"
+  "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
 const sidebarGhostActionClass =
   "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
 const defaultSessionGroupId = "default"
@@ -257,18 +259,18 @@ function SortableSessionRow({
     transform: CSS.Transform.toString(transform),
   }
   const isSessionWorking = sessionRunStatus === "working"
+  const isSelectedSession = session.id === selectedSessionId
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={[
-        "group/session font-radix-regular relative grid h-9 w-full cursor-grab items-center rounded-lg text-sm active:cursor-grabbing",
-        sidebarRowStateClass,
+        "group/session ousia-squircle-corners font-radix-regular relative grid h-8.5 cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing",
+        isSelectedSession ? sidebarSelectedRowClass : sidebarRowStateClass,
         projectChild ? "gap-x-0 gap-y-1" : "gap-1",
         projectChild ? sidebarProjectSessionGridClass : sidebarSingleActionGridClass,
-        sidebarRowXClass,
-        session.id === selectedSessionId ? sidebarSelectedRowClass : "",
+        sidebarSessionRowXClass,
         isDragging ? "opacity-35" : "",
       ].join(" ")}
       onClick={() => {

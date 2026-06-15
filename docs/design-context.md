@@ -16,11 +16,12 @@ workspace, or extension-management UI.
 
 ## Icon Policy
 
-- Use Lucide for ordinary utility icons and controls.
-- Use Solar icons only for high-expression navigation or major workspace-level
-  signals.
-- Use the Lucide `SquareTerminal` icon for the right-panel open/collapse
-  action.
+- Use HugeIcons for all interface icons, including ordinary utility controls
+  and workspace-level signals.
+- Route icon imports through `src/components/icons/huge-icons.tsx` so icon
+  sizing and stroke handling stay consistent.
+- Use the exported `SquareTerminal` HugeIcons mapping for the right-panel
+  open/collapse action.
 
 ## Terminal Panel
 

@@ -55,9 +55,8 @@ match the task.
   `0.5px` foreground/10 border and the shared
   `--ousia-floating-panel-shadow`, which is slightly stronger than the composer
   shadow; avoid thicker borders, diffuse shadows, or ad hoc panel shadows.
-- Follow the project icon policy in `docs/design-context.md`: use Lucide for
-  ordinary utility icons and Solar icons only for high-expression navigation or
-  major workspace signals.
+- Follow the project icon policy in `docs/design-context.md`: use HugeIcons for
+  interface icons and route imports through `src/components/icons/huge-icons.tsx`.
 - Before changing shadcn/ui primitives, compare against the generated reference
   under `ref/`; see `docs/shadcn-reference.md`.
 - When changing agent behavior, verify whether the change belongs in renderer

@@ -590,6 +590,22 @@ export type OusiaChatHistoryResult = {
   items: OusiaChatHistoryItem[]
 }
 
+export type OusiaChatBranchPayload = OusiaChatContext & {
+  messageId: string
+  messageText?: string
+  targetSessionId: string
+}
+
+export type OusiaChatBranchResult =
+  | {
+      ok: true
+      items: OusiaChatHistoryItem[]
+    }
+  | {
+      ok: false
+      error: string
+    }
+
 export type OusiaChatExportFormat = "markdown" | "html" | "jsonl"
 
 export type OusiaChatExportPayload = OusiaChatContext & {

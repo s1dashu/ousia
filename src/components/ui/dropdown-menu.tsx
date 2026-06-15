@@ -1,6 +1,6 @@
 import * as React from "react"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
-import { Check, ChevronRight } from "@/components/icons/nucleo-icons"
+import { Check, ChevronRight } from "@/components/icons/huge-icons"
 
 import { cn } from "@/lib/utils"
 

@@ -11,7 +11,7 @@ import {
   Search,
   Sparkles,
   Terminal,
-} from "@/components/icons/nucleo-icons"
+} from "@/components/icons/huge-icons"
 
 import type { getMessages } from "@/app/i18n"
 import type { ChatItem } from "@/features/chat/chat-events"

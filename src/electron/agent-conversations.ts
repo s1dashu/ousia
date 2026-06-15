@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from "node:fs"
+import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { homedir } from "node:os"
@@ -11,6 +11,7 @@ import {
   ModelRegistry,
   SessionManager,
   SettingsManager,
+  CURRENT_SESSION_VERSION,
   type AgentSession,
   type AgentSessionEvent,
   type SessionMessageEntry,
@@ -18,6 +19,8 @@ import {
 
 import type {
   OusiaChatContext,
+  OusiaChatBranchPayload,
+  OusiaChatBranchResult,
   OusiaChatEvent,
   OusiaChatHistoryItem,
   OusiaChatHistoryResult,
@@ -49,6 +52,8 @@ type AgentConversationModuleOptions = {
   enabledTools: string[]
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
 }
+
+type PiSessionEntry = ReturnType<SessionManager["getEntries"]>[number]
 
 const require = createRequire(__filename)
 
@@ -557,6 +562,100 @@ function messageEntryToHistoryItems(
   }
 }
 
+function piEntryIdFromChatItemId(messageId: string) {
+  return messageId
+    .replace(/-text-\d+$/, "")
+    .replace(/-thinking-\d+$/, "")
+}
+
+function assistantTextFromSessionEntry(entry: PiSessionEntry) {
+  if (entry.type !== "message") {
+    return ""
+  }
+  const message = entry.message as unknown as Record<string, unknown>
+  if (message.role !== "assistant") {
+    return ""
+  }
+  return textFromContent(message.content)
+}
+
+function findBranchLeafId(
+  sessionManager: SessionManager,
+  messageId: string,
+  messageText: string | undefined
+) {
+  const directId = piEntryIdFromChatItemId(messageId)
+  if (sessionManager.getEntry(directId)) {
+    return directId
+  }
+
+  const normalizedMessageText = messageText?.trim()
+  if (!normalizedMessageText) {
+    return undefined
+  }
+  const entries = sessionManager.getEntries()
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index]
+    if (assistantTextFromSessionEntry(entry).trim() === normalizedMessageText) {
+      return entry.id
+    }
+  }
+  return undefined
+}
+
+function createBranchedSessionFile({
+  cwd,
+  parentSessionFile,
+  sourceSessionManager,
+  targetConversationDir,
+  targetSessionId,
+  leafId,
+}: {
+  cwd: string
+  parentSessionFile: string
+  sourceSessionManager: SessionManager
+  targetConversationDir: string
+  targetSessionId: string
+  leafId: string
+}) {
+  const path = sourceSessionManager.getBranch(leafId)
+  if (!path.length) {
+    throw new Error(`Entry ${leafId} not found`)
+  }
+
+  mkdirSync(targetConversationDir, { recursive: true })
+  const timestamp = now()
+  const fileTimestamp = timestamp.replace(/[:.]/g, "-")
+  const targetFile = join(
+    targetConversationDir,
+    `${fileTimestamp}_${targetSessionId}.jsonl`
+  )
+  const header = {
+    type: "session",
+    version: CURRENT_SESSION_VERSION,
+    id: targetSessionId,
+    timestamp,
+    cwd,
+    parentSession: parentSessionFile,
+  }
+  let parentId: string | null = null
+  const entries = path
+    .filter((entry) => entry.type !== "label")
+    .map((entry) => {
+      const nextEntry = { ...entry, parentId }
+      parentId = entry.id
+      return nextEntry
+    })
+
+  writeFileSync(
+    targetFile,
+    [header, ...entries].map((entry) => JSON.stringify(entry)).join("\n") +
+      "\n",
+    { encoding: "utf8", flag: "wx" }
+  )
+  return targetFile
+}
+
 async function findRecentPiSessionFile(cwd: string, conversationDir: string) {
   if (!existsSync(conversationDir)) {
     return undefined
@@ -598,6 +697,79 @@ export function createAgentConversationModule({
       )
     } catch {
       // Context usage is informative only; chat errors are emitted elsewhere.
+    }
+  }
+
+  async function branchChat(
+    payload: OusiaChatBranchPayload
+  ): Promise<OusiaChatBranchResult> {
+    const cwd = expandHomePath(payload.projectPath)
+    const sourceConversationDir = getConversationDir(payload)
+    const sourceSessionFile = await findRecentPiSessionFile(
+      cwd,
+      sourceConversationDir
+    )
+    if (!sourceSessionFile) {
+      return {
+        ok: false,
+        error: "当前会话还没有可分支的 pi 历史。",
+      }
+    }
+
+    try {
+      const sourceSessionManager = SessionManager.open(
+        sourceSessionFile,
+        sourceConversationDir,
+        cwd
+      )
+      const leafId = findBranchLeafId(
+        sourceSessionManager,
+        payload.messageId,
+        payload.messageText
+      )
+      if (!leafId) {
+        return {
+          ok: false,
+          error: "没有在 pi 会话树中找到这条消息，无法创建真实分支。",
+        }
+      }
+
+      const targetContext = {
+        projectPath: payload.projectPath,
+        sessionId: payload.targetSessionId,
+      }
+      const targetConversationDir = getConversationDir(targetContext)
+      const targetFile = createBranchedSessionFile({
+        cwd,
+        parentSessionFile: sourceSessionFile,
+        sourceSessionManager,
+        targetConversationDir,
+        targetSessionId: payload.targetSessionId,
+        leafId,
+      })
+      sessionPromises.delete(sessionKey(targetContext))
+      const targetSessionManager = SessionManager.open(
+        targetFile,
+        targetConversationDir,
+        cwd
+      )
+      const items: OusiaChatHistoryItem[] = []
+      targetSessionManager.getBranch().forEach((entry) => {
+        if (entry.type === "message") {
+          messageEntryToHistoryItems(entry, items)
+        }
+      })
+      return { ok: true, items }
+    } catch (error) {
+      writeRuntimeLog("chat.branch", "error", {
+        payload,
+        sourceSessionFile,
+        error,
+      })
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   }
 
@@ -1322,6 +1494,7 @@ export function createAgentConversationModule({
   }
 
   return {
+    branchChat,
     exportChat,
     getContextUsage,
     getChatHistory,

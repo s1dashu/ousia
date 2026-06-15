@@ -7,7 +7,7 @@ import {
   Plus,
   Trash2,
   X,
-} from "@/components/icons/nucleo-icons"
+} from "@/components/icons/huge-icons"
 
 import { getMessages, languageOptions } from "@/app/i18n"
 import { modelsForProvider, providerLabel } from "@/app/model-presets"
@@ -57,6 +57,8 @@ const appearanceColorScales: Array<{
 ]
 
 type SettingsPageProps = {
+  isSidebarCollapsed: boolean
+  isWindowFullscreen: boolean
   modelRegistry: OusiaModelRegistryResult | undefined
   onClose: () => void
   onSettingsChange: (settings: AppSettings) => void
@@ -72,6 +74,8 @@ const settingsHelpClass = "text-xs leading-5 text-muted-foreground"
 const settingsControlClass = "ousia-squircle-corners w-full rounded-xl"
 
 export function SettingsPage({
+  isSidebarCollapsed,
+  isWindowFullscreen,
   modelRegistry,
   onClose,
   onSettingsChange,
@@ -204,7 +208,7 @@ export function SettingsPage({
     const provider = modelRegistry?.providers.find((item) => item.id === id)
     if (
       !provider ||
-      settings.modelProviders.some((configured) => configured.id === id) ||
+      draft.modelProviders.some((configured) => configured.id === id) ||
       (!newProviderUsesEnvironment && !newProviderApiKey.trim())
     ) {
       return
@@ -214,7 +218,7 @@ export function SettingsPage({
       modelProvider: id,
       modelId: nextModelId,
       modelProviders: [
-        ...settings.modelProviders,
+        ...draft.modelProviders,
         {
           id,
           apiKey: newProviderUsesEnvironment ? "" : newProviderApiKey.trim(),
@@ -356,10 +360,18 @@ export function SettingsPage({
   return (
     <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
       <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pr-4 pl-4">
-        <div className="window-drag flex min-w-0 items-center self-stretch">
-          <h1 className="window-drag truncate text-sm leading-none font-normal">
-            {t.app.settings}
-          </h1>
+        <div
+          className={cn(
+            "window-drag flex min-w-0 items-center self-stretch",
+            isSidebarCollapsed &&
+              (isWindowFullscreen ? "pl-10" : "pl-[108px]")
+          )}
+        >
+          <div className="window-drag flex min-w-0 flex-1 items-center self-stretch pl-2">
+            <h1 className="window-drag truncate text-sm leading-none font-normal">
+              {t.app.settings}
+            </h1>
+          </div>
         </div>
         <div className="window-drag flex shrink-0 items-center gap-1">
           <Button

@@ -3,9 +3,9 @@ import {
   Copy,
   FileImage,
   FileText,
+  GitBranchPlus,
   Paperclip,
-} from "@/components/icons/nucleo-icons"
-import { GitBranchPlus } from "lucide-react"
+} from "@/components/icons/huge-icons"
 import { Streamdown } from "streamdown"
 import "streamdown/styles.css"
 
@@ -147,7 +147,7 @@ function AssistantMessageFooter({
     : ""
 
   return (
-    <div className="mt-2 flex h-5 items-center gap-2 text-muted-foreground/70 opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100">
+    <div className="mt-2 flex h-5 items-center gap-1.5 text-muted-foreground/70 opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100">
       <button
         type="button"
         className="flex size-5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
@@ -157,7 +157,7 @@ function AssistantMessageFooter({
           void navigator.clipboard?.writeText(item.text)
         }}
       >
-        <Copy size={16} />
+        <Copy size={16} strokeWidth={1.5} />
       </button>
       <button
         type="button"
@@ -166,7 +166,7 @@ function AssistantMessageFooter({
         title={t.chat.branchFromMessage}
         onClick={() => onBranchFromMessage(item.id)}
       >
-        <GitBranchPlus size={16} strokeWidth={1.8} />
+        <GitBranchPlus size={16} strokeWidth={1.5} />
       </button>
       {timeLabel ? (
         <span className="text-xs leading-none tabular-nums">{timeLabel}</span>

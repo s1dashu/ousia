@@ -12,6 +12,7 @@ import { loadAppState, saveAppState } from "./app-state-store.js"
 import { generateChatTitleWithUtilityModel } from "./chat-title-generator.js"
 import type {
   OusiaAppState,
+  OusiaChatBranchPayload,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatExportPayload,
@@ -85,6 +86,10 @@ ipcMain.handle(
 
 ipcMain.handle("ousia:chat:history", (_event, payload: OusiaChatContext) =>
   agentConversations.getChatHistory(payload)
+)
+
+ipcMain.handle("ousia:chat:branch", (_event, payload: OusiaChatBranchPayload) =>
+  agentConversations.branchChat(payload)
 )
 
 ipcMain.handle(

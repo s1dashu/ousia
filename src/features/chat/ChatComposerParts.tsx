@@ -6,7 +6,7 @@ import {
   SendHorizontal,
   Trash2,
   X,
-} from "@/components/icons/nucleo-icons"
+} from "@/components/icons/huge-icons"
 
 import type { getMessages } from "@/app/i18n"
 import { Button } from "@/components/ui/button"

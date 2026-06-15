@@ -6,7 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-} from "@/components/icons/nucleo-icons"
+} from "@/components/icons/huge-icons"
 
 import { cn } from "@/lib/utils"
 

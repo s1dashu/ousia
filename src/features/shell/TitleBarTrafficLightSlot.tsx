@@ -1,4 +1,4 @@
-import { PanelLeft } from "@/components/icons/nucleo-icons"
+import { PanelLeft } from "@/components/icons/huge-icons"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
