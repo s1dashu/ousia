@@ -1,6 +1,7 @@
-import { PanelLeft } from "lucide-react"
+import { PanelLeft } from "@/components/icons/nucleo-icons"
 
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 export function TitleBarTrafficLightSlot({
   isFullscreen,
@@ -15,22 +16,29 @@ export function TitleBarTrafficLightSlot({
 }
 
 export function TitleBarSidebarToggle({
+  className,
   isFullscreen,
   label,
   onClick,
 }: {
+  className?: string
   isFullscreen: boolean
   label: string
   onClick: () => void
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div
+      className={cn(
+        "window-no-drag flex h-10 shrink-0 items-center gap-2",
+        className
+      )}
+    >
       <TitleBarTrafficLightSlot isFullscreen={isFullscreen} />
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="window-no-drag"
+        className="window-no-drag pointer-events-auto hover:bg-transparent focus-visible:bg-transparent"
         aria-label={label}
         onClick={onClick}
       >

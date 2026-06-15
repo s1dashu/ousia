@@ -3,8 +3,8 @@ import { FitAddon } from "@xterm/addon-fit"
 import { WebLinksAddon } from "@xterm/addon-web-links"
 import { Terminal as XtermTerminal, type ITheme } from "@xterm/xterm"
 import "@xterm/xterm/css/xterm.css"
-import { SquareTerminal } from "lucide-react"
 
+import { SquareTerminal } from "@/components/icons/nucleo-icons"
 import { Button } from "@/components/ui/button"
 import type { ResolvedTheme } from "@/components/theme-provider"
 import { getMessages } from "@/app/i18n"
@@ -286,7 +286,7 @@ export function TerminalPanel({
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-col overflow-hidden border border-border/60 ${
+      className={`flex h-full min-w-0 flex-1 flex-col overflow-hidden border border-border/60 ${
         isJoinedToChat
           ? "rounded-l-none rounded-r-[var(--ousia-panel-radius)] border-l-0"
           : "rounded-[var(--ousia-panel-radius)]"
@@ -300,16 +300,16 @@ export function TerminalPanel({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className="window-no-drag size-6 rounded-md"
+          className="window-no-drag size-6 rounded-md hover:bg-transparent focus-visible:bg-transparent"
           aria-label={t.terminal.collapse}
           onClick={onCollapse}
         >
-          <SquareTerminal size={18} />
+          <SquareTerminal size={18} strokeWidth={1.5} />
         </Button>
       </header>
       <div
         ref={containerRef}
-        className="min-h-0 flex-1 overflow-hidden p-3"
+        className="ousia-terminal-viewport min-h-0 w-full flex-1 overflow-hidden p-3"
         onMouseDown={() => terminalRef.current?.focus()}
       />
     </div>

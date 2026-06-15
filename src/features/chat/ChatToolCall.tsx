@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState, type ReactElement } from "react"
 import {
   ChevronDown,
   CircleAlert,
@@ -11,8 +11,7 @@ import {
   Search,
   Sparkles,
   Terminal,
-  type LucideIcon,
-} from "lucide-react"
+} from "@/components/icons/nucleo-icons"
 
 import type { getMessages } from "@/app/i18n"
 import type { ChatItem } from "@/features/chat/chat-events"
@@ -23,6 +22,11 @@ import {
 import { cn } from "@/lib/utils"
 
 type ToolChatItem = Extract<ChatItem, { role: "tool" }>
+type ToolStatusIcon = (props: {
+  className?: string
+  size?: number
+  strokeWidth?: number
+}) => ReactElement
 
 export function ToolCallView({
   item,
@@ -179,7 +183,7 @@ function getToolStatus(
   t: ReturnType<typeof getMessages>
 ): {
   label: string
-  icon: LucideIcon
+  icon: ToolStatusIcon
   className: string
   isSpinning: boolean
 } {

@@ -31,17 +31,17 @@ import {
   Plus,
   Settings,
   Trash2,
-} from "lucide-react"
+} from "@/components/icons/nucleo-icons"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages, type I18nMessages } from "@/app/i18n"
 import { Button } from "@/components/ui/button"
 import type { OusiaLanguage, OusiaSidebarSectionId } from "@/electron/chat-types"
-import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 
 const sidebarAddIconSize = 18
 const sidebarFolderIconSize = 18
 const sidebarMenuIconSize = 18
+const sidebarSectionIconSize = 14
 const sidebarIconStrokeWidth = 1.5
 const sidebarActionButtonClass = "size-6 justify-self-end"
 const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
@@ -55,8 +55,9 @@ const sidebarSectionHeaderXClass = "pl-2 pr-0"
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
 const sidebarRowStateClass =
-  "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)]"
-const sidebarSelectedRowClass = "bg-[var(--sidebar-accent)]"
+  "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)] hover:shadow-[4px_0_0_var(--sidebar-accent)]"
+const sidebarSelectedRowClass =
+  "bg-[var(--sidebar-accent)] shadow-[4px_0_0_var(--sidebar-accent)]"
 const sidebarGhostActionClass =
   "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
 const defaultSessionGroupId = "default"
@@ -87,14 +88,14 @@ type SidebarProps = {
   ) => void
   onReorderSessions: (sourceSessionId: string, targetSessionId: string) => void
   onSelectSession: (sessionId: string) => void
-  onToggleSidebar: () => void
+  onScrollTargetHandled: () => void
   expandedProjectIds: string[]
   projects: ProjectRecord[]
   selectedSessionId: string
   sidebarSectionOrder: OusiaSidebarSectionId[]
+  scrollTargetSessionId: string
   sessionRunStatusById: Record<string, "idle" | "working">
   sessions: SessionRecord[]
-  isWindowFullscreen: boolean
   language: OusiaLanguage
   style: CSSProperties
 }
@@ -176,6 +177,10 @@ function normalizeSidebarSectionOrder(
       [...sectionOrder, "sessions", "projects"].filter(isSidebarSectionId)
     ),
   ]
+}
+
+function escapeAttributeSelectorValue(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 }
 
 function DragPreview({
@@ -276,8 +281,9 @@ function SortableSessionRow({
           onStartRename(session)
         }
       }}
-      {...attributes}
-      {...listeners}
+      {...(editingSessionId === session.id ? {} : attributes)}
+      {...(editingSessionId === session.id ? {} : listeners)}
+      data-sidebar-session-id={session.id}
     >
       {projectChild ? <div aria-hidden="true" /> : null}
       {editingSessionId === session.id ? (
@@ -290,6 +296,7 @@ function SortableSessionRow({
           onBlur={() => onCommitRename(session)}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
+          onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault()
@@ -305,6 +312,10 @@ function SortableSessionRow({
           type="button"
           className="min-w-0 truncate text-left outline-none focus-visible:text-sidebar-accent-foreground"
           onMouseDown={handleTextButtonMouseDown}
+          onDoubleClick={(event) => {
+            event.stopPropagation()
+            onStartRename(session)
+          }}
         >
           {session.title}
         </button>
@@ -405,18 +416,18 @@ function SortableProjectSection({
         <button
           type="button"
           aria-expanded={isExpanded}
-          className="font-radix-regular h-full min-w-0 rounded-md pr-1 text-left text-sm outline-none focus-visible:ring-0"
+          className="font-radix-regular flex h-full min-w-0 items-center rounded-md pr-1 text-left text-sm outline-none focus-visible:ring-0"
           title={project.path}
           onMouseDown={handleTextButtonMouseDown}
           onClick={() => onToggleProject(project.id)}
         >
-          <span className="min-w-0 truncate">{project.name}</span>
+          <span className="block min-w-0 flex-1 truncate">{project.name}</span>
         </button>
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
-          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action opacity-0 transition-opacity`}
+          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
           aria-label={t.sidebar.removeProject(project.name)}
           onClick={(event) => {
             event.stopPropagation()
@@ -435,7 +446,7 @@ function SortableProjectSection({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action opacity-0 transition-opacity`}
+          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
           aria-label={t.sidebar.newProjectSession(project.name)}
           onClick={(event) => {
             event.stopPropagation()
@@ -502,17 +513,16 @@ function SortableSidebarSection({
         {...listeners}
       >
         <div className="flex min-w-0 items-center gap-1">
-          <div className="font-radix-medium min-w-0 truncate text-sm text-muted-foreground">
+          <div className="font-radix-regular min-w-0 truncate text-sm text-muted-foreground">
             {label}
           </div>
           <ChevronDown
             aria-hidden="true"
             className={[
-              "shrink-0 text-muted-foreground transition-[opacity,transform] duration-150 group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100",
-              isCollapsed ? "opacity-100" : "opacity-0",
+              "shrink-0 text-muted-foreground opacity-0 transition-[opacity,transform] duration-150 group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100",
               isCollapsed ? "-rotate-90" : "rotate-0",
             ].join(" ")}
-            size={18}
+            size={sidebarSectionIconSize}
             strokeWidth={sidebarIconStrokeWidth}
           />
           <span className="sr-only">{toggleLabel}</span>
@@ -526,13 +536,16 @@ function SortableSidebarSection({
           onMouseDown={handleTextButtonMouseDown}
           onClick={(event) => {
             event.stopPropagation()
+            if (isCollapsed) {
+              onToggleCollapsed(id)
+            }
             onAction()
           }}
           onPointerDown={(event) => event.stopPropagation()}
         >
           <Plus
             className="text-muted-foreground"
-            size={sidebarAddIconSize}
+            size={sidebarSectionIconSize}
             strokeWidth={sidebarIconStrokeWidth}
           />
         </Button>
@@ -555,14 +568,14 @@ export function Sidebar({
   onReorderSidebarSections,
   onReorderSessions,
   onSelectSession,
-  onToggleSidebar,
+  onScrollTargetHandled,
   expandedProjectIds,
   projects,
   selectedSessionId,
   sidebarSectionOrder,
+  scrollTargetSessionId,
   sessionRunStatusById,
   sessions,
-  isWindowFullscreen,
   language,
   style,
 }: SidebarProps) {
@@ -577,6 +590,7 @@ export function Sidebar({
   >([])
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
   const editingInputRef = useRef<HTMLInputElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
   const sidebarInnerWidth =
     typeof style.width === "number" ? Math.max(176, style.width - 24) : 220
@@ -606,6 +620,41 @@ export function Sidebar({
     editingInputRef.current?.focus()
     editingInputRef.current?.select()
   }, [editingSessionId])
+
+  useEffect(() => {
+    if (!scrollTargetSessionId) {
+      return
+    }
+
+    let animationFrameId = 0
+    let nextAnimationFrameId = 0
+    animationFrameId = window.requestAnimationFrame(() => {
+      nextAnimationFrameId = window.requestAnimationFrame(() => {
+        const container = scrollContainerRef.current
+        const target = container?.querySelector<HTMLElement>(
+          `[data-sidebar-session-id="${escapeAttributeSelectorValue(scrollTargetSessionId)}"]`
+        )
+        if (container && target) {
+          const containerRect = container.getBoundingClientRect()
+          const targetRect = target.getBoundingClientRect()
+          container.scrollTo({
+            top:
+              container.scrollTop +
+              targetRect.top -
+              containerRect.top -
+              8,
+            behavior: "smooth",
+          })
+        }
+        onScrollTargetHandled()
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+      window.cancelAnimationFrame(nextAnimationFrameId)
+    }
+  }, [onScrollTargetHandled, scrollTargetSessionId])
 
   function startRenameSession(session: SessionRecord) {
     setEditingSessionId(session.id)
@@ -852,18 +901,15 @@ export function Sidebar({
 
   return (
     <aside
-      className="flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
+      className="ousia-sidebar-shell flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
       style={style}
     >
-      <div className="window-drag flex h-10 shrink-0 items-center px-4">
-        <TitleBarSidebarToggle
-          isFullscreen={isWindowFullscreen}
-          label={t.sidebar.collapse}
-          onClick={onToggleSidebar}
-        />
-      </div>
+      <div className="window-drag h-10 shrink-0" />
 
-      <div className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-3 pb-2">
+      <div
+        ref={scrollContainerRef}
+        className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-3 pb-2"
+      >
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}

@@ -2,7 +2,11 @@
 
 import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
-import { Check, ChevronDown, ChevronUp } from "lucide-react"
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+} from "@/components/icons/nucleo-icons"
 
 import { cn } from "@/lib/utils"
 
@@ -94,7 +98,7 @@ function SelectContent({
         side={side}
         sideOffset={sideOffset}
         className={cn(
-          "window-no-drag ousia-hover-scrollbar relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border border-neutral-200 bg-white text-neutral-950 shadow-md duration-100 dark:border-border dark:bg-popover dark:text-popover-foreground data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "window-no-drag ousia-hover-scrollbar ousia-squircle-corners relative z-50 max-h-(--radix-select-content-available-height) min-w-36 origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl border-[0.5px] border-foreground/10 bg-white text-neutral-950 shadow-[var(--ousia-floating-panel-shadow)] duration-100 dark:border-neutral-950/10 dark:bg-white dark:text-neutral-950 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           resolvedPosition === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className
@@ -139,7 +143,7 @@ function SelectItem({
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "window-no-drag relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none focus:bg-accent/70 focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 dark:focus:bg-accent dark:focus:text-accent-foreground dark:not-data-[variant=destructive]:focus:**:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-[1.5] [&_svg:not([class*='size-'])]:size-[18px] *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
+        "window-no-drag ousia-squircle-corners relative flex w-full cursor-default items-center gap-2 rounded-lg py-1.5 pr-8 pl-2 text-sm outline-hidden select-none focus:bg-accent/70 focus:text-accent-foreground not-data-[variant=destructive]:focus:**:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 dark:focus:bg-accent dark:focus:text-accent-foreground dark:not-data-[variant=destructive]:focus:**:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:stroke-[1.5] [&_svg:not([class*='size-'])]:size-[18px] *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
       {...props}

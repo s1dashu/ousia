@@ -16,7 +16,8 @@ import {
   ArrowUp,
   ChevronDown,
   Plus,
-} from "lucide-react"
+  SlidersHorizontal,
+} from "@/components/icons/nucleo-icons"
 
 import type {
   AppSettings,
@@ -32,8 +33,17 @@ import {
 } from "@/app/model-presets"
 import { Button } from "@/components/ui/button"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -42,8 +52,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import {
   getOusiaModelProviderApiKey,
   normalizeOusiaAppSettings,
+  type OusiaAgentMode,
+  type OusiaAgentToolName,
+  type OusiaChatExportFormat,
   type OusiaLanguage,
   type OusiaChatAttachment,
   type OusiaChatEvent,
@@ -80,6 +99,15 @@ const CHAT_INPUT_MIN_HEIGHT = 48
 const DEFAULT_CHAT_THINKING_LEVEL: OusiaThinkingLevel = "medium"
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
+const allAgentTools: OusiaAgentToolName[] = [
+  "read",
+  "write",
+  "edit",
+  "bash",
+  "grep",
+  "find",
+  "ls",
+]
 
 const chatThinkingLabels: Record<OusiaThinkingLevel, string> = {
   off: "Off",
@@ -93,6 +121,13 @@ const chatThinkingLabels: Record<OusiaThinkingLevel, string> = {
 type ChatAreaProps = {
   currentProject: ProjectRecord | undefined
   currentSession: SessionRecord | undefined
+  contextUsage:
+    | {
+        tokens: number | null
+        contextWindow: number
+        percent: number | null
+      }
+    | undefined
   items: ChatItem[]
   isAgentWorking: boolean
   isSidebarCollapsed: boolean
@@ -102,9 +137,13 @@ type ChatAreaProps = {
   modelRegistry: OusiaModelRegistryResult | undefined
   onLocalEvent: (event: OusiaChatEvent) => void
   onGenerateSessionTitle: (sessionId: string, firstPrompt: string) => void
+  onBranchFromMessage: (messageId: string) => void
   onExpandTerminalPanel: () => void
   onSettingsChange: (settings: AppSettings) => void
-  onToggleSidebar: () => void
+  queuedChatState: {
+    steering: string[]
+    followUp: string[]
+  }
   settings: AppSettings
   style: CSSProperties
 }
@@ -118,6 +157,7 @@ function defaultThinkingLevelFor(levels: OusiaThinkingLevel[]) {
 export function ChatArea({
   currentProject,
   currentSession,
+  contextUsage: contextUsageFromEvent,
   items,
   isAgentWorking,
   isSidebarCollapsed,
@@ -127,9 +167,10 @@ export function ChatArea({
   modelRegistry,
   onLocalEvent,
   onGenerateSessionTitle,
+  onBranchFromMessage,
   onExpandTerminalPanel,
   onSettingsChange,
-  onToggleSidebar,
+  queuedChatState,
   settings,
   style,
 }: ChatAreaProps) {
@@ -146,12 +187,24 @@ export function ChatArea({
     null
   )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
+  const [isComposerSettingsOpen, setIsComposerSettingsOpen] = useState(false)
+  const [isCustomToolsDialogOpen, setIsCustomToolsDialogOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<ChatCopyStatus>("idle")
+  const [contextUsageState, setContextUsageState] = useState<{
+    key: string
+    usage?: {
+      tokens: number | null
+      contextWindow: number
+      percent: number | null
+    }
+  }>()
+  const [isChatScrolled, setIsChatScrolled] = useState(false)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputScrollTopBeforeResizeRef = useRef(0)
+  const followLatestFrameRef = useRef(0)
   const isComposingRef = useRef(false)
   const isProgrammaticScrollRef = useRef(false)
   const wasAgentWorkingRef = useRef(isAgentWorking)
@@ -180,6 +233,42 @@ export function ChatArea({
   )
   const hasDraftContent = Boolean(draft.trim() || attachments.length)
   const sendDuringRunMode = settings.sendDuringRunMode
+  const currentContextUsageKey =
+    currentProject && currentSession
+      ? `${currentProject.path}::${currentSession.id}`
+      : ""
+  const contextUsage =
+    contextUsageFromEvent ??
+    (contextUsageState?.key === currentContextUsageKey
+      ? contextUsageState.usage
+      : undefined)
+  const hasActualContextUsage = typeof contextUsage?.percent === "number"
+  const contextRemainingPercent =
+    hasActualContextUsage
+      ? Math.max(0, Math.round(100 - contextUsage.percent))
+      : 0
+  const contextUsageStrokeDasharray = `${Math.max(
+    0,
+    Math.min(100, contextRemainingPercent)
+  )} 100`
+  const shouldShowContextUsageRing =
+    settings.showContextUsage && items.length > 0 && hasActualContextUsage
+  const piQueuedMessages: QueuedChatMessage[] = [
+    ...queuedChatState.steering.map((text, index) => ({
+      id: `pi-steering-${index}`,
+      text,
+      attachments: [],
+    })),
+    ...queuedChatState.followUp.map((text, index) => ({
+      id: `pi-follow-up-${index}`,
+      text,
+      attachments: [],
+    })),
+  ].filter((message) => message.text.trim())
+  const visibleQueuedMessages = queuedMessages.length
+    ? queuedMessages
+    : piQueuedMessages
+  const isPiQueueVisible = !queuedMessages.length && piQueuedMessages.length > 0
 
   function isScrolledToLatest(node: HTMLDivElement) {
     return node.scrollHeight - node.scrollTop - node.clientHeight < 24
@@ -212,21 +301,27 @@ export function ChatArea({
     if (!isFollowingLatest) {
       return
     }
-    const node = scrollRef.current
-    if (!node) {
-      return
-    }
-    isProgrammaticScrollRef.current = true
-    node.scrollTo({
-      top: node.scrollHeight,
-      behavior: "auto",
-    })
-    window.setTimeout(() => {
-      const currentNode = scrollRef.current
-      if (currentNode && isScrolledToLatest(currentNode)) {
-        isProgrammaticScrollRef.current = false
+    window.cancelAnimationFrame(followLatestFrameRef.current)
+    followLatestFrameRef.current = window.requestAnimationFrame(() => {
+      const node = scrollRef.current
+      if (!node) {
+        return
       }
-    }, 0)
+      isProgrammaticScrollRef.current = true
+      node.scrollTo({
+        top: node.scrollHeight,
+        behavior: "auto",
+      })
+      window.setTimeout(() => {
+        const currentNode = scrollRef.current
+        if (currentNode && isScrolledToLatest(currentNode)) {
+          isProgrammaticScrollRef.current = false
+        }
+      }, 0)
+    })
+    return () => {
+      window.cancelAnimationFrame(followLatestFrameRef.current)
+    }
   }, [isAgentWorking, isFollowingLatest, items])
 
   useEffect(() => {
@@ -283,8 +378,44 @@ export function ChatArea({
     inputScrollTopBeforeResizeRef.current = node.scrollTop
   }, [draft])
 
+  useEffect(() => {
+    if (
+      !settings.showContextUsage ||
+      !window.ousia ||
+      !currentProject ||
+      !currentSession ||
+      items.length === 0
+    ) {
+      return
+    }
+    let isCancelled = false
+    void window.ousia
+      .getChatContextUsage({
+        projectPath: currentProject.path,
+        sessionId: currentSession.id,
+      })
+      .then((result) => {
+        if (!isCancelled && result.ok) {
+          setContextUsageState({
+            key: `${currentProject.path}::${currentSession.id}`,
+            usage: result.usage,
+          })
+        }
+      })
+    return () => {
+      isCancelled = true
+    }
+  }, [
+    currentProject,
+    currentSession,
+    isAgentWorking,
+    items.length,
+    settings.showContextUsage,
+  ])
+
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const isAtLatest = isScrolledToLatest(event.currentTarget)
+    setIsChatScrolled(event.currentTarget.scrollTop > 2)
     if (isProgrammaticScrollRef.current) {
       if (isAtLatest) {
         isProgrammaticScrollRef.current = false
@@ -302,6 +433,28 @@ export function ChatArea({
         thinkingLevel,
       })
     )
+  }
+
+  function updateComposerSettings(patch: Partial<AppSettings>) {
+    onSettingsChange(
+      normalizeOusiaAppSettings({
+        ...settings,
+        ...patch,
+      })
+    )
+  }
+
+  function toggleCustomAgentTool(tool: OusiaAgentToolName) {
+    const current = new Set(settings.customAgentTools)
+    if (current.has(tool)) {
+      current.delete(tool)
+    } else {
+      current.add(tool)
+    }
+    updateComposerSettings({
+      agentMode: "custom",
+      customAgentTools: allAgentTools.filter((item) => current.has(item)),
+    })
   }
 
   function updateModel(model: (typeof configuredModelPresets)[number]) {
@@ -371,6 +524,8 @@ export function ChatArea({
           attachments: outgoingAttachments,
           sendBehavior,
           agentMode: settings.agentMode,
+          customAgentTools: settings.customAgentTools,
+          autoCompactContext: settings.autoCompactContext,
           projectPath: currentProject.path,
           sessionId: currentSession.id,
           thinkingLevel: selectedThinkingLevel,
@@ -448,7 +603,12 @@ export function ChatArea({
     setDraft("")
     setAttachments([])
 
-    if (editingQueueId || (isAgentWorking && sendDuringRunMode === "queue")) {
+    if (editingQueueId) {
+      queueDraftMessage(text, outgoingAttachments)
+      return
+    }
+
+    if (isAgentWorking && sendDuringRunMode === "queue") {
       queueDraftMessage(text, outgoingAttachments)
       return
     }
@@ -559,6 +719,7 @@ export function ChatArea({
       await window.ousia.interruptChat({
         projectPath: currentProject.path,
         sessionId: currentSession.id,
+        continueQueuedMessages: settings.continueQueuedMessagesAfterInterrupt,
       })
     } finally {
       setIsInterrupting(false)
@@ -604,6 +765,50 @@ export function ChatArea({
         type: "error",
         id: `copy-history-${Date.now()}`,
         text: t.chat.copyHistoryFailed,
+        timestamp: new Date().toISOString(),
+      })
+    }
+  }
+
+  async function handleExportSession(format: OusiaChatExportFormat) {
+    if (!window.ousia || !currentProject || !currentSession) {
+      return
+    }
+    const markdown = formatSessionHistoryForClipboard({
+      items,
+      projectPath: currentProject.path,
+      t,
+      sessionTitle: currentSession.title,
+    })
+    const result = await window.ousia.exportChat({
+      format,
+      markdown: format === "jsonl" ? undefined : markdown,
+      agentMode: settings.agentMode,
+      customAgentTools: settings.customAgentTools,
+      autoCompactContext: settings.autoCompactContext,
+      projectPath: currentProject.path,
+      sessionId: currentSession.id,
+      thinkingLevel: selectedThinkingLevel,
+      model: {
+        provider: settings.modelProvider,
+        modelId: settings.modelId,
+        apiKey: getOusiaModelProviderApiKey(settings)?.trim() || undefined,
+      },
+    })
+    if (!result.ok && !result.canceled) {
+      onLocalEvent({
+        type: "error",
+        id: `export-chat-${Date.now()}`,
+        text: result.error ?? t.chat.exportFailed,
+        timestamp: new Date().toISOString(),
+      })
+    }
+    if (result.ok) {
+      setOpenSessionMenuKey(null)
+      onLocalEvent({
+        type: "run_status",
+        status: "finished",
+        text: t.chat.exportSucceeded(result.path),
         timestamp: new Date().toISOString(),
       })
     }
@@ -692,7 +897,7 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat ousia-squircle-corners flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-none border border-border/60 bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.035)] dark:bg-card dark:shadow-[-8px_0_24px_rgba(0,0,0,0.18)]",
+        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-none border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-chat-composer-shadow)] dark:bg-card",
         isTerminalPanelCollapsed ? "" : "border-r-0"
       )}
       style={style}
@@ -703,9 +908,11 @@ export function ChatArea({
         currentSession={currentSession}
         isSessionMenuOpen={isSessionMenuOpen}
         isSidebarCollapsed={isSidebarCollapsed}
+        isScrolled={isChatScrolled}
         isTerminalPanelCollapsed={isTerminalPanelCollapsed}
         isWindowFullscreen={isWindowFullscreen}
         onCopySessionHistory={() => void handleCopySessionHistory()}
+        onExportSession={(format) => void handleExportSession(format)}
         onExpandTerminalPanel={onExpandTerminalPanel}
         onSessionMenuOpenChange={(open) => {
           setOpenSessionMenuKey(open ? currentSessionMenuKey : null)
@@ -713,20 +920,20 @@ export function ChatArea({
             setCopyStatus("idle")
           }
         }}
-        onToggleSidebar={onToggleSidebar}
         t={t}
       />
 
       <div
         ref={scrollRef}
         className={cn(
-          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 select-text overflow-auto pt-4 pb-16",
+          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 select-text overflow-auto bg-white pt-14 pb-16 dark:bg-card",
           CHAT_HORIZONTAL_PADDING_CLASS
         )}
         onScroll={handleChatScroll}
       >
         <ChatMessageList
           items={items}
+          onBranchFromMessage={onBranchFromMessage}
           showTurnWaitIndicator={showTurnWaitIndicator}
           t={t}
         />
@@ -738,7 +945,7 @@ export function ChatArea({
             type="button"
             variant="secondary"
             size="icon-sm"
-            className="pointer-events-auto absolute bottom-3 left-1/2 size-6 -translate-x-1/2 rounded-full border bg-popover/90 text-popover-foreground backdrop-blur dark:shadow-md"
+            className="pointer-events-auto absolute bottom-3 left-1/2 size-6 -translate-x-1/2 rounded-full border-[0.5px] border-foreground/10 bg-popover/90 text-popover-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur hover:bg-popover/95 dark:border-foreground/10 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
             aria-label={t.chat.scrollToLatest}
             onClick={() => scrollToLatest("smooth")}
           >
@@ -748,32 +955,35 @@ export function ChatArea({
       ) : null}
 
       <form
-        className={cn("shrink-0 pt-2 pb-6", CHAT_HORIZONTAL_PADDING_CLASS)}
+        className={cn(
+          "shrink-0 bg-white pt-2 pb-4 dark:bg-card",
+          CHAT_HORIZONTAL_PADDING_CLASS
+        )}
         onSubmit={handleSubmit}
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
-          {queuedMessages.length ? (
-            <QueuedMessageList
-              editingId={editingQueueId}
-              draggingId={draggingQueueId}
-              messages={queuedMessages}
-              onDelete={deleteQueuedMessage}
-              onDragEnd={() => setDraggingQueueId(null)}
-              onDragOver={moveQueuedMessage}
-              onDragStart={setDraggingQueueId}
-              onEdit={editQueuedMessage}
-              onSendNow={sendQueuedMessageNow}
-              t={t}
-            />
-          ) : null}
-          <div
-            className={cn(
-              "ousia-squircle-corners border-[0.5px] border-foreground/10 bg-popover px-4 pt-3 pb-3 shadow-[0_6px_22px_rgba(0,0,0,0.04),0_1px_8px_rgba(0,0,0,0.022),inset_0_1px_0_rgba(255,255,255,0.42)] transition-shadow focus-within:border-foreground/10 focus-within:shadow-[0_8px_26px_rgba(0,0,0,0.06),0_2px_10px_rgba(0,0,0,0.032),inset_0_1px_0_rgba(255,255,255,0.46)] focus-within:ring-0 dark:border-foreground/10 dark:shadow-[0_6px_22px_rgba(0,0,0,0.22),0_1px_8px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-within:shadow-[0_8px_26px_rgba(0,0,0,0.28),0_2px_10px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.045)]",
-              queuedMessages.length
-                ? "rounded-t-xl rounded-b-[var(--ousia-chat-composer-radius)]"
-                : "rounded-[var(--ousia-chat-composer-radius)]"
-            )}
-          >
+          <div className="relative">
+            {visibleQueuedMessages.length ? (
+              <QueuedMessageList
+                editingId={isPiQueueVisible ? null : editingQueueId}
+                draggingId={isPiQueueVisible ? null : draggingQueueId}
+                messages={visibleQueuedMessages}
+                onDelete={deleteQueuedMessage}
+                onDragEnd={() => setDraggingQueueId(null)}
+                onDragOver={moveQueuedMessage}
+                onDragStart={setDraggingQueueId}
+                onEdit={editQueuedMessage}
+                onSendNow={sendQueuedMessageNow}
+                readOnly={isPiQueueVisible}
+                t={t}
+              />
+            ) : null}
+            <div
+              className={cn(
+                "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-foreground/10 bg-[var(--ousia-sidebar)] px-4 pt-3 pb-3 shadow-[var(--ousia-chat-composer-shadow)] transition-[border-color,box-shadow] focus-within:border-ring/30 focus-within:shadow-[var(--ousia-chat-composer-shadow-focus)] focus-within:ring-0 dark:border-white/10 dark:focus-within:border-white/20",
+                visibleQueuedMessages.length && "-mt-8"
+              )}
+            >
             <input
               ref={fileInputRef}
               type="file"
@@ -813,7 +1023,7 @@ export function ChatArea({
                   event.currentTarget.form?.requestSubmit()
                 }
               }}
-              className="ousia-hover-scrollbar min-h-12 rounded-none border-0 bg-transparent p-0 text-sm leading-6 [field-sizing:fixed] focus-visible:ring-0"
+              className="ousia-hover-scrollbar min-h-12 rounded-none border-0 bg-transparent p-0 text-sm leading-6 placeholder:text-muted-foreground/55 [field-sizing:fixed] focus-visible:ring-0"
               placeholder={
                 editingQueueId
                   ? t.chat.editQueuedMessage
@@ -836,12 +1046,184 @@ export function ChatArea({
                 </Button>
                 <DropdownMenu
                   modal={false}
+                  open={isComposerSettingsOpen}
+                  onOpenChange={setIsComposerSettingsOpen}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-6"
+                      aria-label={t.chat.composerSettings}
+                    >
+                      <SlidersHorizontal size={18} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    side="top"
+                    sideOffset={8}
+                    align="start"
+                    className="ousia-hover-scrollbar w-72 rounded-xl p-2"
+                  >
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                      {t.settings.agentMode}
+                    </DropdownMenuLabel>
+                    <DropdownMenuRadioGroup value={settings.agentMode}>
+                      <TooltipProvider>
+                        {(
+                          [
+                            [
+                              "standard",
+                              t.settings.standardMode,
+                              t.settings.standardModeDescription,
+                            ],
+                            [
+                              "readOnly",
+                              t.settings.readOnlyMode,
+                              t.settings.readOnlyModeDescription,
+                            ],
+                            [
+                              "noTerminal",
+                              t.settings.noTerminalMode,
+                              t.settings.noTerminalModeDescription,
+                            ],
+                            [
+                              "custom",
+                              t.chat.customMode,
+                              t.settings.customModeDescription,
+                            ],
+                          ] satisfies Array<[OusiaAgentMode, string, string]>
+                        ).map(([value, label, description]) => (
+                          <Tooltip key={value}>
+                            <TooltipTrigger asChild>
+                              <DropdownMenuRadioItem
+                                value={value}
+                                className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                                onClick={() => {
+                                  updateComposerSettings({ agentMode: value })
+                                  if (value === "custom") {
+                                    setIsCustomToolsDialogOpen(true)
+                                  }
+                                }}
+                              >
+                                {label}
+                              </DropdownMenuRadioItem>
+                            </TooltipTrigger>
+                            <TooltipContent
+                              side="right"
+                              align="center"
+                              className="max-w-56"
+                            >
+                              {description}
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </TooltipProvider>
+                    </DropdownMenuRadioGroup>
+                    <div className="h-2" />
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                      {t.chat.appendMessages}
+                    </DropdownMenuLabel>
+                    <DropdownMenuRadioGroup value={settings.sendDuringRunMode}>
+                      <DropdownMenuRadioItem
+                        value="queue"
+                        className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                        onClick={() =>
+                          updateComposerSettings({ sendDuringRunMode: "queue" })
+                        }
+                      >
+                        {t.settings.queue}
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem
+                        value="steer"
+                        className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                        onClick={() =>
+                          updateComposerSettings({ sendDuringRunMode: "steer" })
+                        }
+                      >
+                        {t.settings.steer}
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
+                    <div className="h-2" />
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                      {t.chat.interruptBehavior}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="flex h-10 justify-between rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                      onSelect={(event) => {
+                        event.preventDefault()
+                        updateComposerSettings({
+                          continueQueuedMessagesAfterInterrupt:
+                            !settings.continueQueuedMessagesAfterInterrupt,
+                        })
+                      }}
+                    >
+                      <span className="min-w-0 truncate">
+                        {t.chat.continueQueuedAfterInterrupt}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "relative ml-3 h-5 w-9 shrink-0 rounded-full transition-colors",
+                          settings.continueQueuedMessagesAfterInterrupt
+                            ? "bg-neutral-950"
+                            : "bg-neutral-200"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]",
+                            settings.continueQueuedMessagesAfterInterrupt
+                              ? "left-[18px]"
+                              : "left-0.5"
+                          )}
+                        />
+                      </span>
+                    </DropdownMenuItem>
+                    <div className="h-2" />
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                      {t.chat.context}
+                    </DropdownMenuLabel>
+                    <DropdownMenuItem
+                      className="flex h-10 justify-between rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                      onSelect={(event) => {
+                        event.preventDefault()
+                        updateComposerSettings({
+                          showContextUsage: !settings.showContextUsage,
+                        })
+                      }}
+                    >
+                      <span className="min-w-0 truncate">
+                        {t.chat.showContextUsage}
+                      </span>
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "relative ml-3 h-5 w-9 shrink-0 rounded-full transition-colors",
+                          settings.showContextUsage
+                            ? "bg-neutral-950"
+                            : "bg-neutral-200"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]",
+                            settings.showContextUsage ? "left-[18px]" : "left-0.5"
+                          )}
+                        />
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu
+                  modal={false}
                   open={isModelMenuOpen}
                   onOpenChange={setIsModelMenuOpen}
                 >
                   <DropdownMenuTrigger
                     aria-label={t.chat.modelAndThinking}
-                    className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
+                    className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
                   >
                     <span className="min-w-0 truncate text-foreground">
                       {selectedModelLabel}
@@ -861,9 +1243,9 @@ export function ChatArea({
                     side="top"
                     sideOffset={8}
                     align="start"
-                    className="w-72 rounded-xl p-2 shadow-[0_18px_50px_rgba(0,0,0,0.10),0_0_0_1px_rgba(0,0,0,0.08)] dark:shadow-[0_18px_50px_rgba(0,0,0,0.42),0_0_0_1px_rgba(255,255,255,0.1)]"
+                    className="w-72 rounded-xl p-2"
                   >
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm">
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
                       Reasoning
                     </DropdownMenuLabel>
                     <DropdownMenuRadioGroup value={selectedThinkingLevel}>
@@ -871,7 +1253,7 @@ export function ChatArea({
                         <DropdownMenuRadioItem
                           key={level}
                           value={level}
-                          className="h-10 rounded-md px-2"
+                          className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                           onClick={() => updateThinkingLevel(level)}
                         >
                           <span className="min-w-0 flex-1 truncate">
@@ -880,7 +1262,7 @@ export function ChatArea({
                         </DropdownMenuRadioItem>
                       ))}
                     </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator className="my-2" />
+                    <DropdownMenuSeparator className="my-2 bg-neutral-200" />
                     <DropdownMenuRadioGroup
                       value={
                         selectedModelPreset
@@ -901,7 +1283,7 @@ export function ChatArea({
                           <DropdownMenuRadioItem
                             key={value}
                             value={value}
-                            className="h-10 rounded-md px-2"
+                            className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                             onClick={() => updateModel(preset)}
                           >
                             <span className="min-w-0 flex-1 truncate">
@@ -914,19 +1296,110 @@ export function ChatArea({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <Button
-                type="submit"
-                size="icon-sm"
-                className="size-6"
-                disabled={isSending || !hasDraftContent}
-                aria-label={t.app.send}
-              >
-                <ArrowUp size={18} />
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                {shouldShowContextUsageRing ? (
+                  <span
+                    className="flex size-6 items-center justify-center text-muted-foreground"
+                    aria-label={t.chat.contextRemaining(
+                      contextRemainingPercent
+                    )}
+                    title={t.chat.contextRemaining(contextRemainingPercent)}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      className="size-[18px] -rotate-90"
+                      viewBox="0 0 18 18"
+                    >
+                      <circle
+                        cx="9"
+                        cy="9"
+                        r="6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeOpacity="0.22"
+                        strokeWidth="3"
+                      />
+                      <circle
+                        cx="9"
+                        cy="9"
+                        r="6"
+                        fill="none"
+                        pathLength="100"
+                        stroke="currentColor"
+                        strokeDasharray={contextUsageStrokeDasharray}
+                        strokeLinecap="round"
+                        strokeWidth="3"
+                      />
+                    </svg>
+                  </span>
+                ) : null}
+                <Button
+                  type="submit"
+                  size="icon-sm"
+                  className="size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] hover:bg-primary/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
+                  disabled={isSending || !hasDraftContent}
+                  aria-label={t.app.send}
+                >
+                  <ArrowUp size={18} />
+                </Button>
+              </div>
             </div>
+          </div>
           </div>
         </div>
       </form>
+      <Dialog
+        open={isCustomToolsDialogOpen}
+        onOpenChange={setIsCustomToolsDialogOpen}
+      >
+        <DialogContent className="max-w-sm rounded-3xl bg-white text-neutral-950 dark:bg-white dark:text-neutral-950">
+          <DialogHeader>
+            <DialogTitle className="text-xl">{t.chat.customTools}</DialogTitle>
+            <DialogDescription className="text-neutral-500">
+              {t.chat.customToolsDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 grid gap-1">
+            {allAgentTools.map((tool) => {
+              const isEnabled = settings.customAgentTools.includes(tool)
+              return (
+                <button
+                  key={tool}
+                  type="button"
+                  className="flex h-11 items-center justify-between rounded-xl px-3 text-left text-sm hover:bg-neutral-100 focus-visible:bg-neutral-100 focus-visible:outline-none"
+                  onClick={() => toggleCustomAgentTool(tool)}
+                >
+                  <span>{t.chat.agentToolNames[tool]}</span>
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "relative ml-3 h-5 w-9 shrink-0 rounded-full transition-colors",
+                      isEnabled ? "bg-neutral-950" : "bg-neutral-200"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]",
+                        isEnabled ? "left-[18px]" : "left-0.5"
+                      )}
+                    />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <DialogFooter className="mt-5">
+            <Button
+              type="button"
+              size="sm"
+              className="rounded-xl px-5"
+              onClick={() => setIsCustomToolsDialogOpen(false)}
+            >
+              {t.app.close}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }

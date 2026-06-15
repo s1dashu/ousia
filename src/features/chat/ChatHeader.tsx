@@ -1,4 +1,9 @@
-import { Check, Copy, MoreHorizontal, SquareTerminal } from "lucide-react"
+import {
+  Check,
+  Copy,
+  MoreHorizontal,
+  SquareTerminal,
+} from "@/components/icons/nucleo-icons"
 
 import type { SessionRecord } from "@/app/app-state"
 import { Button } from "@/components/ui/button"
@@ -9,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import type { getMessages } from "@/app/i18n"
-import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
+import { cn } from "@/lib/utils"
 
 export type ChatCopyStatus = "idle" | "copied" | "failed"
 
@@ -18,12 +23,13 @@ type ChatHeaderProps = {
   currentSession: SessionRecord | undefined
   isSessionMenuOpen: boolean
   isSidebarCollapsed: boolean
+  isScrolled: boolean
   isTerminalPanelCollapsed: boolean
   isWindowFullscreen: boolean
   onCopySessionHistory: () => void
+  onExportSession: (format: "markdown" | "html" | "jsonl") => void
   onExpandTerminalPanel: () => void
   onSessionMenuOpenChange: (open: boolean) => void
-  onToggleSidebar: () => void
   t: ReturnType<typeof getMessages>
 }
 
@@ -32,24 +38,30 @@ export function ChatHeader({
   currentSession,
   isSessionMenuOpen,
   isSidebarCollapsed,
+  isScrolled,
   isTerminalPanelCollapsed,
   isWindowFullscreen,
   onCopySessionHistory,
+  onExportSession,
   onExpandTerminalPanel,
   onSessionMenuOpenChange,
-  onToggleSidebar,
   t,
 }: ChatHeaderProps) {
   return (
-    <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pr-4 pl-4">
-      <div className="window-drag flex min-w-0 items-center gap-3 self-stretch">
-        {isSidebarCollapsed ? (
-          <TitleBarSidebarToggle
-            isFullscreen={isWindowFullscreen}
-            label={t.chat.expandSidebar}
-            onClick={onToggleSidebar}
-          />
-        ) : null}
+    <header
+      className={cn(
+        "window-drag absolute top-0 right-0 left-px z-30 grid h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-tl-[calc(var(--ousia-chat-panel-radius)-1px)] pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter]",
+        isScrolled
+          ? "bg-white shadow-none dark:bg-card"
+          : "bg-white shadow-none dark:bg-card"
+      )}
+    >
+      <div
+        className={cn(
+          "window-drag flex min-w-0 items-center gap-3 self-stretch",
+          isSidebarCollapsed && (isWindowFullscreen ? "pl-10" : "pl-[108px]")
+        )}
+      >
         <div className="window-drag flex min-w-0 flex-1 items-center self-stretch pl-2">
           <h1 className="window-drag truncate text-sm leading-none font-normal">
             {currentSession?.title ?? t.app.newSession}
@@ -72,16 +84,16 @@ export function ChatHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="w-auto rounded-md shadow-none dark:shadow-md"
+              className="w-auto rounded-md p-1"
             >
               <DropdownMenuItem
-                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-muted/45 focus:bg-muted/45"
+                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
                 onClick={onCopySessionHistory}
               >
                 {copyStatus === "copied" ? (
-                  <Check size={18} className="text-muted-foreground" />
+                  <Check size={18} className="text-neutral-500" />
                 ) : (
-                  <Copy size={18} className="text-muted-foreground" />
+                  <Copy size={18} className="text-neutral-500" />
                 )}
                 <span className="flex-1">
                   {copyStatus === "copied"
@@ -90,6 +102,27 @@ export function ChatHeader({
                       ? t.app.copyFailed
                       : t.chat.copyHistory}
                 </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+                onClick={() => onExportSession("markdown")}
+              >
+                <Copy size={18} className="text-neutral-500" />
+                <span className="flex-1">{t.chat.exportMarkdown}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+                onClick={() => onExportSession("html")}
+              >
+                <Copy size={18} className="text-neutral-500" />
+                <span className="flex-1">{t.chat.exportHtml}</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+                onClick={() => onExportSession("jsonl")}
+              >
+                <Copy size={18} className="text-neutral-500" />
+                <span className="flex-1">{t.chat.exportJsonl}</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -101,11 +134,11 @@ export function ChatHeader({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="window-no-drag size-6 rounded-md"
+            className="window-no-drag size-6 rounded-md hover:bg-transparent focus-visible:bg-transparent"
             aria-label={t.chat.openTerminal}
             onClick={onExpandTerminalPanel}
           >
-            <SquareTerminal size={18} />
+            <SquareTerminal size={18} strokeWidth={1.5} />
           </Button>
         ) : null}
       </div>

@@ -24,6 +24,69 @@
     format("truetype");
 }
 
+@font-face {
+  font-family: "Ousia Source Han Sans SC";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/debug/source-han-sans-sc/SourceHanSansCN-Regular.otf")
+    format("opentype");
+}
+
+@font-face {
+  font-family: "Ousia Source Han Sans SC";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/debug/source-han-sans-sc/SourceHanSansCN-Medium.otf")
+    format("opentype");
+}
+
+@font-face {
+  font-family: "Ousia Source Han Sans SC";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/debug/source-han-sans-sc/SourceHanSansCN-Bold.otf")
+    format("opentype");
+}
+
+@font-face {
+  font-family: "Ousia LXGW WenKai";
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src: url("./assets/fonts/debug/lxgw-wenkai/LXGWWenKai-Light.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Ousia LXGW WenKai";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/debug/lxgw-wenkai/LXGWWenKai-Medium.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Ousia LXGW WenKai";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./assets/fonts/debug/lxgw-wenkai/LXGWWenKai-Bold.woff2")
+    format("woff2");
+}
+
+@font-face {
+  font-family: "Ousia Zhuque Fangsong";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/debug/zhuque-fangsong/ZhuqueFangsong-Regular.ttf")
+    format("truetype");
+}
+
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: var(--font-sans-default);
@@ -71,6 +134,7 @@
 :root {
     --font-sans-default: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono-default: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ousia-chat-font-family: var(--font-sans-default);
     --font-weight-light: 300;
     --font-weight-regular: 400;
     --font-weight-medium: 500;
@@ -83,7 +147,12 @@
     --ousia-chat-content-max-width: 64rem;
     --ousia-chat-gutter: 20px;
     --ousia-chat-panel-radius: 24px;
-    --ousia-chat-composer-radius: 32px;
+    --ousia-chat-composer-radius: 36px;
+    --ousia-chat-composer-ring-size: 3px;
+    --ousia-chat-composer-ring-color: rgba(36, 31, 27, 0.055);
+    --ousia-chat-composer-shadow: 0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.56);
+    --ousia-chat-composer-shadow-focus: 0 1px 3px rgba(24, 24, 27, 0.045), 0 10px 24px -15px rgba(24, 24, 27, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(24, 24, 27, 0.08), 0 2px 7px -5px rgba(24, 24, 27, 0.1), 0 12px 28px -18px rgba(24, 24, 27, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.56);
     --ousia-settings-content-max-width: 44rem;
     --ousia-settings-gutter: 32px;
     --background: #fdfbf9;
@@ -134,6 +203,22 @@
 @media (min-width: 920px) {
     :root {
         --ousia-chat-gutter: 32px;
+    }
+}
+
+.ousia-chat-horizontal-padding {
+    padding-inline: var(--ousia-chat-gutter);
+}
+
+@container chat (max-width: 640px) {
+    .ousia-chat-horizontal-padding {
+        padding-inline: 16px;
+    }
+}
+
+@container chat (max-width: 520px) {
+    .ousia-chat-horizontal-padding {
+        padding-inline: 12px;
     }
 }
 
@@ -1010,6 +1095,10 @@
     --sidebar-accent-foreground: #f4f0ec;
     --sidebar-border: color-mix(in srgb, #f0e8e0 12%, transparent);
     --sidebar-ring: color-mix(in oklch, var(--radix-scale-9) 58%, #bdb7b0);
+    --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.035);
+    --ousia-chat-composer-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+    --ousia-chat-composer-shadow-focus: 0 10px 24px -14px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.055);
 }
 
 @layer base {
@@ -1061,6 +1150,30 @@
     .ousia-squircle-corners {
       corner-shape: squircle;
     }
+
+    .ousia-chat-composer-ring::after {
+      corner-shape: squircle;
+    }
+  }
+
+  .ousia-chat-composer-ring::after {
+    content: "";
+    position: absolute;
+    inset: calc(var(--ousia-chat-composer-ring-size) * -1);
+    z-index: 0;
+    pointer-events: none;
+    border: var(--ousia-chat-composer-ring-size) solid
+      var(--ousia-chat-composer-ring-color);
+    border-radius: calc(
+      var(--ousia-chat-composer-radius) +
+        var(--ousia-chat-composer-ring-size)
+    );
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+
+  .ousia-chat-composer-ring:focus-within::after {
+    opacity: 1;
   }
 
   .font-radix-light {
@@ -1091,6 +1204,7 @@
 }
 
 .ousia-hover-scrollbar,
+.ousia-terminal-viewport .xterm-viewport,
 .ousia-chat-markdown [data-streamdown="code-block-body"],
 .ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child {
   scrollbar-color: transparent transparent;
@@ -1104,6 +1218,7 @@
 .ousia-hover-scrollbar:hover,
 .ousia-hover-scrollbar:focus,
 .ousia-hover-scrollbar:focus-within,
+.ousia-terminal-viewport:hover .xterm-viewport,
 .ousia-chat-markdown [data-streamdown="code-block-body"]:hover,
 .ousia-chat-markdown [data-streamdown="code-block-body"]:focus,
 .ousia-chat-markdown [data-streamdown="code-block-body"]:focus-within,
@@ -1115,6 +1230,7 @@
 }
 
 .ousia-hover-scrollbar::-webkit-scrollbar,
+.ousia-terminal-viewport .xterm-viewport::-webkit-scrollbar,
 .ousia-chat-markdown
   [data-streamdown="code-block-body"]::-webkit-scrollbar,
 .ousia-chat-markdown
@@ -1125,6 +1241,7 @@
 }
 
 .ousia-hover-scrollbar::-webkit-scrollbar-track,
+.ousia-terminal-viewport .xterm-viewport::-webkit-scrollbar-track,
 .ousia-chat-markdown
   [data-streamdown="code-block-body"]::-webkit-scrollbar-track,
 .ousia-chat-markdown
@@ -1134,6 +1251,7 @@
 }
 
 .ousia-hover-scrollbar::-webkit-scrollbar-thumb,
+.ousia-terminal-viewport .xterm-viewport::-webkit-scrollbar-thumb,
 .ousia-chat-markdown
   [data-streamdown="code-block-body"]::-webkit-scrollbar-thumb,
 .ousia-chat-markdown
@@ -1146,6 +1264,11 @@
 .ousia-hover-scrollbar:hover::-webkit-scrollbar-thumb,
 .ousia-hover-scrollbar:focus::-webkit-scrollbar-thumb,
 .ousia-hover-scrollbar:focus-within::-webkit-scrollbar-thumb,
+.ousia-terminal-viewport:hover .xterm-viewport::-webkit-scrollbar-thumb,
+.ousia-terminal-viewport:hover
+  .xterm-scrollable-element
+  > .scrollbar
+  > div,
 .ousia-chat-markdown
   [data-streamdown="code-block-body"]:hover::-webkit-scrollbar-thumb,
 .ousia-chat-markdown
@@ -1168,9 +1291,39 @@
   );
 }
 
+.ousia-terminal-viewport .xterm-scrollable-element > .scrollbar {
+  opacity: 0;
+  transition: opacity 140ms ease;
+  width: 6px !important;
+}
+
+.ousia-terminal-viewport .xterm-scrollable-element > .scrollbar > div {
+  background-color: transparent !important;
+  border-radius: 999px;
+  left: 0 !important;
+  width: 6px !important;
+}
+
+.ousia-terminal-viewport:hover .xterm-scrollable-element > .scrollbar {
+  opacity: 1;
+}
+
+.ousia-terminal-viewport:hover .xterm-scrollable-element > .scrollbar > div {
+  background-color: color-mix(
+    in oklch,
+    var(--muted-foreground) 24%,
+    transparent
+  ) !important;
+}
+
 .ousia-hover-scrollbar:hover::-webkit-scrollbar-thumb:hover,
 .ousia-hover-scrollbar:focus::-webkit-scrollbar-thumb:hover,
 .ousia-hover-scrollbar:focus-within::-webkit-scrollbar-thumb:hover,
+.ousia-terminal-viewport:hover .xterm-viewport::-webkit-scrollbar-thumb:hover,
+.ousia-terminal-viewport:hover
+  .xterm-scrollable-element
+  > .scrollbar
+  > div:hover,
 .ousia-chat-markdown
   [data-streamdown="code-block-body"]:hover::-webkit-scrollbar-thumb:hover,
 .ousia-chat-markdown
@@ -1190,11 +1343,25 @@
     in oklch,
     var(--muted-foreground) 36%,
     transparent
-  );
+  ) !important;
 }
 
 .ousia-chat-markdown {
+  font-family: var(--ousia-chat-font-family);
   line-height: 1.3125rem;
+}
+
+.ousia-chat-message-text {
+  font-family: var(--ousia-chat-font-family);
+}
+
+.ousia-chat-markdown :where(*, p, ul, ol, li, blockquote, table, th, td) {
+  font-family: inherit;
+}
+
+.ousia-chat-markdown
+  :where(pre, code, kbd, samp, [data-streamdown="code-block-body"]) {
+  font-family: var(--ousia-chat-font-family);
 }
 
 .ousia-chat-markdown :where(p, ul, ol, blockquote) {

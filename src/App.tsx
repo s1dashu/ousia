@@ -23,6 +23,7 @@ import {
 import {
   getOusiaModelProviderApiKey,
   normalizeOusiaAppSettings,
+  resolveOusiaFontFamilyValue,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
   type OusiaSidebarSectionId,
@@ -32,6 +33,7 @@ import { modelsForProvider } from "@/app/model-presets"
 import { ChatArea } from "@/features/chat/ChatArea"
 import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
 import { SettingsPage } from "@/features/settings/SettingsPage"
+import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 import { Sidebar } from "@/features/sidebar/Sidebar"
 import { TerminalPanel } from "@/features/terminal/TerminalPanel"
 
@@ -46,12 +48,38 @@ const MIN_TERMINAL_PANEL_COMPACT_WIDTH = 100
 const RESIZE_HANDLE_WIDTH = 1
 
 type AgentRunStatus = "idle" | "working"
+type QueuedChatState = {
+  steering: string[]
+  followUp: string[]
+}
+type ChatContextUsageState = {
+  tokens: number | null
+  contextWindow: number
+  percent: number | null
+}
+type TextDeltaChatEvent = Extract<
+  OusiaChatEvent,
+  { type: "assistant_text_delta" | "thinking_delta" }
+>
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
 function chatKey(projectPath: string, sessionId: string) {
   return `${projectPath}::${sessionId}`
+}
+
+function canMergeTextDeltaEvents(
+  previousEvent: OusiaChatEvent | undefined,
+  nextEvent: OusiaChatEvent
+): previousEvent is TextDeltaChatEvent {
+  return (
+    Boolean(previousEvent) &&
+    (nextEvent.type === "assistant_text_delta" ||
+      nextEvent.type === "thinking_delta") &&
+    previousEvent?.type === nextEvent.type &&
+    previousEvent.id === nextEvent.id
+  )
 }
 
 function reorderById<T extends { id: string }>(
@@ -133,11 +161,15 @@ function ResizeHandle({
 }) {
   return (
     <div
-      className={`relative z-10 flex w-px shrink-0 flex-col ${showLine ? "bg-border/80" : "bg-transparent"}`}
+      className="relative z-10 flex w-px shrink-0 flex-col"
     >
       <div
         aria-hidden="true"
-        className="window-drag h-10 shrink-0"
+        className={`pointer-events-none absolute inset-y-0 left-0 w-px ${showLine ? "bg-border/80" : "bg-transparent"}`}
+      />
+      <div
+        aria-hidden="true"
+        className="window-drag relative h-10 shrink-0"
       />
       <div
         aria-label={label}
@@ -172,7 +204,14 @@ export function App() {
   >(normalizeSidebarSectionOrder(initialState.shellLayout.sidebarSectionOrder))
   const [isShellResizing, setIsShellResizing] = useState(false)
   const [shellWidth, setShellWidth] = useState(0)
+  const shellWidthRef = useRef(0)
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false)
+  const [zoomIndicatorPercent, setZoomIndicatorPercent] = useState<number | null>(
+    null
+  )
+  const zoomIndicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  )
   const [isTerminalPanelCollapsed, setIsTerminalPanelCollapsed] = useState(
     initialState.shellLayout.isTerminalPanelCollapsed
   )
@@ -195,11 +234,21 @@ export function App() {
   const [selectedSessionId, setSelectedSessionId] = useState(
     initialState.selectedSessionId
   )
+  const [sidebarScrollTargetSessionId, setSidebarScrollTargetSessionId] =
+    useState("")
   const [itemsBySession, setItemsBySession] = useState<
     Record<string, ChatItem[]>
   >({})
+  const pendingChatEventsRef = useRef<Map<string, OusiaChatEvent[]>>(new Map())
+  const pendingChatEventsFrameRef = useRef(0)
   const [runStatusBySession, setRunStatusBySession] = useState<
     Record<string, AgentRunStatus>
+  >({})
+  const [queuedChatStateBySession, setQueuedChatStateBySession] = useState<
+    Record<string, QueuedChatState>
+  >({})
+  const [contextUsageBySession, setContextUsageBySession] = useState<
+    Record<string, ChatContextUsageState | undefined>
   >({})
   const titleGenerationSessionIdsRef = useRef<Set<string>>(new Set())
   const isApplyingStoredThemeRef = useRef(false)
@@ -224,12 +273,74 @@ export function App() {
   const selectedItems = selectedChatKey
     ? (itemsBySession[selectedChatKey] ?? [])
     : []
+  const selectedQueuedChatState = selectedChatKey
+    ? (queuedChatStateBySession[selectedChatKey] ?? {
+        steering: [],
+        followUp: [],
+      })
+    : {
+        steering: [],
+        followUp: [],
+      }
+  const selectedContextUsage = selectedChatKey
+    ? contextUsageBySession[selectedChatKey]
+    : undefined
   const handleSettingsChange = useCallback(
     (nextSettings: AppSettings) => {
       const normalizedSettings = normalizeOusiaAppSettings(nextSettings)
       setSettings(normalizedSettings)
     },
     []
+  )
+  const flushPendingChatEvents = useCallback(() => {
+    pendingChatEventsFrameRef.current = 0
+    const pendingEvents = pendingChatEventsRef.current
+    if (!pendingEvents.size) {
+      return
+    }
+
+    pendingChatEventsRef.current = new Map()
+    setItemsBySession((current) => {
+      let nextBySession = current
+      for (const [targetKey, events] of pendingEvents) {
+        let nextItems = current[targetKey] ?? []
+        for (const event of events) {
+          nextItems = applyChatEvent(nextItems, event)
+        }
+        if (nextItems !== current[targetKey]) {
+          if (nextBySession === current) {
+            nextBySession = { ...current }
+          }
+          nextBySession[targetKey] = nextItems
+        }
+      }
+      return nextBySession
+    })
+  }, [])
+  const queueChatItemEvent = useCallback(
+    (targetKey: string, event: OusiaChatEvent) => {
+      const pendingEvents = pendingChatEventsRef.current
+      const targetEvents = pendingEvents.get(targetKey)
+      if (targetEvents) {
+        const previousEvent = targetEvents[targetEvents.length - 1]
+        if (canMergeTextDeltaEvents(previousEvent, event)) {
+          targetEvents[targetEvents.length - 1] = {
+            ...event,
+            delta: previousEvent.delta + event.delta,
+          } as TextDeltaChatEvent
+          return
+        }
+        targetEvents.push(event)
+      } else {
+        pendingEvents.set(targetKey, [event])
+      }
+      if (pendingChatEventsFrameRef.current) {
+        return
+      }
+      pendingChatEventsFrameRef.current =
+        window.requestAnimationFrame(flushPendingChatEvents)
+    },
+    [flushPendingChatEvents]
   )
 
   useEffect(() => {
@@ -318,6 +429,20 @@ export function App() {
     document.documentElement.dataset.radixColorScale =
       settings.appearanceColorScale
   }, [settings.appearanceColorScale])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--font-sans-default",
+      resolveOusiaFontFamilyValue(settings.appFontFamily)
+    )
+  }, [settings.appFontFamily])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--ousia-chat-font-family",
+      resolveOusiaFontFamilyValue(settings.chatFontFamily)
+    )
+  }, [settings.chatFontFamily])
 
   useEffect(() => {
     if (!isAppStateLoaded) {
@@ -424,6 +549,27 @@ export function App() {
               : "idle",
         }))
       }
+      if (event.type === "queue_update") {
+        setQueuedChatStateBySession((current) => ({
+          ...current,
+          [targetKey]: {
+            steering: event.steering,
+            followUp: event.followUp,
+          },
+        }))
+        return
+      }
+      if (event.type === "context_usage") {
+        setContextUsageBySession((current) => ({
+          ...current,
+          [targetKey]: {
+            tokens: event.tokens,
+            contextWindow: event.contextWindow,
+            percent: event.percent,
+          },
+        }))
+        return
+      }
       if (
         targetSession &&
         (event.type === "user_message" ||
@@ -434,11 +580,17 @@ export function App() {
           moveSessionToGroupFront(current, targetSession.id, event.timestamp)
         )
       }
-      setItemsBySession((current) => ({
-        ...current,
-        [targetKey]: applyChatEvent(current[targetKey] ?? [], event),
-      }))
+      queueChatItemEvent(targetKey, event)
     })
+  }, [queueChatItemEvent])
+
+  useEffect(() => {
+    return () => {
+      if (pendingChatEventsFrameRef.current) {
+        window.cancelAnimationFrame(pendingChatEventsFrameRef.current)
+      }
+      pendingChatEventsRef.current = new Map()
+    }
   }, [])
 
   useEffect(() => {
@@ -457,6 +609,30 @@ export function App() {
     }
   }, [])
 
+  const showZoomIndicator = useCallback((zoomPercent: number) => {
+    setZoomIndicatorPercent(zoomPercent)
+    if (zoomIndicatorTimerRef.current) {
+      window.clearTimeout(zoomIndicatorTimerRef.current)
+    }
+    zoomIndicatorTimerRef.current = window.setTimeout(() => {
+      setZoomIndicatorPercent(null)
+      zoomIndicatorTimerRef.current = null
+    }, 1200)
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = window.ousia?.onWindowZoomChange((event) => {
+      showZoomIndicator(event.zoomPercent)
+    })
+    return () => {
+      unsubscribe?.()
+      if (zoomIndicatorTimerRef.current) {
+        window.clearTimeout(zoomIndicatorTimerRef.current)
+        zoomIndicatorTimerRef.current = null
+      }
+    }
+  }, [showZoomIndicator])
+
   function appendLocalEvent(event: OusiaChatEvent) {
     if (!selectedChatKey) {
       return
@@ -469,6 +645,27 @@ export function App() {
             ? "working"
             : "idle",
       }))
+    }
+    if (event.type === "queue_update") {
+      setQueuedChatStateBySession((current) => ({
+        ...current,
+        [selectedChatKey]: {
+          steering: event.steering,
+          followUp: event.followUp,
+        },
+      }))
+      return
+    }
+    if (event.type === "context_usage") {
+      setContextUsageBySession((current) => ({
+        ...current,
+        [selectedChatKey]: {
+          tokens: event.tokens,
+          contextWindow: event.contextWindow,
+          percent: event.percent,
+        },
+      }))
+      return
     }
     setItemsBySession((current) => ({
       ...current,
@@ -510,6 +707,7 @@ export function App() {
     const session = createSession(t.app.newSession)
     setSessions((current) => [session, ...current])
     setSelectedSessionId(session.id)
+    setSidebarScrollTargetSessionId(session.id)
     setIsSettingsOpen(false)
   }
 
@@ -520,6 +718,7 @@ export function App() {
       current.includes(projectId) ? current : [...current, projectId]
     )
     setSelectedSessionId(session.id)
+    setSidebarScrollTargetSessionId(session.id)
   }
 
   function selectOrCreateProjectSession(project: ProjectRecord) {
@@ -660,6 +859,53 @@ export function App() {
       })
   }
 
+  function handleBranchFromMessage(messageId: string) {
+    if (!selectedSession || !selectedChatKey) {
+      return
+    }
+    const branchIndex = selectedItems.findIndex((item) => item.id === messageId)
+    if (branchIndex < 0) {
+      return
+    }
+
+    const now = new Date().toISOString()
+    const titleSuffix = settings.language === "zh" ? "分支" : "Fork"
+    const branchSession = {
+      ...createSession(`${selectedSession.title} · ${titleSuffix}`),
+      projectId: selectedSession.projectId,
+      time: now,
+    }
+    const branchItems = selectedItems
+      .slice(0, branchIndex + 1)
+      .map((item) =>
+        item.role === "tool"
+          ? { ...item }
+          : {
+              ...item,
+              attachments: item.attachments
+                ? item.attachments.map((attachment) => ({ ...attachment }))
+                : undefined,
+            }
+      )
+    const branchKey = chatKey(currentProject.path, branchSession.id)
+
+    setSessions((current) => [branchSession, ...current])
+    setItemsBySession((current) => ({
+      ...current,
+      [branchKey]: branchItems,
+    }))
+    if (branchSession.projectId) {
+      setExpandedProjectIds((current) =>
+        current.includes(branchSession.projectId!)
+          ? current
+          : [...current, branchSession.projectId!]
+      )
+    }
+    setSelectedSessionId(branchSession.id)
+    setSidebarScrollTargetSessionId(branchSession.id)
+    setIsSettingsOpen(false)
+  }
+
   function handleDeleteSession(sessionId: string) {
     const session = sessions.find((item) => item.id === sessionId)
     if (!session) {
@@ -688,15 +934,32 @@ export function App() {
       return
     }
 
-    setShellWidth(shell.getBoundingClientRect().width)
+    let animationFrameId = 0
+    const updateShellWidth = (width: number) => {
+      const nextWidth = Math.round(width)
+      if (!nextWidth || shellWidthRef.current === nextWidth) {
+        return
+      }
+
+      shellWidthRef.current = nextWidth
+      setShellWidth(nextWidth)
+    }
+
+    updateShellWidth(shell.getBoundingClientRect().width)
     const resizeObserver = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width
-      if (width) {
-        setShellWidth(width)
+      if (!width) {
+        return
       }
+
+      cancelAnimationFrame(animationFrameId)
+      animationFrameId = requestAnimationFrame(() => updateShellWidth(width))
     })
     resizeObserver.observe(shell)
-    return () => resizeObserver.disconnect()
+    return () => {
+      cancelAnimationFrame(animationFrameId)
+      resizeObserver.disconnect()
+    }
   }, [])
 
   const currentShellWidth = shellWidth || getShellWidth()
@@ -859,10 +1122,22 @@ export function App() {
     <main
       ref={shellRef}
       data-shell-resizing={isShellResizing ? "true" : undefined}
-      className="relative flex h-svh overflow-hidden rounded-[var(--ousia-window-radius)] bg-sidebar text-foreground"
+      className="relative flex h-screen overflow-hidden rounded-[var(--ousia-window-radius)] bg-sidebar text-foreground"
     >
+      <div
+        aria-hidden={zoomIndicatorPercent === null}
+        aria-live="polite"
+        className={[
+          "pointer-events-none fixed top-3 right-3 z-50 rounded-md border border-foreground/10 bg-popover/92 px-3 py-1.5 text-sm font-medium tabular-nums text-popover-foreground shadow-lg backdrop-blur transition-all duration-150",
+          zoomIndicatorPercent === null
+            ? "translate-y-1 opacity-0"
+            : "translate-y-0 opacity-100",
+        ].join(" ")}
+      >
+        {zoomIndicatorPercent ?? 100}%
+      </div>
       {isSidebarCollapsed ? null : (
-        <div className="flex shrink-0 overflow-hidden">
+        <div className="relative z-0 flex shrink-0 overflow-hidden">
           <Sidebar
             onCreateProjectSession={createProjectSession}
             onCreateSession={handleCreateSession}
@@ -875,15 +1150,15 @@ export function App() {
             onReorderSidebarSections={handleReorderSidebarSections}
             onReorderSessions={handleReorderSessions}
             onSelectSession={handleSelectSession}
-            onToggleSidebar={() => setIsSidebarCollapsed(true)}
+            onScrollTargetHandled={() => setSidebarScrollTargetSessionId("")}
             expandedProjectIds={expandedProjectIds}
             onExpandedProjectIdsChange={setExpandedProjectIds}
             projects={projects}
             selectedSessionId={selectedSession?.id ?? ""}
             sidebarSectionOrder={sidebarSectionOrder}
+            scrollTargetSessionId={sidebarScrollTargetSessionId}
             sessionRunStatusById={runStatusBySession}
             sessions={sessions}
-            isWindowFullscreen={isWindowFullscreen}
             language={settings.language}
             style={{ width: effectiveSidebarWidth }}
           />
@@ -893,8 +1168,8 @@ export function App() {
           />
         </div>
       )}
-      <div className="min-w-0 flex-1 bg-sidebar">
-        <div className="flex h-full min-w-0 overflow-hidden">
+      <div className="relative z-20 min-w-0 flex-1 bg-sidebar">
+        <div className="flex h-full min-w-0 overflow-visible">
           {isSettingsOpen ? (
             <SettingsPage
               modelRegistry={modelRegistry}
@@ -920,14 +1195,14 @@ export function App() {
                   isTerminalPanelCollapsed={!shouldShowTerminalPanel}
                   onLocalEvent={appendLocalEvent}
                   onGenerateSessionTitle={handleGenerateSessionTitle}
+                  onBranchFromMessage={handleBranchFromMessage}
+                  contextUsage={selectedContextUsage}
                   onExpandTerminalPanel={() => {
                     expandTerminalPanel()
                   }}
                   onSettingsChange={handleSettingsChange}
-                  onToggleSidebar={() => {
-                    expandSidebar()
-                  }}
                   modelRegistry={modelRegistry}
+                  queuedChatState={selectedQueuedChatState}
                   settings={settings}
                   language={settings.language}
                   style={
@@ -977,6 +1252,14 @@ export function App() {
           )}
         </div>
       </div>
+      <TitleBarSidebarToggle
+        className="absolute top-0 left-4 z-50"
+        isFullscreen={isWindowFullscreen}
+        label={isSidebarCollapsed ? t.chat.expandSidebar : t.sidebar.collapse}
+        onClick={
+          isSidebarCollapsed ? expandSidebar : () => setIsSidebarCollapsed(true)
+        }
+      />
     </main>
   )
 }

@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react"
-import { Eye, EyeOff, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react"
+import {
+  Eye,
+  EyeOff,
+  FolderOpen,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from "@/components/icons/nucleo-icons"
 
 import { getMessages, languageOptions } from "@/app/i18n"
 import { modelsForProvider, providerLabel } from "@/app/model-presets"
@@ -27,10 +35,12 @@ import {
   normalizeOusiaAppSettings,
   type OusiaAgentMode,
   type OusiaAppearanceColorScale,
+  type OusiaFontFamily,
   type OusiaLanguage,
   type OusiaModelRegistryResult,
   type OusiaSendDuringRunMode,
 } from "@/electron/chat-types"
+import { cn } from "@/lib/utils"
 
 const appearanceColorScales: Array<{
   label: string
@@ -44,30 +54,6 @@ const appearanceColorScales: Array<{
   { label: "Slate", value: "slate", description: "" },
   { label: "Mauve", value: "mauve", description: "" },
   { label: "Sage", value: "sage", description: "" },
-  { label: "Olive", value: "olive", description: "" },
-  { label: "Tomato", value: "tomato", description: "" },
-  { label: "Red", value: "red", description: "" },
-  { label: "Ruby", value: "ruby", description: "" },
-  { label: "Crimson", value: "crimson", description: "" },
-  { label: "Pink", value: "pink", description: "" },
-  { label: "Plum", value: "plum", description: "" },
-  { label: "Purple", value: "purple", description: "" },
-  { label: "Violet", value: "violet", description: "" },
-  { label: "Iris", value: "iris", description: "" },
-  { label: "Indigo", value: "indigo", description: "" },
-  { label: "Blue", value: "blue", description: "" },
-  { label: "Cyan", value: "cyan", description: "" },
-  { label: "Teal", value: "teal", description: "" },
-  { label: "Jade", value: "jade", description: "" },
-  { label: "Green", value: "green", description: "" },
-  { label: "Grass", value: "grass", description: "" },
-  { label: "Brown", value: "brown", description: "" },
-  { label: "Orange", value: "orange", description: "" },
-  { label: "Amber", value: "amber", description: "" },
-  { label: "Yellow", value: "yellow", description: "" },
-  { label: "Lime", value: "lime", description: "" },
-  { label: "Mint", value: "mint", description: "" },
-  { label: "Sky", value: "sky", description: "" },
 ]
 
 type SettingsPageProps = {
@@ -83,7 +69,7 @@ const settingsSectionClass = "grid gap-4"
 const settingsFieldClass = "grid gap-2"
 const settingsLabelClass = "text-xs font-medium text-muted-foreground"
 const settingsHelpClass = "text-xs leading-5 text-muted-foreground"
-const settingsControlClass = "w-full rounded-md"
+const settingsControlClass = "ousia-squircle-corners w-full rounded-xl"
 
 export function SettingsPage({
   modelRegistry,
@@ -116,8 +102,8 @@ export function SettingsPage({
     label: string
     value: OusiaSendDuringRunMode
   }> = [
-    { label: t.settings.steer, value: "steer" },
     { label: t.settings.queue, value: "queue" },
+    { label: t.settings.steer, value: "steer" },
   ]
   const agentModeOptions: Array<{
     description: string
@@ -139,6 +125,22 @@ export function SettingsPage({
       label: t.settings.noTerminalMode,
       value: "noTerminal",
     },
+    {
+      description: t.settings.customModeDescription,
+      label: t.settings.customMode,
+      value: "custom",
+    },
+  ]
+  const fontFamilyOptions: Array<{
+    label: string
+    value: OusiaFontFamily
+  }> = [
+    { label: t.settings.fontSystem, value: "system" },
+    { label: t.settings.fontPingFang, value: "pingfang" },
+    { label: t.settings.fontMicrosoftYaHei, value: "microsoftYaHei" },
+    { label: t.settings.fontSourceHanSans, value: "sourceHanSans" },
+    { label: t.settings.fontZhuqueFangsong, value: "zhuqueFangsong" },
+    { label: t.settings.fontLxgwWenkai, value: "lxgwWenkai" },
   ]
 
   useEffect(() => {
@@ -352,7 +354,7 @@ export function SettingsPage({
   )?.description
 
   return (
-    <section className="@container/settings flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
+    <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
       <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pr-4 pl-4">
         <div className="window-drag flex min-w-0 items-center self-stretch">
           <h1 className="window-drag truncate text-sm leading-none font-normal">
@@ -364,7 +366,7 @@ export function SettingsPage({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="window-no-drag size-6 rounded-md"
+            className="window-no-drag ousia-squircle-corners size-6 rounded-lg"
             aria-label={t.app.close}
             onClick={onClose}
           >
@@ -382,7 +384,7 @@ export function SettingsPage({
               </label>
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                 <Input
-                  className="flex-1 rounded-md border-border/70 bg-input/30"
+                  className="ousia-squircle-corners flex-1 rounded-xl border-[0.5px] border-foreground/10 bg-input/30"
                   value={draft.defaultWorkDir}
                   onChange={(event) =>
                     updateDraft({
@@ -395,13 +397,13 @@ export function SettingsPage({
                       event.currentTarget.blur()
                     }
                   }}
-                  placeholder="~/.ousia/workspace"
+                  placeholder="~/.ousia/chat"
                 />
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-9 rounded-md border-border/70 bg-input/30 hover:bg-input/45"
+                  className="ousia-squircle-corners h-9 rounded-xl border-[0.5px] border-foreground/10 bg-input/30 hover:bg-input/45"
                   onClick={chooseDefaultWorkDir}
                 >
                   <FolderOpen size={18} />
@@ -469,6 +471,78 @@ export function SettingsPage({
                   </SelectGroup>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
+                {t.settings.appFontFamily}
+              </span>
+              <Select
+                items={fontFamilyOptions}
+                value={draft.appFontFamily}
+                onValueChange={(value) =>
+                  applySettings({
+                    appFontFamily: value as OusiaFontFamily,
+                  })
+                }
+              >
+                <SelectTrigger
+                  aria-label={t.settings.appFontFamily}
+                  className={settingsControlClass}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    {fontFamilyOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {draft.appFontFamily === "microsoftYaHei" ? (
+                <div className={settingsHelpClass}>
+                  {t.settings.fontFamilyHelp}
+                </div>
+              ) : null}
+            </div>
+
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
+                {t.settings.chatFontFamily}
+              </span>
+              <Select
+                items={fontFamilyOptions}
+                value={draft.chatFontFamily}
+                onValueChange={(value) =>
+                  applySettings({
+                    chatFontFamily: value as OusiaFontFamily,
+                  })
+                }
+              >
+                <SelectTrigger
+                  aria-label={t.settings.chatFontFamily}
+                  className={settingsControlClass}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    {fontFamilyOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {draft.chatFontFamily === "microsoftYaHei" ? (
+                <div className={settingsHelpClass}>
+                  {t.settings.fontFamilyHelp}
+                </div>
+              ) : null}
             </div>
 
             <div className={settingsFieldClass}>
@@ -575,6 +649,31 @@ export function SettingsPage({
                 </SelectContent>
               </Select>
             </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className={settingsLabelClass}>
+                {t.settings.showContextUsage}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.showContextUsage}
+                className={cn(
+                  "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                  draft.showContextUsage ? "bg-foreground" : "bg-muted"
+                )}
+                onClick={() =>
+                  applySettings({ showContextUsage: !draft.showContextUsage })
+                }
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute top-0.5 size-4 rounded-full bg-background shadow-sm transition-[left]",
+                    draft.showContextUsage ? "left-[18px]" : "left-0.5"
+                  )}
+                />
+              </button>
+            </div>
           </section>
 
           <section className={settingsSectionClass}>
@@ -588,7 +687,7 @@ export function SettingsPage({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  className="border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
+                  className="ousia-squircle-corners rounded-xl border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
                   disabled={!addableProviders.length}
                   onClick={openAddProviderDialog}
                 >
@@ -617,7 +716,7 @@ export function SettingsPage({
                       <div className="relative min-w-0 @max-[559px]:col-span-1">
                         <Input
                           aria-label={`${provider.id} API Key`}
-                          className="min-w-0 rounded-md border-transparent bg-background/85 pr-10 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.03)] focus-visible:bg-background disabled:opacity-100 dark:bg-input/45 dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] dark:focus-visible:bg-input/60"
+                          className="ousia-squircle-corners min-w-0 rounded-xl border-[0.5px] border-foreground/10 bg-background/85 pr-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] focus-visible:bg-background disabled:opacity-100 dark:bg-input/45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-visible:bg-input/60"
                           disabled={
                             !providerHasApiKey && !isEditingEnvironmentProvider
                           }
@@ -667,7 +766,7 @@ export function SettingsPage({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                            className="ousia-squircle-corners absolute top-1/2 right-1 size-7 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
                             aria-label={
                               isProviderApiKeyVisible
                                 ? t.settings.hideApiKey
@@ -688,7 +787,7 @@ export function SettingsPage({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                            className="ousia-squircle-corners absolute top-1/2 right-1 size-7 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
                             aria-label={t.app.cancel}
                             onMouseDown={(event) => event.preventDefault()}
                             onClick={() =>
@@ -702,7 +801,7 @@ export function SettingsPage({
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            className="absolute top-1/2 right-1 size-7 -translate-y-1/2 text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                            className="ousia-squircle-corners absolute top-1/2 right-1 size-7 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
                             aria-label={`${t.app.edit} ${provider.id} API Key`}
                             onClick={() =>
                               editEnvironmentProviderApiKey(provider.id)
@@ -716,7 +815,7 @@ export function SettingsPage({
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        className="justify-self-end text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
+                        className="ousia-squircle-corners justify-self-end rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
                         aria-label={`${t.app.delete} ${provider.id}`}
                         disabled={draft.modelProviders.length <= 1}
                         onClick={() => deleteProvider(provider.id)}
@@ -744,7 +843,7 @@ export function SettingsPage({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="mt-0.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.96]"
+                    className="ousia-squircle-corners mt-0.5 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.96]"
                     aria-label={t.app.close}
                     onClick={() => setIsAddProviderDialogOpen(false)}
                   >
@@ -767,7 +866,7 @@ export function SettingsPage({
                   >
                     <SelectTrigger
                       aria-label={t.settings.provider}
-                      className="mt-2 w-full rounded-xl border-neutral-200 bg-white hover:bg-white"
+                      className="ousia-squircle-corners mt-2 w-full rounded-xl border-[0.5px] border-foreground/10 bg-white hover:bg-white"
                     >
                       <SelectValue placeholder={t.settings.chooseProvider} />
                     </SelectTrigger>
@@ -789,7 +888,7 @@ export function SettingsPage({
                   </span>
                   <Input
                     aria-label="API Key"
-                    className="mt-2 rounded-xl border-neutral-200 bg-white focus-visible:bg-white disabled:cursor-default disabled:bg-neutral-50 disabled:text-neutral-500 disabled:opacity-100"
+                    className="ousia-squircle-corners mt-2 rounded-xl border-[0.5px] border-foreground/10 bg-white focus-visible:bg-white disabled:cursor-default disabled:bg-neutral-50 disabled:text-neutral-500 disabled:opacity-100"
                     disabled={newProviderUsesEnvironment}
                     value={newProviderUsesEnvironment ? "" : newProviderApiKey}
                     onChange={(event) =>
@@ -830,7 +929,7 @@ export function SettingsPage({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-10 rounded-2xl border-neutral-200 bg-white px-5 text-neutral-950 hover:bg-neutral-50 active:scale-[0.96]"
+                    className="ousia-squircle-corners h-10 rounded-2xl border-[0.5px] border-foreground/10 bg-white px-5 text-neutral-950 hover:bg-neutral-50 active:scale-[0.96]"
                     onClick={() => setIsAddProviderDialogOpen(false)}
                   >
                     {t.app.cancel}
@@ -838,7 +937,7 @@ export function SettingsPage({
                   <Button
                     type="button"
                     size="sm"
-                    className="h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800 active:scale-[0.96]"
+                    className="ousia-squircle-corners h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800 active:scale-[0.96]"
                     disabled={!canAddProvider}
                     onClick={addProvider}
                   >

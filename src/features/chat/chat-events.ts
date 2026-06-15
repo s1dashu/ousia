@@ -40,34 +40,41 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
       role: "user",
       text: event.text,
       attachments: event.attachments,
+      timestamp: event.timestamp,
     })
   } else if (event.type === "assistant_text_start") {
     upsertText(event.id, "assistant", (item) => {
       item.status = "streaming"
+      item.timestamp = event.timestamp
     })
   } else if (event.type === "assistant_text_delta") {
     upsertText(event.id, "assistant", (item) => {
       item.text += event.delta
       item.status = "streaming"
+      item.timestamp = event.timestamp
     })
   } else if (event.type === "assistant_text_end") {
     upsertText(event.id, "assistant", (item) => {
       item.text = event.text ?? item.text
       item.status = "finished"
+      item.timestamp = event.timestamp
     })
   } else if (event.type === "thinking_start") {
     upsertText(event.id, "thinking", (item) => {
       item.status = "streaming"
+      item.timestamp = event.timestamp
     })
   } else if (event.type === "thinking_delta") {
     upsertText(event.id, "thinking", (item) => {
       item.text += event.delta
       item.status = "streaming"
+      item.timestamp = event.timestamp
     })
   } else if (event.type === "thinking_end") {
     upsertText(event.id, "thinking", (item) => {
       item.text = event.text ?? item.text
       item.status = "finished"
+      item.timestamp = event.timestamp
     })
   } else if (event.type === "tool_start") {
     const input = formatToolPayload(event.args)
