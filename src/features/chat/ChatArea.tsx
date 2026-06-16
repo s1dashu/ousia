@@ -935,6 +935,7 @@ export function ChatArea({
       >
         <ChatMessageList
           items={items}
+          isAgentWorking={isAgentWorking}
           onBranchFromMessage={onBranchFromMessage}
           showTurnWaitIndicator={showTurnWaitIndicator}
           t={t}

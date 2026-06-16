@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 
 type ChatMessageListProps = {
   items: ChatItem[]
+  isAgentWorking: boolean
   onBranchFromMessage: (itemId: string) => void
   projectPath?: string
   sessionId?: string
@@ -28,6 +29,7 @@ type ChatMessageListProps = {
 
 export const ChatMessageList = memo(function ChatMessageList({
   items,
+  isAgentWorking,
   onBranchFromMessage,
   projectPath,
   sessionId,
@@ -35,6 +37,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   t,
 }: ChatMessageListProps) {
   const visibleItems = items.filter(shouldRenderChatItem)
+  const footerItemIds = footerItemIdsForVisibleItems(visibleItems, isAgentWorking)
 
   return (
     <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-6")}>
@@ -48,6 +51,7 @@ export const ChatMessageList = memo(function ChatMessageList({
             >
               <ChatItemView
                 item={item}
+                showAssistantFooter={footerItemIds.has(item.id)}
                 onBranchFromMessage={onBranchFromMessage}
                 projectPath={projectPath}
                 sessionId={sessionId}
@@ -66,14 +70,52 @@ function shouldRenderChatItem(item: ChatItem) {
   return item.role !== "thinking" || item.status !== "finished"
 }
 
+function footerItemIdsForVisibleItems(items: ChatItem[], isAgentWorking: boolean) {
+  const footerItemIds = new Set<string>()
+  let latestFinishedAssistantId: string | undefined
+
+  items.forEach((item) => {
+    if (item.role === "user" || item.role === "system" || item.role === "error") {
+      if (latestFinishedAssistantId) {
+        footerItemIds.add(latestFinishedAssistantId)
+        latestFinishedAssistantId = undefined
+      }
+      return
+    }
+
+    if (item.role === "assistant") {
+      if (item.status === "finished") {
+        latestFinishedAssistantId = item.id
+      }
+      return
+    }
+
+    if (item.role === "tool") {
+      latestFinishedAssistantId = undefined
+      return
+    }
+  })
+
+  const isCurrentRunCandidate =
+    isAgentWorking && latestFinishedAssistantId === items.at(-1)?.id
+
+  if (latestFinishedAssistantId && !isCurrentRunCandidate) {
+    footerItemIds.add(latestFinishedAssistantId)
+  }
+
+  return footerItemIds
+}
+
 const ChatItemView = memo(function ChatItemView({
   item,
+  showAssistantFooter,
   onBranchFromMessage,
   projectPath,
   sessionId,
   t,
 }: {
   item: ChatItem
+  showAssistantFooter: boolean
   onBranchFromMessage: (itemId: string) => void
   projectPath?: string
   sessionId?: string
@@ -144,7 +186,7 @@ const ChatItemView = memo(function ChatItemView({
           ) : null}
         </>
       )}
-      {item.role === "assistant" && item.status === "finished" ? (
+      {showAssistantFooter ? (
         <AssistantMessageFooter
           item={item}
           onBranchFromMessage={onBranchFromMessage}
