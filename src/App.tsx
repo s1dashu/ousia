@@ -44,7 +44,7 @@ const SESSION_TITLE_MODEL_ID = "deepseek-v4-flash"
 
 const MIN_SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSE_THRESHOLD = 120
-const MAX_SIDEBAR_WIDTH = 360
+const MAX_SIDEBAR_WIDTH = 320
 const MIN_CHAT_WIDTH = 300
 const MIN_TERMINAL_PANEL_WIDTH = 400
 const MIN_TERMINAL_PANEL_COMPACT_WIDTH = 260
@@ -1280,6 +1280,7 @@ export function App() {
     const startSidebarWidth = sidebarWidth
     const shellWidth = getShellWidth()
     let pendingSidebarWidth = startSidebarWidth
+    let isStopped = false
 
     function commitSidebarWidth(nextSidebarWidth: number) {
       pendingSidebarWidth = nextSidebarWidth
@@ -1296,6 +1297,10 @@ export function App() {
     }
 
     function stopSidebarResize() {
+      if (isStopped) {
+        return
+      }
+      isStopped = true
       if (resizeTarget.hasPointerCapture(event.pointerId)) {
         resizeTarget.releasePointerCapture(event.pointerId)
       }
@@ -1312,6 +1317,8 @@ export function App() {
       window.removeEventListener("pointerup", handlePointerUp)
       window.removeEventListener("pointercancel", handlePointerUp)
       window.removeEventListener("blur", handlePointerUp)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      resizeTarget.removeEventListener("lostpointercapture", handlePointerUp)
       setIsShellResizing(false)
     }
 
@@ -1344,10 +1351,20 @@ export function App() {
       stopSidebarResize()
     }
 
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") {
+        stopSidebarResize()
+      }
+    }
+
     window.addEventListener("pointermove", handlePointerMove)
     window.addEventListener("pointerup", handlePointerUp, { once: true })
     window.addEventListener("pointercancel", handlePointerUp, { once: true })
     window.addEventListener("blur", handlePointerUp, { once: true })
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    resizeTarget.addEventListener("lostpointercapture", handlePointerUp, {
+      once: true,
+    })
   }
 
   function beginTerminalPanelResize(event: PointerEvent<HTMLDivElement>) {
@@ -1359,6 +1376,7 @@ export function App() {
     const startTerminalPanelWidth = terminalPanelWidth
     const shellWidth = getShellWidth()
     let pendingTerminalPanelWidth = startTerminalPanelWidth
+    let isStopped = false
 
     function commitTerminalPanelWidth(nextTerminalPanelWidth: number) {
       pendingTerminalPanelWidth = nextTerminalPanelWidth
@@ -1388,7 +1406,11 @@ export function App() {
       commitTerminalPanelWidth(nextTerminalPanelWidth)
     }
 
-    function handlePointerUp() {
+    function stopTerminalPanelResize() {
+      if (isStopped) {
+        return
+      }
+      isStopped = true
       if (resizeTarget.hasPointerCapture(event.pointerId)) {
         resizeTarget.releasePointerCapture(event.pointerId)
       }
@@ -1405,13 +1427,29 @@ export function App() {
       window.removeEventListener("pointerup", handlePointerUp)
       window.removeEventListener("pointercancel", handlePointerUp)
       window.removeEventListener("blur", handlePointerUp)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+      resizeTarget.removeEventListener("lostpointercapture", handlePointerUp)
       setIsShellResizing(false)
+    }
+
+    function handlePointerUp() {
+      stopTerminalPanelResize()
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") {
+        stopTerminalPanelResize()
+      }
     }
 
     window.addEventListener("pointermove", handlePointerMove)
     window.addEventListener("pointerup", handlePointerUp, { once: true })
     window.addEventListener("pointercancel", handlePointerUp, { once: true })
     window.addEventListener("blur", handlePointerUp, { once: true })
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    resizeTarget.addEventListener("lostpointercapture", handlePointerUp, {
+      once: true,
+    })
   }
 
   const shouldShowTerminalPanel = isTerminalPanelOpen

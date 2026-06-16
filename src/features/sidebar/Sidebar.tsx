@@ -701,6 +701,29 @@ export const Sidebar = memo(function Sidebar({
     }
   }, [onScrollTargetHandled, scrollTargetSessionId])
 
+  useEffect(() => {
+    if (!dragPreview) {
+      return
+    }
+
+    function clearDragPreview() {
+      setDragPreview(null)
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") {
+        clearDragPreview()
+      }
+    }
+
+    window.addEventListener("blur", clearDragPreview)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+    return () => {
+      window.removeEventListener("blur", clearDragPreview)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [dragPreview])
+
   function startRenameSession(session: SessionRecord) {
     setEditingSessionId(session.id)
     setEditingSessionTitle(session.title)
@@ -956,6 +979,7 @@ export const Sidebar = memo(function Sidebar({
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragAbort={handleDragCancel}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}

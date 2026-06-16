@@ -34,11 +34,13 @@ export const ChatMessageList = memo(function ChatMessageList({
   showTurnWaitIndicator,
   t,
 }: ChatMessageListProps) {
+  const visibleItems = items.filter(shouldRenderChatItem)
+
   return (
     <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-6")}>
-      {items.length ? (
+      {visibleItems.length ? (
         <>
-          {items.map((item) => (
+          {visibleItems.map((item) => (
             <div
               className="ousia-chat-message-contain"
               data-chat-message-role={item.role}
@@ -59,6 +61,10 @@ export const ChatMessageList = memo(function ChatMessageList({
     </div>
   )
 })
+
+function shouldRenderChatItem(item: ChatItem) {
+  return item.role !== "thinking" || item.status !== "finished"
+}
 
 const ChatItemView = memo(function ChatItemView({
   item,

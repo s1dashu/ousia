@@ -289,6 +289,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       minWidth: MAIN_WINDOW_MIN_WIDTH,
       minHeight: MAIN_WINDOW_MIN_HEIGHT,
       title: "Ousia",
+      frame: platform !== "darwin",
       titleBarStyle: "hiddenInset",
       trafficLightPosition: { x: 14, y: 15 },
       transparent: platform === "darwin",
@@ -302,6 +303,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       },
     })
     if (platform === "darwin") {
+      mainWindow.setWindowButtonVisibility(true)
       mainWindow.setVibrancy("under-window")
     }
     if (appState.windowState.isMaximized) {

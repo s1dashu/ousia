@@ -12,7 +12,12 @@ export function TitleBarTrafficLightSlot({
     return null
   }
 
-  return <div className="w-[70px] shrink-0" aria-hidden="true" />
+  return (
+    <div
+      className="window-drag pointer-events-none w-[70px] shrink-0"
+      aria-hidden="true"
+    />
+  )
 }
 
 export function TitleBarSidebarToggle({
@@ -29,7 +34,7 @@ export function TitleBarSidebarToggle({
   return (
     <div
       className={cn(
-        "window-no-drag flex h-10 shrink-0 items-center gap-2",
+        "window-drag pointer-events-none flex h-10 shrink-0 items-center gap-2",
         className
       )}
     >

@@ -66,7 +66,7 @@ function normalizeShellLayout(value: unknown): OusiaShellLayoutState {
   ]
 
   return {
-    sidebarWidth: clampNumber(value.sidebarWidth, fallback.sidebarWidth, 200, 360),
+    sidebarWidth: clampNumber(value.sidebarWidth, fallback.sidebarWidth, 200, 320),
     terminalPanelWidth: clampNumber(
       value.terminalPanelWidth,
       fallback.terminalPanelWidth,

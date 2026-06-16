@@ -51,9 +51,10 @@ export function ChatHeader({
         "window-drag absolute top-0 right-0 left-px z-30 grid h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-tl-[calc(var(--ousia-chat-panel-radius)-1px)] bg-[var(--ousia-chat-header-bg)] pr-4 pl-4 shadow-none transition-[background-color,box-shadow,backdrop-filter]"
       )}
     >
+      <div className="window-drag absolute inset-0" aria-hidden="true" />
       <div
         className={cn(
-          "window-drag flex min-w-0 items-center gap-3 self-stretch",
+          "window-drag pointer-events-none relative z-10 flex min-w-0 items-center gap-3 self-stretch",
           isSidebarCollapsed && (isWindowFullscreen ? "pl-10" : "pl-[108px]")
         )}
       >
@@ -71,7 +72,7 @@ export function ChatHeader({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className="window-no-drag ml-1 shrink-0"
+                  className="window-no-drag pointer-events-auto ml-1 shrink-0"
                   aria-label={t.chat.moreSessionActions}
                 >
                   <MoreHorizontal size={18} />
@@ -123,13 +124,13 @@ export function ChatHeader({
           </DropdownMenu>
         </div>
       </div>
-      <div className="window-drag flex shrink-0 items-center gap-1">
+      <div className="window-drag pointer-events-none relative z-10 flex shrink-0 items-center gap-1">
         {isTerminalPanelCollapsed ? (
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="window-no-drag ousia-squircle-corners size-6 rounded-lg hover:bg-[var(--sidebar-accent)] focus-visible:bg-[var(--sidebar-accent)]"
+            className="window-no-drag ousia-squircle-corners pointer-events-auto size-6 rounded-lg hover:bg-[var(--sidebar-accent)] focus-visible:bg-[var(--sidebar-accent)]"
             aria-label={t.chat.openTerminal}
             onClick={onExpandTerminalPanel}
           >
