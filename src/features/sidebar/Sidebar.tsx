@@ -47,17 +47,20 @@ const sidebarActionButtonClass = "size-6 justify-self-end"
 const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
 const sidebarProjectActionButtonClass = "size-6 justify-self-center"
 const sidebarProjectLeadGridClass =
-  "grid-cols-[24px_minmax(0,1fr)_24px_4px_24px]"
+  "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarRowXClass = "pl-2 pr-0"
 const sidebarSessionRowXClass =
   "-mx-[5px] w-[calc(100%+10px)] pl-[13px] pr-[5px]"
+const sidebarProjectRowXClass = "w-full pl-2 pr-0"
 const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = "pl-2 pr-0"
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
 const sidebarRowStateClass =
   "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)]"
+const sidebarProjectRowStateClass =
+  "relative text-sidebar-accent-foreground before:pointer-events-none before:absolute before:inset-y-0 before:-left-[5px] before:-right-[5px] before:rounded-md before:bg-transparent hover:before:bg-[var(--sidebar-accent)] focus-within:before:bg-[var(--sidebar-accent)] [&>*]:relative [&>*]:z-[1]"
 const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
 const sidebarGhostActionClass =
@@ -393,10 +396,10 @@ function SortableProjectSection({
     <section ref={setNodeRef} style={style} className="min-w-0">
       <div
         className={[
-          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing",
-          sidebarRowStateClass,
+          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-1 gap-y-1 rounded-md active:cursor-grabbing",
+          sidebarProjectRowStateClass,
           sidebarProjectLeadGridClass,
-          sidebarRowXClass,
+          sidebarProjectRowXClass,
           isDragging ? "opacity-35" : "",
         ].join(" ")}
         {...attributes}
@@ -443,7 +446,6 @@ function SortableProjectSection({
             strokeWidth={sidebarIconStrokeWidth}
           />
         </Button>
-        <div aria-hidden="true" />
         <Button
           type="button"
           variant="ghost"
@@ -857,7 +859,7 @@ export function Sidebar({
                   t={t}
                 >
                   {isExpanded ? (
-                    <div className="overflow-hidden">
+                    <div className="overflow-visible py-1 -my-1">
                       <SortableContext
                         items={visibleProjectSessions.map((session) => session.id)}
                         strategy={verticalListSortingStrategy}
@@ -969,7 +971,7 @@ export function Sidebar({
         <Button
           type="button"
           variant="ghost"
-          className={`font-radix-regular h-9 w-full justify-start gap-2 text-sm ${sidebarRowStateClass}`}
+          className={`font-radix-regular h-9 w-full justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
           <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />

@@ -4,8 +4,11 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import {
   AlertCircleIcon,
   ArrowDownIcon,
+  ArrowShrinkIcon,
+  ArrowUp02Icon,
   ArrowUpIcon,
   Cancel01Icon,
+  ChatAdd01Icon,
   CheckIcon,
   CheckmarkCircleIcon,
   ChevronDownIcon,
@@ -24,6 +27,7 @@ import {
   FileScriptIcon,
   Folder01Icon,
   Folder02Icon,
+  FolderAddIcon,
   GitBranchIcon,
   GripVerticalIcon,
   Loading03Icon,
@@ -82,8 +86,11 @@ function createHugeIcon(icon: IconSvgElement) {
 }
 
 export const ArrowDown = createHugeIcon(ArrowDownIcon)
+export const ArrowShrink = createHugeIcon(ArrowShrinkIcon)
 export const ArrowUp = createHugeIcon(ArrowUpIcon)
+export const SendArrowUp = createHugeIcon(ArrowUp02Icon)
 export const Branch = createHugeIcon(GitBranchIcon)
+export const ChatPlus = createHugeIcon(ChatAdd01Icon)
 export const Check = createHugeIcon(CheckIcon)
 export const ChevronDown = createHugeIcon(ChevronDownIcon)
 export const ChevronRight = createHugeIcon(ChevronRightIcon)
@@ -101,6 +108,7 @@ export const FileImage = createHugeIcon(HugeFileImageIcon)
 export const FileText = createHugeIcon(FileScriptIcon)
 export const Folder = createHugeIcon(Folder01Icon)
 export const FolderOpen = createHugeIcon(Folder02Icon)
+export const FolderPlus = createHugeIcon(FolderAddIcon)
 export const GitBranchPlus = createHugeIcon(SplitIcon)
 export const GripVertical = createHugeIcon(GripVerticalIcon)
 export const LoaderCircle = createHugeIcon(Loading03Icon)

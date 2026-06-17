@@ -13,6 +13,7 @@ import { generateChatTitleWithUtilityModel } from "./chat-title-generator.js"
 import type {
   OusiaAppState,
   OusiaChatBranchPayload,
+  OusiaChatCompactPayload,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatExportPayload,
@@ -39,8 +40,6 @@ let mainWindow: BrowserWindow | undefined
 
 function emitChatEvent(event: OusiaChatEvent, context?: OusiaChatContext) {
   if (event.type === "error") {
-    writeRuntimeLog("chat.event", "error", { context, text: event.text })
-  } else if (event.type === "run_status" && event.status === "error") {
     writeRuntimeLog("chat.event", "error", { context, text: event.text })
   }
   mainWindow?.webContents.send(
@@ -131,6 +130,14 @@ ipcMain.handle(
 
 ipcMain.handle("ousia:chat:interrupt", (_event, payload: OusiaChatInterruptPayload) =>
   agentConversations.interruptChat(payload)
+)
+
+ipcMain.handle("ousia:chat:clear-queue", (_event, payload: OusiaChatContext) =>
+  agentConversations.clearChatQueue(payload)
+)
+
+ipcMain.handle("ousia:chat:compact", (_event, payload: OusiaChatCompactPayload) =>
+  agentConversations.compactChat(payload)
 )
 
 ipcMain.handle("ousia:models:list", () => listPiModels(app.getPath("userData")))

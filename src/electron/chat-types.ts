@@ -525,6 +525,14 @@ export type OusiaChatEvent = {
       timestamp: string
     }
   | {
+      type: "status_message"
+      id: string
+      role?: "system" | "error"
+      status: "streaming" | "finished"
+      text: string
+      timestamp: string
+    }
+  | {
       type: "context_usage"
       tokens: number | null
       contextWindow: number
@@ -572,6 +580,24 @@ export type OusiaChatInterruptResult = {
   ok: boolean
 }
 
+export type OusiaChatClearQueueResult = {
+  ok: boolean
+  error?: string
+}
+
+export type OusiaChatCompactPayload = OusiaChatContext & {
+  agentMode?: OusiaAgentMode
+  customAgentTools?: OusiaAgentToolName[]
+  autoCompactContext?: boolean
+  thinkingLevel: OusiaThinkingLevel
+  model: OusiaModelSettings
+}
+
+export type OusiaChatCompactResult = {
+  ok: boolean
+  error?: string
+}
+
 export type OusiaChatSendPayload = OusiaChatContext & {
   prompt: string
   attachments?: OusiaChatAttachment[]
@@ -584,13 +610,16 @@ export type OusiaChatSendPayload = OusiaChatContext & {
 }
 
 export type OusiaChatHistoryPayload = OusiaChatContext & {
+  beforeItemId?: string
   includeToolPayloads?: boolean
   limit?: number
 }
 
 export type OusiaChatHistoryResult = {
+  hasMore?: boolean
   isPartial?: boolean
   items: OusiaChatHistoryItem[]
+  nextCursor?: string
   totalItems?: number
 }
 

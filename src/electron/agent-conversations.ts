@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs"
 import { stat } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
@@ -22,6 +28,9 @@ import type {
   OusiaChatContext,
   OusiaChatBranchPayload,
   OusiaChatBranchResult,
+  OusiaChatClearQueueResult,
+  OusiaChatCompactPayload,
+  OusiaChatCompactResult,
   OusiaChatEvent,
   OusiaChatHistoryItem,
   OusiaChatHistoryPayload,
@@ -727,6 +736,95 @@ async function findRecentPiSessionFile(cwd: string, conversationDir: string) {
   )[0]?.path
 }
 
+function readSessionHeaderCwd(sessionFile: string) {
+  try {
+    const firstLine = readFileSync(sessionFile, "utf8").split("\n", 1)[0]
+    const header = JSON.parse(firstLine) as { cwd?: unknown }
+    return typeof header.cwd === "string" && header.cwd.trim()
+      ? header.cwd
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function findRecentPiSessionFileForHistory(context: OusiaChatContext) {
+  const cwd = expandHomePath(context.projectPath)
+  const conversationDir = getConversationDir(context)
+  const expectedSessionFile = await findRecentPiSessionFile(cwd, conversationDir)
+  if (expectedSessionFile) {
+    return { conversationDir, cwd, sessionFile: expectedSessionFile }
+  }
+
+  const sessionsRoot = join(app.getPath("userData"), "sessions")
+  if (!existsSync(sessionsRoot)) {
+    return undefined
+  }
+
+  const candidates = readdirSync(sessionsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const candidateDir = join(sessionsRoot, entry.name, safePathSegment(context.sessionId))
+      if (!existsSync(candidateDir)) {
+        return []
+      }
+      try {
+        return readdirSync(candidateDir)
+          .filter((name) => name.endsWith(".jsonl"))
+          .map((name) => ({
+            conversationDir: candidateDir,
+            sessionFile: join(candidateDir, name),
+          }))
+      } catch {
+        return []
+      }
+    })
+
+  const sortedCandidates = (
+    await Promise.all(
+      candidates.map(async (candidate) => {
+        try {
+          return {
+            ...candidate,
+            fileStat: await stat(candidate.sessionFile),
+          }
+        } catch {
+          return undefined
+        }
+      })
+    )
+  )
+    .filter((candidate): candidate is NonNullable<typeof candidate> =>
+      Boolean(candidate)
+    )
+    .sort((left, right) => right.fileStat.mtimeMs - left.fileStat.mtimeMs)
+
+  for (const candidate of sortedCandidates) {
+    const candidateCwd = readSessionHeaderCwd(candidate.sessionFile) ?? cwd
+    const sessionFile = await findRecentPiSessionFile(
+      candidateCwd,
+      candidate.conversationDir
+    )
+    if (!sessionFile) {
+      continue
+    }
+    writeRuntimeLog("chat.history", "warn", {
+      message: "Recovered session history from fallback directory",
+      requestedProjectPath: context.projectPath,
+      recoveredCwd: candidateCwd,
+      recoveredDir: candidate.conversationDir,
+      sessionId: context.sessionId,
+    })
+    return {
+      conversationDir: candidate.conversationDir,
+      cwd: candidateCwd,
+      sessionFile,
+    }
+  }
+
+  return undefined
+}
+
 export function createAgentConversationModule({
   enabledTools,
   emitChatEvent,
@@ -740,12 +838,11 @@ export function createAgentConversationModule({
     context: OusiaChatContext,
     includeToolPayloads: boolean
   ) {
-    const cwd = expandHomePath(context.projectPath)
-    const conversationDir = getConversationDir(context)
-    const sessionFile = await findRecentPiSessionFile(cwd, conversationDir)
-    if (!sessionFile) {
+    const lookup = await findRecentPiSessionFileForHistory(context)
+    if (!lookup) {
       return []
     }
+    const { conversationDir, cwd, sessionFile } = lookup
 
     const fileStat = await stat(sessionFile)
     const key = sessionKey(context)
@@ -1321,20 +1418,57 @@ export function createAgentConversationModule({
         typeof payload.limit === "number" && Number.isFinite(payload.limit)
           ? Math.max(1, Math.floor(payload.limit))
           : 0
-      if (limit && allItems.length > limit) {
+      const endIndex = payload.beforeItemId
+        ? allItems.findIndex((item) => item.id === payload.beforeItemId)
+        : allItems.length
+      if (endIndex < 0) {
         return {
+          hasMore: false,
           isPartial: true,
-          items: allItems.slice(-limit),
+          items: [],
+          totalItems: allItems.length,
+        }
+      }
+      const startIndex = limit ? Math.max(0, endIndex - limit) : 0
+      const items = allItems.slice(startIndex, endIndex)
+      const hasMore = startIndex > 0
+      writeRuntimeLog("chat.history", "info", {
+        beforeItemId: payload.beforeItemId,
+        includeToolPayloads: payload.includeToolPayloads === true,
+        limit,
+        projectPath: payload.projectPath,
+        returnedItems: items.length,
+        sessionId: payload.sessionId,
+        totalItems: allItems.length,
+      })
+      if (!items.length) {
+        writeRuntimeLog("chat.history", "warn", {
+          beforeItemId: payload.beforeItemId,
+          includeToolPayloads: payload.includeToolPayloads === true,
+          limit,
+          projectPath: payload.projectPath,
+          sessionId: payload.sessionId,
+          totalItems: allItems.length,
+        })
+      }
+      if (limit || payload.beforeItemId) {
+        return {
+          hasMore,
+          isPartial: items.length !== allItems.length,
+          items,
+          nextCursor: hasMore ? items[0]?.id : undefined,
           totalItems: allItems.length,
         }
       }
       return {
+        hasMore: false,
         isPartial: false,
         items: allItems,
         totalItems: allItems.length,
       }
     } catch (error) {
       return {
+        hasMore: false,
         isPartial: false,
         items: [
           {
@@ -1359,6 +1493,14 @@ export function createAgentConversationModule({
         (candidate) => candidate.role === "tool" && candidate.id === payload.itemId
       )
       if (!item || item.role !== "tool") {
+        writeRuntimeLog("chat.toolPayload", "warn", {
+          itemId: payload.itemId,
+          projectPath: payload.projectPath,
+          sessionId: payload.sessionId,
+          toolItemCount: items.filter((candidate) => candidate.role === "tool")
+            .length,
+          totalItems: items.length,
+        })
         return { ok: false, error: "没有找到这条工具调用。" }
       }
       return { ok: true, item }
@@ -1493,7 +1635,7 @@ export function createAgentConversationModule({
           {
             type: "run_status",
             status: "finished",
-            text: "已中断智能体。",
+            text: "已中断",
             timestamp: now(),
           },
           context
@@ -1549,6 +1691,60 @@ export function createAgentConversationModule({
     try {
       const bundle = await promise
       return { ok: true, usage: bundle.session.getContextUsage() }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  async function clearChatQueue(
+    context: OusiaChatContext
+  ): Promise<OusiaChatClearQueueResult> {
+    const promise = sessionPromises.get(sessionKey(context))
+    if (!promise) {
+      return { ok: true }
+    }
+    try {
+      const bundle = await promise
+      bundle.session.clearQueue()
+      return { ok: true }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  async function compactChat(
+    payload: OusiaChatCompactPayload
+  ): Promise<OusiaChatCompactResult> {
+    const context = {
+      projectPath: payload.projectPath,
+      sessionId: payload.sessionId,
+    }
+    try {
+      const bundle = await getAgentSession(
+        context,
+        payload.model,
+        payload.thinkingLevel,
+        payload.agentMode,
+        payload.customAgentTools,
+        payload.autoCompactContext
+      )
+      await configureSessionBundle(
+        bundle,
+        payload.model,
+        payload.thinkingLevel,
+        payload.agentMode,
+        payload.customAgentTools,
+        payload.autoCompactContext
+      )
+      await bundle.session.compact()
+      void emitContextUsage(context, sessionKey(context))
+      return { ok: true }
     } catch (error) {
       return {
         ok: false,
@@ -1632,6 +1828,8 @@ export function createAgentConversationModule({
 
   return {
     branchChat,
+    clearChatQueue,
+    compactChat,
     exportChat,
     getContextUsage,
     getChatHistory,

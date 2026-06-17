@@ -13,9 +13,10 @@ import {
 } from "react"
 import {
   ArrowDown,
-  ArrowUp,
   ChevronDown,
+  LoaderCircle,
   Plus,
+  SendArrowUp,
   SlidersHorizontal,
 } from "@/components/icons/huge-icons"
 
@@ -43,7 +44,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -129,7 +129,10 @@ type ChatAreaProps = {
       }
     | undefined
   items: ChatItem[]
+  hasMoreHistory: boolean
   isAgentWorking: boolean
+  isLoadingHistory: boolean
+  isLoadingOlderHistory: boolean
   isSidebarCollapsed: boolean
   isWindowFullscreen: boolean
   language: OusiaLanguage
@@ -137,6 +140,7 @@ type ChatAreaProps = {
   onLocalEvent: (event: OusiaChatEvent) => void
   onGenerateSessionTitle: (sessionId: string, firstPrompt: string) => void
   onBranchFromMessage: (messageId: string) => void
+  onLoadOlderHistory: () => Promise<void> | void
   onSettingsChange: (settings: AppSettings) => void
   queuedChatState: {
     steering: string[]
@@ -144,6 +148,40 @@ type ChatAreaProps = {
   }
   settings: AppSettings
   style: CSSProperties
+}
+
+type ContextUsage = NonNullable<ChatAreaProps["contextUsage"]>
+
+function clampPercentage(value: number) {
+  return Math.max(0, Math.min(100, value))
+}
+
+function getContextUsagePercent(usage: ContextUsage | undefined) {
+  if (
+    usage &&
+    typeof usage.percent === "number" &&
+    Number.isFinite(usage.percent) &&
+    usage.percent >= 0
+  ) {
+    return clampPercentage(usage.percent)
+  }
+
+  if (
+    usage &&
+    typeof usage.tokens === "number" &&
+    Number.isFinite(usage.tokens) &&
+    usage.tokens > 0 &&
+    Number.isFinite(usage.contextWindow) &&
+    usage.contextWindow > 0
+  ) {
+    return clampPercentage((usage.tokens / usage.contextWindow) * 100)
+  }
+
+  return undefined
+}
+
+function formatContextUsagePercent(percent: number) {
+  return percent < 10 ? percent.toFixed(1) : Math.round(percent).toString()
 }
 
 function defaultThinkingLevelFor(levels: OusiaThinkingLevel[]) {
@@ -157,7 +195,10 @@ export function ChatArea({
   currentSession,
   contextUsage: contextUsageFromEvent,
   items,
+  hasMoreHistory,
   isAgentWorking,
+  isLoadingHistory,
+  isLoadingOlderHistory,
   isSidebarCollapsed,
   isWindowFullscreen,
   language,
@@ -165,6 +206,7 @@ export function ChatArea({
   onLocalEvent,
   onGenerateSessionTitle,
   onBranchFromMessage,
+  onLoadOlderHistory,
   onSettingsChange,
   queuedChatState,
   settings,
@@ -174,10 +216,13 @@ export function ChatArea({
   const [draft, setDraft] = useState("")
   const [attachments, setAttachments] = useState<OusiaChatAttachment[]>([])
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatMessage[]>([])
+  const [isQueuePausedAfterInterrupt, setIsQueuePausedAfterInterrupt] =
+    useState(false)
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null)
   const [draggingQueueId, setDraggingQueueId] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
   const [isInterrupting, setIsInterrupting] = useState(false)
+  const [isCompacting, setIsCompacting] = useState(false)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
   const [openSessionMenuKey, setOpenSessionMenuKey] = useState<string | null>(
     null
@@ -197,10 +242,16 @@ export function ChatArea({
   const [isChatScrolled, setIsChatScrolled] = useState(false)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const chatContentRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputScrollTopBeforeResizeRef = useRef(0)
   const followLatestFrameRef = useRef(0)
+  const olderHistoryScrollAnchorRef = useRef<{
+    height: number
+    top: number
+  } | null>(null)
+  const isFollowingLatestRef = useRef(isFollowingLatest)
   const isComposingRef = useRef(false)
   const isProgrammaticScrollRef = useRef(false)
   const wasAgentWorkingRef = useRef(isAgentWorking)
@@ -233,24 +284,33 @@ export function ChatArea({
     currentProject && currentSession
       ? `${currentProject.path}::${currentSession.id}`
       : ""
-  const contextUsage =
-    contextUsageFromEvent ??
-    (contextUsageState?.key === currentContextUsageKey
+  const localContextUsage =
+    contextUsageState?.key === currentContextUsageKey
       ? contextUsageState.usage
-      : undefined)
-  const contextUsagePercent =
-    typeof contextUsage?.percent === "number" ? contextUsage.percent : undefined
+      : undefined
+  const contextUsage = localContextUsage ?? contextUsageFromEvent
+  const contextUsagePercent = getContextUsagePercent(contextUsage)
   const hasActualContextUsage = typeof contextUsagePercent === "number"
-  const contextRemainingPercent =
-    hasActualContextUsage
-      ? Math.max(0, Math.round(100 - contextUsagePercent))
-      : 0
-  const contextUsageStrokeDasharray = `${Math.max(
-    0,
-    Math.min(100, contextRemainingPercent)
-  )} 100`
+  const hasContextUsageWindow =
+    Boolean(contextUsage) &&
+    Number.isFinite(contextUsage?.contextWindow) &&
+    (contextUsage?.contextWindow ?? 0) > 0
+  const contextRemainingPercent = hasActualContextUsage
+    ? Math.max(0, Math.floor(100 - contextUsagePercent))
+    : undefined
+  const contextUsagePercentLabel = hasActualContextUsage
+    ? formatContextUsagePercent(contextUsagePercent)
+    : "?"
+  const contextRemainingLabel =
+    typeof contextRemainingPercent === "number" ? contextRemainingPercent : "?"
+  const contextUsageStrokeDasharray = `${contextUsagePercent ?? 0} 100`
+  const isQueueAutoSendPaused =
+    isQueuePausedAfterInterrupt &&
+    !settings.continueQueuedMessagesAfterInterrupt
   const shouldShowContextUsageRing =
-    settings.showContextUsage && items.length > 0 && hasActualContextUsage
+    settings.showContextUsage &&
+    items.length > 0 &&
+    (hasActualContextUsage || hasContextUsageWindow)
   const piQueuedMessages: QueuedChatMessage[] = [
     ...queuedChatState.steering.map((text, index) => ({
       id: `pi-steering-${index}`,
@@ -272,7 +332,7 @@ export function ChatArea({
     return node.scrollHeight - node.scrollTop - node.clientHeight < 24
   }
 
-  const scrollToLatest = useCallback((behavior: ScrollBehavior = "auto") => {
+  const performLatestScroll = useCallback((behavior: ScrollBehavior = "auto") => {
     const node = scrollRef.current
     if (!node) {
       return
@@ -282,20 +342,47 @@ export function ChatArea({
       top: node.scrollHeight,
       behavior,
     })
-    setIsFollowingLatest(true)
     setShowScrollToLatest(false)
     window.setTimeout(
       () => {
-        const currentNode = scrollRef.current
-        if (currentNode && isScrolledToLatest(currentNode)) {
-          isProgrammaticScrollRef.current = false
-        }
+        isProgrammaticScrollRef.current = false
       },
       behavior === "smooth" ? 450 : 0
     )
   }, [])
 
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = "auto") => {
+    performLatestScroll(behavior)
+    setIsFollowingLatest(true)
+  }, [performLatestScroll])
+
+  const loadOlderHistory = useCallback(() => {
+    const node = scrollRef.current
+    if (
+      !node ||
+      !hasMoreHistory ||
+      isLoadingHistory ||
+      isLoadingOlderHistory
+    ) {
+      return
+    }
+    olderHistoryScrollAnchorRef.current = {
+      height: node.scrollHeight,
+      top: node.scrollTop,
+    }
+    void onLoadOlderHistory()
+  }, [
+    hasMoreHistory,
+    isLoadingHistory,
+    isLoadingOlderHistory,
+    onLoadOlderHistory,
+  ])
+
   useEffect(() => {
+    isFollowingLatestRef.current = isFollowingLatest
+  }, [isFollowingLatest])
+
+  useLayoutEffect(() => {
     if (!isFollowingLatest) {
       return
     }
@@ -305,22 +392,54 @@ export function ChatArea({
       if (!node) {
         return
       }
-      isProgrammaticScrollRef.current = true
-      node.scrollTo({
-        top: node.scrollHeight,
-        behavior: "auto",
-      })
-      window.setTimeout(() => {
-        const currentNode = scrollRef.current
-        if (currentNode && isScrolledToLatest(currentNode)) {
-          isProgrammaticScrollRef.current = false
-        }
-      }, 0)
+      performLatestScroll("auto")
     })
     return () => {
       window.cancelAnimationFrame(followLatestFrameRef.current)
     }
-  }, [isAgentWorking, isFollowingLatest, items])
+  }, [isAgentWorking, isFollowingLatest, items, performLatestScroll])
+
+  useLayoutEffect(() => {
+    const anchor = olderHistoryScrollAnchorRef.current
+    const node = scrollRef.current
+    if (!anchor || !node) {
+      return
+    }
+    olderHistoryScrollAnchorRef.current = null
+    node.scrollTop = anchor.top + (node.scrollHeight - anchor.height)
+  }, [items])
+
+  useEffect(() => {
+    if (!isLoadingOlderHistory) {
+      olderHistoryScrollAnchorRef.current = null
+    }
+  }, [isLoadingOlderHistory])
+
+  useLayoutEffect(() => {
+    const contentNode = chatContentRef.current
+    if (!contentNode) {
+      return
+    }
+
+    let frameId = 0
+    const resizeObserver = new ResizeObserver(() => {
+      if (!isFollowingLatestRef.current) {
+        return
+      }
+      window.cancelAnimationFrame(frameId)
+      frameId = window.requestAnimationFrame(() => {
+        if (isFollowingLatestRef.current) {
+          performLatestScroll("auto")
+        }
+      })
+    })
+
+    resizeObserver.observe(contentNode)
+    return () => {
+      window.cancelAnimationFrame(frameId)
+      resizeObserver.disconnect()
+    }
+  }, [performLatestScroll])
 
   useEffect(() => {
     const sessionId = currentSession?.id
@@ -393,7 +512,7 @@ export function ChatArea({
         sessionId: currentSession.id,
       })
       .then((result) => {
-        if (!isCancelled && result.ok) {
+        if (!isCancelled && result.ok && result.usage) {
           setContextUsageState({
             key: `${currentProject.path}::${currentSession.id}`,
             usage: result.usage,
@@ -411,9 +530,32 @@ export function ChatArea({
     settings.showContextUsage,
   ])
 
+  useEffect(() => {
+    const node = scrollRef.current
+    if (
+      !node ||
+      !hasMoreHistory ||
+      isLoadingHistory ||
+      isLoadingOlderHistory ||
+      node.scrollHeight > node.clientHeight + 160
+    ) {
+      return
+    }
+    loadOlderHistory()
+  }, [
+    hasMoreHistory,
+    isLoadingHistory,
+    isLoadingOlderHistory,
+    items.length,
+    loadOlderHistory,
+  ])
+
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const isAtLatest = isScrolledToLatest(event.currentTarget)
     setIsChatScrolled(event.currentTarget.scrollTop > 2)
+    if (event.currentTarget.scrollTop < 160) {
+      loadOlderHistory()
+    }
     if (isProgrammaticScrollRef.current) {
       if (isAtLatest) {
         isProgrammaticScrollRef.current = false
@@ -540,7 +682,7 @@ export function ChatArea({
             timestamp: new Date().toISOString(),
           })
         }
-        if (shouldGenerateTitle) {
+        if (result.ok && shouldGenerateTitle) {
           const titlePrompt =
             text ||
             outgoingAttachments.map((attachment) => attachment.name).join(" ")
@@ -570,6 +712,7 @@ export function ChatArea({
   )
 
   function queueDraftMessage(text: string, outgoingAttachments: OusiaChatAttachment[]) {
+    setIsQueuePausedAfterInterrupt(false)
     if (editingQueueId) {
       setQueuedMessages((current) =>
         current.map((message) =>
@@ -589,6 +732,24 @@ export function ChatArea({
         attachments: outgoingAttachments,
       },
     ])
+  }
+
+  async function clearPiQueue() {
+    if (!window.ousia || !currentProject || !currentSession) {
+      return
+    }
+
+    await window.ousia.clearChatQueue({
+      projectPath: currentProject.path,
+      sessionId: currentSession.id,
+    })
+  }
+
+  async function materializePiQueue(
+    messages: QueuedChatMessage[] = piQueuedMessages
+  ) {
+    setQueuedMessages(messages)
+    await clearPiQueue()
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -618,18 +779,28 @@ export function ChatArea({
     })
   }
 
-  function sendQueuedMessageNow(id: string) {
-    const message = queuedMessages.find((item) => item.id === id)
+  async function sendQueuedMessageNow(id: string) {
+    const isPiQueueMessage = isPiQueueVisible
+    const sourceMessages = isPiQueueMessage ? piQueuedMessages : queuedMessages
+    const message = sourceMessages.find((item) => item.id === id)
     if (!message) {
       return
     }
-    setQueuedMessages((current) => current.filter((item) => item.id !== id))
+    const remainingMessages = sourceMessages.filter((item) => item.id !== id)
+    if (remainingMessages.length === 0) {
+      setIsQueuePausedAfterInterrupt(false)
+    }
+    if (isPiQueueMessage) {
+      await materializePiQueue(remainingMessages)
+    } else {
+      setQueuedMessages((current) => current.filter((item) => item.id !== id))
+    }
     if (editingQueueId === id) {
       setEditingQueueId(null)
       setDraft("")
       setAttachments([])
     }
-    void sendMessage({
+    await sendMessage({
       text: message.text,
       attachments: message.attachments,
       sendBehavior: isAgentWorking ? "steer" : "normal",
@@ -637,9 +808,14 @@ export function ChatArea({
   }
 
   function editQueuedMessage(id: string) {
-    const message = queuedMessages.find((item) => item.id === id)
+    const isPiQueueMessage = isPiQueueVisible
+    const sourceMessages = isPiQueueMessage ? piQueuedMessages : queuedMessages
+    const message = sourceMessages.find((item) => item.id === id)
     if (!message) {
       return
+    }
+    if (isPiQueueMessage) {
+      void materializePiQueue(sourceMessages)
     }
     setEditingQueueId(id)
     setDraft(message.text)
@@ -656,7 +832,17 @@ export function ChatArea({
   }
 
   function deleteQueuedMessage(id: string) {
-    setQueuedMessages((current) => current.filter((item) => item.id !== id))
+    const isPiQueueMessage = isPiQueueVisible
+    const sourceMessages = isPiQueueMessage ? piQueuedMessages : queuedMessages
+    const remainingMessages = sourceMessages.filter((item) => item.id !== id)
+    if (remainingMessages.length === 0) {
+      setIsQueuePausedAfterInterrupt(false)
+    }
+    if (isPiQueueMessage) {
+      void materializePiQueue(remainingMessages)
+    } else {
+      setQueuedMessages((current) => current.filter((item) => item.id !== id))
+    }
     if (editingQueueId === id) {
       setEditingQueueId(null)
       setDraft("")
@@ -668,17 +854,24 @@ export function ChatArea({
     if (activeId === overId) {
       return
     }
-    setQueuedMessages((current) => {
-      const from = current.findIndex((item) => item.id === activeId)
-      const to = current.findIndex((item) => item.id === overId)
+    const isPiQueueMessage = isPiQueueVisible
+    const sourceMessages = isPiQueueMessage ? piQueuedMessages : queuedMessages
+    const nextMessages = (() => {
+      const from = sourceMessages.findIndex((item) => item.id === activeId)
+      const to = sourceMessages.findIndex((item) => item.id === overId)
       if (from < 0 || to < 0) {
-        return current
+        return sourceMessages
       }
-      const next = [...current]
+      const next = [...sourceMessages]
       const [moved] = next.splice(from, 1)
       next.splice(to, 0, moved)
       return next
-    })
+    })()
+    if (isPiQueueMessage) {
+      void materializePiQueue(nextMessages)
+    } else {
+      setQueuedMessages(nextMessages)
+    }
   }
 
   useEffect(() => {
@@ -690,7 +883,12 @@ export function ChatArea({
       return
     }
     wasAgentWorkingRef.current = false
-    if (editingQueueId || isSending || !queuedMessages.length) {
+    if (
+      editingQueueId ||
+      isSending ||
+      isQueueAutoSendPaused ||
+      !queuedMessages.length
+    ) {
       return
     }
     const timer = window.setTimeout(() => {
@@ -706,11 +904,31 @@ export function ChatArea({
       })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [editingQueueId, isAgentWorking, isSending, queuedMessages, sendMessage])
+  }, [
+    editingQueueId,
+    isAgentWorking,
+    isQueueAutoSendPaused,
+    isSending,
+    queuedMessages,
+    sendMessage,
+  ])
 
   async function handleInterrupt() {
     if (isInterrupting || !window.ousia || !currentProject || !currentSession) {
       return
+    }
+    if (
+      !settings.continueQueuedMessagesAfterInterrupt &&
+      isPiQueueVisible &&
+      piQueuedMessages.length
+    ) {
+      setQueuedMessages(
+        piQueuedMessages.map((message, index) => ({
+          ...message,
+          id: `interrupted-${Date.now()}-${index}`,
+        }))
+      )
+      setIsQueuePausedAfterInterrupt(true)
     }
     setIsInterrupting(true)
     try {
@@ -721,6 +939,66 @@ export function ChatArea({
       })
     } finally {
       setIsInterrupting(false)
+    }
+  }
+
+  async function handleManualCompact() {
+    if (isCompacting || !window.ousia || !currentProject || !currentSession) {
+      return
+    }
+    const statusMessageId = `compact-${Date.now()}`
+    setIsCompacting(true)
+    onLocalEvent({
+      type: "status_message",
+      id: statusMessageId,
+      status: "streaming",
+      text: t.chat.contextCompacting,
+      timestamp: new Date().toISOString(),
+    })
+    try {
+      const result = await window.ousia.compactChat({
+        agentMode: settings.agentMode,
+        customAgentTools: settings.customAgentTools,
+        autoCompactContext: settings.autoCompactContext,
+        projectPath: currentProject.path,
+        sessionId: currentSession.id,
+        thinkingLevel: selectedThinkingLevel,
+        model: {
+          provider: settings.modelProvider,
+          modelId: settings.modelId,
+          apiKey: getOusiaModelProviderApiKey(settings)?.trim() || undefined,
+        },
+      })
+      if (!result.ok) {
+        onLocalEvent({
+          type: "status_message",
+          id: statusMessageId,
+          role: "error",
+          status: "finished",
+          text: result.error ?? t.chat.compactFailed,
+          timestamp: new Date().toISOString(),
+        })
+        return
+      }
+      onLocalEvent({
+        type: "status_message",
+        id: statusMessageId,
+        status: "finished",
+        text: t.chat.contextCompacted,
+        timestamp: new Date().toISOString(),
+      })
+      const usageResult = await window.ousia.getChatContextUsage({
+        projectPath: currentProject.path,
+        sessionId: currentSession.id,
+      })
+      if (usageResult.ok && usageResult.usage) {
+        setContextUsageState({
+          key: `${currentProject.path}::${currentSession.id}`,
+          usage: usageResult.usage,
+        })
+      }
+    } finally {
+      setIsCompacting(false)
     }
   }
 
@@ -895,7 +1173,7 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-chat-composer-shadow)] dark:bg-card"
+        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card"
       )}
       style={style}
       onKeyDownCapture={handleEscapeKey}
@@ -903,12 +1181,14 @@ export function ChatArea({
       <ChatHeader
         copyStatus={copyStatus}
         currentSession={currentSession}
+        isCompacting={isCompacting}
         isSessionMenuOpen={isSessionMenuOpen}
         isSidebarCollapsed={isSidebarCollapsed}
         isScrolled={isChatScrolled}
         isWindowFullscreen={isWindowFullscreen}
         onCopySessionHistory={() => void handleCopySessionHistory()}
         onExportSession={(format) => void handleExportSession(format)}
+        onManualCompact={() => void handleManualCompact()}
         onSessionMenuOpenChange={(open) => {
           setOpenSessionMenuKey(open ? currentSessionMenuKey : null)
           if (!open) {
@@ -926,13 +1206,25 @@ export function ChatArea({
         )}
         onScroll={handleChatScroll}
       >
-        <ChatMessageList
-          items={items}
-          isAgentWorking={isAgentWorking}
-          onBranchFromMessage={onBranchFromMessage}
-          showTurnWaitIndicator={showTurnWaitIndicator}
-          t={t}
-        />
+        <div ref={chatContentRef}>
+          {isLoadingOlderHistory ? (
+            <div
+              aria-label={t.chat.historyLoading}
+              className="flex h-8 items-center justify-center text-muted-foreground"
+            >
+              <LoaderCircle className="size-4 animate-spin" strokeWidth={1.5} />
+            </div>
+          ) : null}
+          <ChatMessageList
+            items={items}
+            isAgentWorking={isAgentWorking}
+            onBranchFromMessage={onBranchFromMessage}
+            projectPath={currentProject?.path}
+            sessionId={currentSession?.id}
+            showTurnWaitIndicator={showTurnWaitIndicator}
+            t={t}
+          />
+        </div>
       </div>
 
       {showScrollToLatest ? (
@@ -961,8 +1253,9 @@ export function ChatArea({
           <div className="relative">
             {visibleQueuedMessages.length ? (
               <QueuedMessageList
-                editingId={isPiQueueVisible ? null : editingQueueId}
-                draggingId={isPiQueueVisible ? null : draggingQueueId}
+                className="mx-5"
+                editingId={editingQueueId}
+                draggingId={draggingQueueId}
                 messages={visibleQueuedMessages}
                 onDelete={deleteQueuedMessage}
                 onDragEnd={() => setDraggingQueueId(null)}
@@ -970,7 +1263,6 @@ export function ChatArea({
                 onDragStart={setDraggingQueueId}
                 onEdit={editQueuedMessage}
                 onSendNow={sendQueuedMessageNow}
-                readOnly={isPiQueueVisible}
                 t={t}
               />
             ) : null}
@@ -1117,7 +1409,7 @@ export function ChatArea({
                         ))}
                       </TooltipProvider>
                     </DropdownMenuRadioGroup>
-                    <div className="h-2" />
+                    <DropdownMenuSeparator className="my-2 bg-neutral-200" />
                     <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
                       {t.chat.appendMessages}
                     </DropdownMenuLabel>
@@ -1141,75 +1433,6 @@ export function ChatArea({
                         {t.settings.steer}
                       </DropdownMenuRadioItem>
                     </DropdownMenuRadioGroup>
-                    <div className="h-2" />
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                      {t.chat.interruptBehavior}
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      className="flex h-10 justify-between rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        updateComposerSettings({
-                          continueQueuedMessagesAfterInterrupt:
-                            !settings.continueQueuedMessagesAfterInterrupt,
-                        })
-                      }}
-                    >
-                      <span className="min-w-0 truncate">
-                        {t.chat.continueQueuedAfterInterrupt}
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "relative ml-3 h-5 w-9 shrink-0 rounded-full transition-colors",
-                          settings.continueQueuedMessagesAfterInterrupt
-                            ? "bg-neutral-950"
-                            : "bg-neutral-200"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]",
-                            settings.continueQueuedMessagesAfterInterrupt
-                              ? "left-[18px]"
-                              : "left-0.5"
-                          )}
-                        />
-                      </span>
-                    </DropdownMenuItem>
-                    <div className="h-2" />
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                      {t.chat.context}
-                    </DropdownMenuLabel>
-                    <DropdownMenuItem
-                      className="flex h-10 justify-between rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                      onSelect={(event) => {
-                        event.preventDefault()
-                        updateComposerSettings({
-                          showContextUsage: !settings.showContextUsage,
-                        })
-                      }}
-                    >
-                      <span className="min-w-0 truncate">
-                        {t.chat.showContextUsage}
-                      </span>
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "relative ml-3 h-5 w-9 shrink-0 rounded-full transition-colors",
-                          settings.showContextUsage
-                            ? "bg-neutral-950"
-                            : "bg-neutral-200"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]",
-                            settings.showContextUsage ? "left-[18px]" : "left-0.5"
-                          )}
-                        />
-                      </span>
-                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <DropdownMenu
@@ -1259,6 +1482,9 @@ export function ChatArea({
                       ))}
                     </DropdownMenuRadioGroup>
                     <DropdownMenuSeparator className="my-2 bg-neutral-200" />
+                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                      {t.chat.model}
+                    </DropdownMenuLabel>
                     <DropdownMenuRadioGroup
                       value={
                         selectedModelPreset
@@ -1294,40 +1520,53 @@ export function ChatArea({
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {shouldShowContextUsageRing ? (
-                  <span
-                    className="flex size-6 items-center justify-center text-muted-foreground"
-                    aria-label={t.chat.contextRemaining(
-                      contextRemainingPercent
-                    )}
-                    title={t.chat.contextRemaining(contextRemainingPercent)}
-                  >
-                    <svg
-                      aria-hidden="true"
-                      className="size-[18px] -rotate-90"
-                      viewBox="0 0 18 18"
-                    >
-                      <circle
-                        cx="9"
-                        cy="9"
-                        r="6"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeOpacity="0.22"
-                        strokeWidth="3"
-                      />
-                      <circle
-                        cx="9"
-                        cy="9"
-                        r="6"
-                        fill="none"
-                        pathLength="100"
-                        stroke="currentColor"
-                        strokeDasharray={contextUsageStrokeDasharray}
-                        strokeLinecap="round"
-                        strokeWidth="3"
-                      />
-                    </svg>
-                  </span>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="flex size-6 items-center justify-center text-muted-foreground/55"
+                          aria-label={t.chat.contextUsageDetails(
+                            contextUsagePercentLabel,
+                            contextRemainingLabel
+                          )}
+                        >
+                          <svg
+                            aria-hidden="true"
+                            className="size-[18px] -rotate-90"
+                            viewBox="0 0 18 18"
+                          >
+                            <circle
+                              cx="9"
+                              cy="9"
+                              r="6"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeOpacity="0.12"
+                              strokeWidth="2.5"
+                            />
+                            <circle
+                              cx="9"
+                              cy="9"
+                              r="6"
+                              fill="none"
+                              pathLength="100"
+                              stroke="currentColor"
+                              strokeDasharray={contextUsageStrokeDasharray}
+                              strokeOpacity="0.5"
+                              strokeLinecap="round"
+                              strokeWidth="2.5"
+                            />
+                          </svg>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {t.chat.contextUsageDetails(
+                          contextUsagePercentLabel,
+                          contextRemainingLabel
+                        )}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ) : null}
                 <Button
                   type="submit"
@@ -1336,7 +1575,7 @@ export function ChatArea({
                   disabled={isSending || !hasDraftContent}
                   aria-label={t.app.send}
                 >
-                  <ArrowUp size={18} />
+                  <SendArrowUp size={17} strokeWidth={1.9} />
                 </Button>
               </div>
             </div>

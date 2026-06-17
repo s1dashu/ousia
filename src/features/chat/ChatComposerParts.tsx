@@ -21,6 +21,7 @@ export type QueuedChatMessage = {
 }
 
 export function QueuedMessageList({
+  className,
   editingId,
   draggingId,
   messages,
@@ -33,6 +34,7 @@ export function QueuedMessageList({
   readOnly = false,
   t,
 }: {
+  className?: string
   editingId: string | null
   draggingId: string | null
   messages: QueuedChatMessage[]
@@ -46,7 +48,12 @@ export function QueuedMessageList({
   t: ReturnType<typeof getMessages>
 }) {
   return (
-    <div className="ousia-squircle-corners rounded-t-[var(--ousia-chat-composer-radius)] rounded-b-none border-[0.5px] border-foreground/10 bg-white px-2.5 pt-2.5 pb-10 shadow-[0_6px_22px_rgba(0,0,0,0.035),0_1px_8px_rgba(0,0,0,0.02),inset_0_1px_0_rgba(255,255,255,0.42)] dark:border-foreground/10 dark:bg-card dark:shadow-[0_6px_22px_rgba(0,0,0,0.18),0_1px_8px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.035)]">
+    <div
+      className={cn(
+        "ousia-squircle-corners rounded-t-[var(--ousia-chat-composer-radius)] rounded-b-none border-[0.5px] border-foreground/10 bg-white px-2.5 pt-2.5 pb-10 shadow-[0_6px_22px_rgba(0,0,0,0.035),0_1px_8px_rgba(0,0,0,0.02),inset_0_1px_0_rgba(255,255,255,0.42)] dark:border-foreground/10 dark:bg-card dark:shadow-[0_6px_22px_rgba(0,0,0,0.18),0_1px_8px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.035)]",
+        className
+      )}
+    >
       <div className="space-y-1.5">
         {messages.map((message, index) => (
           <div
@@ -80,7 +87,7 @@ export function QueuedMessageList({
             }}
             onDragEnd={readOnly ? undefined : onDragEnd}
             className={cn(
-              "flex h-8 min-w-0 items-center gap-2 rounded-2xl bg-muted/35 px-2.5 text-xs text-muted-foreground",
+              "flex h-8 min-w-0 items-center gap-2 rounded-lg bg-muted/35 px-2.5 text-xs text-muted-foreground",
               draggingId === message.id && "opacity-50",
               editingId === message.id && "bg-ring/12 text-foreground"
             )}

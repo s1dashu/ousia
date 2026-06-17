@@ -358,8 +358,8 @@ export function SettingsPage({
   )?.description
 
   return (
-    <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--ousia-panel-radius)] border border-border/60 bg-white dark:bg-card">
-      <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pr-4 pl-4">
+    <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card">
+      <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4">
         <div
           className={cn(
             "window-drag flex min-w-0 items-center self-stretch",
@@ -682,6 +682,38 @@ export function SettingsPage({
                   className={cn(
                     "absolute top-0.5 size-4 rounded-full bg-background shadow-sm transition-[left]",
                     draft.showContextUsage ? "left-[18px]" : "left-0.5"
+                  )}
+                />
+              </button>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className={settingsLabelClass}>
+                {t.settings.continueQueuedAfterInterrupt}
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={draft.continueQueuedMessagesAfterInterrupt}
+                className={cn(
+                  "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                  draft.continueQueuedMessagesAfterInterrupt
+                    ? "bg-foreground"
+                    : "bg-muted"
+                )}
+                onClick={() =>
+                  applySettings({
+                    continueQueuedMessagesAfterInterrupt:
+                      !draft.continueQueuedMessagesAfterInterrupt,
+                  })
+                }
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "absolute top-0.5 size-4 rounded-full bg-background shadow-sm transition-[left]",
+                    draft.continueQueuedMessagesAfterInterrupt
+                      ? "left-[18px]"
+                      : "left-0.5"
                   )}
                 />
               </button>

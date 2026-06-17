@@ -3,6 +3,9 @@ import type {
   OusiaAppStateSaveResult,
   OusiaChatBranchPayload,
   OusiaChatBranchResult,
+  OusiaChatClearQueueResult,
+  OusiaChatCompactPayload,
+  OusiaChatCompactResult,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatContextUsageResult,
@@ -100,6 +103,14 @@ const api = {
     payload: OusiaChatInterruptPayload
   ): Promise<OusiaChatInterruptResult> {
     return ipcRenderer.invoke("ousia:chat:interrupt", payload)
+  },
+  clearChatQueue(payload: OusiaChatContext): Promise<OusiaChatClearQueueResult> {
+    return ipcRenderer.invoke("ousia:chat:clear-queue", payload)
+  },
+  compactChat(
+    payload: OusiaChatCompactPayload
+  ): Promise<OusiaChatCompactResult> {
+    return ipcRenderer.invoke("ousia:chat:compact", payload)
   },
   listModels(): Promise<OusiaModelRegistryResult> {
     return ipcRenderer.invoke("ousia:models:list")

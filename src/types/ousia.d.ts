@@ -3,6 +3,9 @@ import type {
   OusiaAppStateSaveResult,
   OusiaChatBranchPayload,
   OusiaChatBranchResult,
+  OusiaChatClearQueueResult,
+  OusiaChatCompactPayload,
+  OusiaChatCompactResult,
   OusiaChatContext,
   OusiaChatEvent,
   OusiaChatContextUsageResult,
@@ -50,6 +53,12 @@ declare global {
       interruptChat(
         payload: OusiaChatInterruptPayload
       ): Promise<OusiaChatInterruptResult>
+      clearChatQueue(
+        payload: OusiaChatContext
+      ): Promise<OusiaChatClearQueueResult>
+      compactChat(
+        payload: OusiaChatCompactPayload
+      ): Promise<OusiaChatCompactResult>
       listModels(): Promise<OusiaModelRegistryResult>
       openProjectDirectory(): Promise<OusiaOpenProjectResult>
       selectDirectory(): Promise<OusiaSelectDirectoryResult>

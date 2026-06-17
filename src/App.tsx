@@ -46,8 +46,7 @@ const SIDEBAR_COLLAPSE_THRESHOLD = 120
 const MAX_SIDEBAR_WIDTH = 320
 const MIN_CHAT_WIDTH = 300
 const RESIZE_HANDLE_WIDTH = 1
-const CHAT_HISTORY_PREVIEW_LIMIT = 50
-const CHAT_HISTORY_PREFETCH_COUNT = 5
+const CHAT_HISTORY_PAGE_SIZE = 20
 
 type AgentRunStatus = "idle" | "working"
 type QueuedChatState = {
@@ -59,7 +58,18 @@ type ChatContextUsageState = {
   contextWindow: number
   percent: number | null
 }
-type ChatHistoryLoadState = "loading-preview" | "preview" | "loading-full" | "full"
+type ChatHistoryPageState = {
+  cursor?: string
+  error?: string
+  hasMore: boolean
+  status:
+    | "loading-initial"
+    | "ready"
+    | "loading-older"
+    | "empty"
+    | "error"
+  totalItems?: number
+}
 type TextDeltaChatEvent = Extract<
   OusiaChatEvent,
   { type: "assistant_text_delta" | "thinking_delta" }
@@ -72,14 +82,44 @@ function chatKey(projectPath: string, sessionId: string) {
   return `${projectPath}::${sessionId}`
 }
 
-function scheduleIdleWork(callback: () => void) {
-  const requestIdleCallback = window.requestIdleCallback
-  if (typeof requestIdleCallback === "function") {
-    const id = requestIdleCallback.call(window, callback, { timeout: 1200 })
-    return () => window.cancelIdleCallback(id)
+function historyPageStateFromResult(
+  items: ChatItem[],
+  history: {
+    hasMore?: boolean
+    nextCursor?: string
+    totalItems?: number
   }
-  const id = globalThis.setTimeout(callback, 120)
-  return () => globalThis.clearTimeout(id)
+) {
+  if (!items.length) {
+    return {
+      hasMore: false,
+      status: "empty" as const,
+      totalItems: history.totalItems,
+    }
+  }
+  return {
+    cursor: history.hasMore ? (history.nextCursor ?? items[0]?.id) : undefined,
+    hasMore: Boolean(history.hasMore),
+    status: "ready" as const,
+    totalItems: history.totalItems,
+  }
+}
+
+function mergePersistedChatItems(
+  existingItems: ChatItem[],
+  persistedItems: ChatItem[]
+) {
+  if (!existingItems.length) {
+    return persistedItems
+  }
+  if (!persistedItems.length) {
+    return existingItems
+  }
+  const persistedIds = new Set(persistedItems.map((item) => item.id))
+  return [
+    ...persistedItems,
+    ...existingItems.filter((item) => !persistedIds.has(item.id)),
+  ]
 }
 
 function isTextDeltaEvent(
@@ -248,9 +288,12 @@ export function App() {
   const [itemsBySession, setItemsBySession] = useState<
     Record<string, ChatItem[]>
   >({})
-  const [historyLoadStateBySession, setHistoryLoadStateBySession] = useState<
-    Record<string, ChatHistoryLoadState>
+  const [historyPageStateBySession, setHistoryPageStateBySession] = useState<
+    Record<string, ChatHistoryPageState>
   >({})
+  const itemsBySessionRef = useRef(itemsBySession)
+  const historyPageStateBySessionRef = useRef(historyPageStateBySession)
+  const historyInFlightKeysRef = useRef<Set<string>>(new Set())
   const pendingChatEventsRef = useRef<Map<string, OusiaChatEvent[]>>(new Map())
   const pendingChatEventsFrameRef = useRef(0)
   const sidebarResizeFrameRef = useRef(0)
@@ -264,22 +307,39 @@ export function App() {
     Record<string, ChatContextUsageState | undefined>
   >({})
   const titleGenerationSessionIdsRef = useRef<Set<string>>(new Set())
+  const draftSessionKeysRef = useRef<Set<string>>(new Set())
   const isApplyingStoredThemeRef = useRef(false)
 
+  const projectPathForSession = useCallback(
+    (session: SessionRecord) => {
+      if (!session.projectId) {
+        return settings.defaultWorkDir
+      }
+      return (
+        projects.find((project) => project.id === session.projectId)?.path ??
+        settings.defaultWorkDir
+      )
+    },
+    [projects, settings.defaultWorkDir]
+  )
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? sessions[0]
+  const selectedSessionIdForHistory = selectedSession?.id
   const selectedProject = selectedSession?.projectId
     ? projects.find((project) => project.id === selectedSession.projectId)
     : undefined
+  const selectedProjectPath = selectedSession
+    ? projectPathForSession(selectedSession)
+    : settings.defaultWorkDir
   const defaultWorkDirProject: ProjectRecord = {
     id: "default-workdir",
     name: projectNameFromPath(settings.defaultWorkDir),
-    path: settings.defaultWorkDir,
+    path: selectedProjectPath,
   }
   const currentProject = selectedProject ?? defaultWorkDirProject
   const selectedChatKey =
     currentProject && selectedSession
-      ? chatKey(currentProject.path, selectedSession.id)
+      ? chatKey(selectedProjectPath, selectedSession.id)
       : ""
   const sessionsRef = useRef(sessions)
   const selectedChatKeyRef = useRef(selectedChatKey)
@@ -302,18 +362,9 @@ export function App() {
   const selectedContextUsage = selectedChatKey
     ? contextUsageBySession[selectedChatKey]
     : undefined
-  const projectPathForSession = useCallback(
-    (session: SessionRecord) => {
-      if (!session.projectId) {
-        return settings.defaultWorkDir
-      }
-      return (
-        projects.find((project) => project.id === session.projectId)?.path ??
-        settings.defaultWorkDir
-      )
-    },
-    [projects, settings.defaultWorkDir]
-  )
+  const selectedHistoryPageState = selectedChatKey
+    ? historyPageStateBySession[selectedChatKey]
+    : undefined
   const sidebarRunStatusBySessionId = useMemo(() => {
     const next: Record<string, AgentRunStatus> = {}
     for (const session of sessions) {
@@ -530,223 +581,141 @@ export function App() {
   }, [sessions])
 
   useEffect(() => {
+    itemsBySessionRef.current = itemsBySession
+  }, [itemsBySession])
+
+  useEffect(() => {
+    historyPageStateBySessionRef.current = historyPageStateBySession
+  }, [historyPageStateBySession])
+
+  useEffect(() => {
     selectedChatKeyRef.current = selectedChatKey
   }, [selectedChatKey])
 
   useEffect(() => {
+    if (!selectedChatKey || selectedItems.length > 0) {
+      return
+    }
+    const status = selectedHistoryPageState?.status
+    if (status !== "ready" && status !== "error") {
+      return
+    }
+    setHistoryPageStateBySession((current) => {
+      if (current[selectedChatKey]?.status !== status) {
+        return current
+      }
+      const next = { ...current }
+      delete next[selectedChatKey]
+      return next
+    })
+  }, [selectedChatKey, selectedHistoryPageState?.status, selectedItems.length])
+
+  useEffect(() => {
+    const inconsistentKeys = Object.entries(historyPageStateBySession)
+      .filter(([key, state]) => {
+        if (state.status !== "empty" && state.status !== "error") {
+          return false
+        }
+        return Boolean(itemsBySession[key]?.length)
+      })
+      .map(([key]) => key)
+    if (!inconsistentKeys.length) {
+      return
+    }
+    setHistoryPageStateBySession((current) => {
+      let next = current
+      for (const key of inconsistentKeys) {
+        const state = current[key]
+        if (
+          (state?.status === "empty" || state?.status === "error") &&
+          itemsBySession[key]?.length
+        ) {
+          if (next === current) {
+            next = { ...current }
+          }
+          delete next[key]
+        }
+      }
+      return next
+    })
+  }, [historyPageStateBySession, itemsBySession])
+
+  useEffect(() => {
     if (
       !window.ousia ||
-      !selectedSession ||
+      !selectedSessionIdForHistory ||
       !selectedChatKey
     ) {
       return
     }
-    const loadState = historyLoadStateBySession[selectedChatKey]
+    const historyKey = selectedChatKey
+    const historyProjectPath = selectedProjectPath
+    const historySessionId = selectedSessionIdForHistory
+    const pageState = historyPageStateBySessionRef.current[historyKey]
+    const hasLoadedItems = Boolean(itemsBySessionRef.current[historyKey]?.length)
     if (
-      loadState === "loading-preview" ||
-      loadState === "loading-full" ||
-      loadState === "preview" ||
-      loadState === "full" ||
-      itemsBySession[selectedChatKey]?.length
+      (draftSessionKeysRef.current.has(historyKey) && !hasLoadedItems) ||
+      historyInFlightKeysRef.current.has(historyKey) ||
+      pageState?.status === "loading-initial" ||
+      pageState?.status === "loading-older" ||
+      pageState?.status === "empty" ||
+      pageState?.status === "error" ||
+      hasLoadedItems
     ) {
       return
     }
 
-    let isCancelled = false
+    historyInFlightKeysRef.current.add(historyKey)
     queueMicrotask(() => {
-      if (isCancelled) {
-        return
-      }
-      setHistoryLoadStateBySession((current) => ({
+      setHistoryPageStateBySession((current) => ({
         ...current,
-        [selectedChatKey]: "loading-preview",
+        [historyKey]: {
+          hasMore: false,
+          status: "loading-initial",
+        },
       }))
       void window.ousia
         ?.getChatHistory({
           includeToolPayloads: false,
-          limit: CHAT_HISTORY_PREVIEW_LIMIT,
-          projectPath: currentProject.path,
-          sessionId: selectedSession.id,
+          limit: CHAT_HISTORY_PAGE_SIZE,
+          projectPath: historyProjectPath,
+          sessionId: historySessionId,
         })
         .then((history) => {
-          if (isCancelled) {
-            return
-          }
-          startTransition(() => {
-            setItemsBySession((current) => {
-              if (current[selectedChatKey]?.length) {
-                return current
-              }
-              if (!history.items.length) {
-                return current
-              }
-              return {
-                ...current,
-                [selectedChatKey]: history.items,
-              }
-            })
-            setHistoryLoadStateBySession((current) => ({
-              ...current,
-              [selectedChatKey]: history.isPartial ? "preview" : "full",
-            }))
-          })
-        })
-        .catch(() => {
-          if (!isCancelled) {
-            setHistoryLoadStateBySession((current) => {
-              const next = { ...current }
-              delete next[selectedChatKey]
-              return next
-            })
-          }
-        })
-    })
-
-    return () => {
-      isCancelled = true
-    }
-  }, [
-    currentProject.path,
-    historyLoadStateBySession,
-    itemsBySession,
-    selectedChatKey,
-    selectedSession,
-  ])
-
-  useEffect(() => {
-    if (!window.ousia || !isAppStateLoaded || !sessions.length) {
-      return
-    }
-    let isCancelled = false
-    const cancelIdleWork = scheduleIdleWork(() => {
-      if (isCancelled) {
-        return
-      }
-      const candidates = sessions
-        .filter((session) => session.id !== selectedSession?.id)
-        .slice(0, CHAT_HISTORY_PREFETCH_COUNT)
-      for (const session of candidates) {
-        const projectPath = projectPathForSession(session)
-        const targetKey = chatKey(projectPath, session.id)
-        if (
-          itemsBySession[targetKey]?.length ||
-          historyLoadStateBySession[targetKey]
-        ) {
-          continue
-        }
-        setHistoryLoadStateBySession((current) => ({
-          ...current,
-          [targetKey]: "loading-preview",
-        }))
-        void window.ousia
-          ?.getChatHistory({
-            includeToolPayloads: false,
-            limit: CHAT_HISTORY_PREVIEW_LIMIT,
-            projectPath,
-            sessionId: session.id,
-          })
-          .then((history) => {
-            if (isCancelled) {
-              return
-            }
-            startTransition(() => {
-              setItemsBySession((current) =>
-                current[targetKey]?.length || !history.items.length
-                  ? current
-                  : {
-                      ...current,
-                      [targetKey]: history.items,
-                    }
-              )
-              setHistoryLoadStateBySession((current) => ({
-                ...current,
-                [targetKey]: history.isPartial ? "preview" : "full",
-              }))
-            })
-          })
-          .catch(() => {
-            if (!isCancelled) {
-              setHistoryLoadStateBySession((current) => {
-                const next = { ...current }
-                delete next[targetKey]
-                return next
-              })
-            }
-          })
-      }
-    })
-    return () => {
-      isCancelled = true
-      cancelIdleWork()
-    }
-  }, [
-    historyLoadStateBySession,
-    isAppStateLoaded,
-    itemsBySession,
-    projectPathForSession,
-    selectedSession?.id,
-    sessions,
-  ])
-
-  useEffect(() => {
-    if (
-      !window.ousia ||
-      !selectedSession ||
-      !selectedChatKey ||
-      historyLoadStateBySession[selectedChatKey] !== "preview"
-    ) {
-      return
-    }
-
-    let isCancelled = false
-    const cancelIdleWork = scheduleIdleWork(() => {
-      if (isCancelled) {
-        return
-      }
-      setHistoryLoadStateBySession((current) => ({
-        ...current,
-        [selectedChatKey]: "loading-full",
-      }))
-      window.ousia
-        ?.getChatHistory({
-          includeToolPayloads: false,
-          projectPath: currentProject.path,
-          sessionId: selectedSession.id,
-        })
-        .then((history) => {
-          if (isCancelled) {
-            return
-          }
           startTransition(() => {
             setItemsBySession((current) => ({
               ...current,
-              [selectedChatKey]: history.items,
+              [historyKey]: mergePersistedChatItems(
+                current[historyKey] ?? [],
+                history.items
+              ),
             }))
-            setHistoryLoadStateBySession((current) => ({
+            setHistoryPageStateBySession((current) => ({
               ...current,
-              [selectedChatKey]: "full",
+              [historyKey]: historyPageStateFromResult(history.items, history),
             }))
           })
         })
         .catch(() => {
-          if (!isCancelled) {
-            setHistoryLoadStateBySession((current) => ({
-              ...current,
-              [selectedChatKey]: "preview",
-            }))
-          }
+          setHistoryPageStateBySession((current) => ({
+            ...current,
+            [historyKey]: {
+              error: "会话历史加载失败。",
+              hasMore: false,
+              status: "error",
+            },
+          }))
+        })
+        .finally(() => {
+          historyInFlightKeysRef.current.delete(historyKey)
         })
     })
-
-    return () => {
-      isCancelled = true
-      cancelIdleWork()
-    }
   }, [
-    currentProject.path,
-    historyLoadStateBySession,
+    selectedProjectPath,
     selectedChatKey,
-    selectedSession,
+    selectedHistoryPageState?.status,
+    selectedItems.length,
+    selectedSessionIdForHistory,
   ])
 
   useEffect(() => {
@@ -760,6 +729,17 @@ export function App() {
           : selectedChatKeyRef.current
       if (!targetKey) {
         return
+      }
+      if (event.type === "user_message") {
+        draftSessionKeysRef.current.delete(targetKey)
+        setHistoryPageStateBySession((current) => {
+          if (!current[targetKey]) {
+            return current
+          }
+          const next = { ...current }
+          delete next[targetKey]
+          return next
+        })
       }
       if (event.type === "run_status") {
         setRunStatusBySession((current) => ({
@@ -861,6 +841,17 @@ export function App() {
     if (!selectedChatKey) {
       return
     }
+    if (event.type === "user_message") {
+      draftSessionKeysRef.current.delete(selectedChatKey)
+      setHistoryPageStateBySession((current) => {
+        if (!current[selectedChatKey]) {
+          return current
+        }
+        const next = { ...current }
+        delete next[selectedChatKey]
+        return next
+      })
+    }
     if (event.type === "run_status") {
       setRunStatusBySession((current) => ({
         ...current,
@@ -897,6 +888,82 @@ export function App() {
     }))
   }
 
+  const handleLoadOlderHistory = useCallback(async () => {
+    if (!window.ousia || !selectedSession || !selectedChatKey) {
+      return
+    }
+    const pageState = historyPageStateBySession[selectedChatKey]
+    const currentItems = itemsBySession[selectedChatKey] ?? []
+    const beforeItemId = pageState?.cursor ?? currentItems[0]?.id
+    if (
+      !beforeItemId ||
+      !pageState?.hasMore ||
+      pageState.status === "loading-initial" ||
+      pageState.status === "loading-older"
+    ) {
+      return
+    }
+
+    setHistoryPageStateBySession((current) => ({
+      ...current,
+      [selectedChatKey]: {
+        ...pageState,
+        status: "loading-older",
+      },
+    }))
+
+    try {
+      const history = await window.ousia.getChatHistory({
+        beforeItemId,
+        includeToolPayloads: false,
+        limit: CHAT_HISTORY_PAGE_SIZE,
+        projectPath: selectedProjectPath,
+        sessionId: selectedSession.id,
+      })
+      startTransition(() => {
+        setItemsBySession((current) => {
+          const existingItems = current[selectedChatKey] ?? []
+          const existingIds = new Set(existingItems.map((item) => item.id))
+          const olderItems = history.items.filter(
+            (item) => !existingIds.has(item.id)
+          )
+          if (!olderItems.length) {
+            return current
+          }
+          return {
+            ...current,
+            [selectedChatKey]: [...olderItems, ...existingItems],
+          }
+        })
+        setHistoryPageStateBySession((current) => ({
+          ...current,
+          [selectedChatKey]: history.items.length
+            ? historyPageStateFromResult(history.items, history)
+            : {
+                ...pageState,
+                hasMore: false,
+                status: "ready",
+              },
+        }))
+      })
+    } catch (error) {
+      setHistoryPageStateBySession((current) => ({
+        ...current,
+        [selectedChatKey]: {
+          ...pageState,
+          error: error instanceof Error ? error.message : String(error),
+          status: "ready",
+        },
+      }))
+    }
+  }, [
+    historyPageStateBySession,
+    itemsBySession,
+    selectedProjectPath,
+    selectedChatKey,
+    selectedSession,
+  ])
+
   async function handleOpenProject() {
     if (!window.ousia) {
       const rawPath = window.prompt(t.shell.projectPathPrompt)
@@ -923,21 +990,49 @@ export function App() {
     const project = createProject(path, name)
     setProjects((current) => [...current, project])
     setExpandedProjectIds((current) => [...current, project.id])
-    createProjectSession(project.id)
+    createProjectSession(project.id, project.path)
     setIsSettingsOpen(false)
   }
 
   function handleCreateSession() {
     const session = createSession(t.app.newSession)
+    const targetKey = chatKey(settings.defaultWorkDir, session.id)
+    draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
+    setItemsBySession((current) => {
+      const next = { ...current }
+      delete next[targetKey]
+      return next
+    })
+    setHistoryPageStateBySession((current) => {
+      const next = { ...current }
+      delete next[targetKey]
+      return next
+    })
     setSelectedSessionId(session.id)
     setSidebarScrollTargetSessionId(session.id)
     setIsSettingsOpen(false)
   }
 
-  function createProjectSession(projectId: string) {
+  function createProjectSession(projectId: string, explicitProjectPath?: string) {
     const session = { ...createSession(t.app.newSession), projectId }
+    const projectPath =
+      explicitProjectPath ??
+      projects.find((project) => project.id === projectId)?.path ??
+      settings.defaultWorkDir
+    const targetKey = chatKey(projectPath, session.id)
+    draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
+    setItemsBySession((current) => {
+      const next = { ...current }
+      delete next[targetKey]
+      return next
+    })
+    setHistoryPageStateBySession((current) => {
+      const next = { ...current }
+      delete next[targetKey]
+      return next
+    })
     setExpandedProjectIds((current) =>
       current.includes(projectId) ? current : [...current, projectId]
     )
@@ -984,7 +1079,7 @@ export function App() {
       }
       return next
     })
-    setHistoryLoadStateBySession((current) => {
+    setHistoryPageStateBySession((current) => {
       const next = { ...current }
       for (const session of removedSessions) {
         delete next[chatKey(project.path, session.id)]
@@ -998,6 +1093,9 @@ export function App() {
       }
       return next
     })
+    for (const session of removedSessions) {
+      draftSessionKeysRef.current.delete(chatKey(project.path, session.id))
+    }
 
     if (selectedSession?.projectId === projectId) {
       const nextSession = remainingSessions[0]
@@ -1114,14 +1212,14 @@ export function App() {
         }))
         return attachments ? { ...item, attachments } : { ...item }
       })
-    const branchKey = chatKey(currentProject.path, branchSession.id)
+    const branchKey = chatKey(selectedProjectPath, branchSession.id)
     const branchSourceItem = selectedItems[branchIndex]
 
     let resolvedBranchItems = branchItems
     if (window.ousia) {
       const result = await window.ousia
         .branchChat({
-          projectPath: currentProject.path,
+          projectPath: selectedProjectPath,
           sessionId: selectedSession.id,
           messageId,
           messageText:
@@ -1168,21 +1266,23 @@ export function App() {
     if (!session) {
       return
     }
+    const targetKey = chatKey(projectPathForSession(session), sessionId)
     const remaining = sessions.filter((item) => item.id !== sessionId)
     setSessions(remaining)
     setItemsBySession((current) => {
       const next = { ...current }
-      delete next[chatKey(projectPathForSession(session), sessionId)]
+      delete next[targetKey]
       return next
     })
-    setHistoryLoadStateBySession((current) => {
+    setHistoryPageStateBySession((current) => {
       const next = { ...current }
-      delete next[chatKey(projectPathForSession(session), sessionId)]
+      delete next[targetKey]
       return next
     })
+    draftSessionKeysRef.current.delete(targetKey)
     setRunStatusBySession((current) => {
       const next = { ...current }
-      delete next[chatKey(projectPathForSession(session), sessionId)]
+      delete next[targetKey]
       return next
     })
     if (selectedSessionId === sessionId) {
@@ -1400,6 +1500,14 @@ export function App() {
               onLocalEvent={appendLocalEvent}
               onGenerateSessionTitle={handleGenerateSessionTitle}
               onBranchFromMessage={handleBranchFromMessage}
+              onLoadOlderHistory={handleLoadOlderHistory}
+              hasMoreHistory={Boolean(selectedHistoryPageState?.hasMore)}
+              isLoadingHistory={
+                selectedHistoryPageState?.status === "loading-initial"
+              }
+              isLoadingOlderHistory={
+                selectedHistoryPageState?.status === "loading-older"
+              }
               contextUsage={selectedContextUsage}
               onSettingsChange={handleSettingsChange}
               modelRegistry={modelRegistry}

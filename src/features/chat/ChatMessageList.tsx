@@ -4,6 +4,7 @@ import {
   FileImage,
   FileText,
   GitBranchPlus,
+  LoaderCircle,
   Paperclip,
 } from "@/components/icons/huge-icons"
 import { Streamdown } from "streamdown"
@@ -14,7 +15,7 @@ import type { OusiaChatAttachmentSummary } from "@/electron/chat-types"
 import type { ChatItem } from "@/features/chat/chat-events"
 import { formatBytes } from "@/features/chat/chat-format"
 import { CHAT_CONTENT_MAX_WIDTH_CLASS } from "@/features/chat/chat-layout"
-import { ToolCallView } from "@/features/chat/ChatToolCall"
+import { ToolCallGroupView, ToolCallView } from "@/features/chat/ChatToolCall"
 import { cn } from "@/lib/utils"
 
 type ChatMessageListProps = {
@@ -37,21 +38,27 @@ export const ChatMessageList = memo(function ChatMessageList({
   t,
 }: ChatMessageListProps) {
   const visibleItems = items.filter(shouldRenderChatItem)
+  const renderItems = groupVisibleItems(visibleItems)
   const footerItemIds = footerItemIdsForVisibleItems(visibleItems, isAgentWorking)
 
   return (
-    <div className={cn(CHAT_CONTENT_MAX_WIDTH_CLASS, "space-y-6")}>
-      {visibleItems.length ? (
+    <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
+      {renderItems.length ? (
         <>
-          {visibleItems.map((item) => (
+          {renderItems.map((item, index) => (
             <div
-              className="ousia-chat-message-contain"
-              data-chat-message-role={item.role}
-              key={item.id}
+              className={cn(
+                "ousia-chat-message-contain",
+                chatRenderItemSpacingClass(item, renderItems[index - 1])
+              )}
+              data-chat-message-role={chatRenderItemRole(item)}
+              key={chatRenderItemId(item)}
             >
               <ChatItemView
                 item={item}
-                showAssistantFooter={footerItemIds.has(item.id)}
+                showAssistantFooter={
+                  item.kind === "single" && footerItemIds.has(item.item.id)
+                }
                 onBranchFromMessage={onBranchFromMessage}
                 projectPath={projectPath}
                 sessionId={sessionId}
@@ -68,6 +75,88 @@ export const ChatMessageList = memo(function ChatMessageList({
 
 function shouldRenderChatItem(item: ChatItem) {
   return item.role !== "thinking" || item.status !== "finished"
+}
+
+function chatItemSpacingClass(item: ChatItem, previousItem?: ChatItem) {
+  if (!previousItem) {
+    return "mt-0"
+  }
+
+  if (item.role === "tool") {
+    return previousItem.role === "tool" ? "mt-2" : "mt-4"
+  }
+
+  if (previousItem.role === "tool") {
+    return "mt-5"
+  }
+
+  return "mt-6"
+}
+
+type ChatRenderItem =
+  | { kind: "single"; item: ChatItem }
+  | { kind: "toolGroup"; id: string; items: Extract<ChatItem, { role: "tool" }>[] }
+
+function groupVisibleItems(items: ChatItem[]): ChatRenderItem[] {
+  const grouped: ChatRenderItem[] = []
+  let pendingTools: Extract<ChatItem, { role: "tool" }>[] = []
+
+  const flushTools = () => {
+    if (!pendingTools.length) {
+      return
+    }
+    if (pendingTools.length === 1) {
+      grouped.push({ kind: "single", item: pendingTools[0] })
+    } else {
+      grouped.push({
+        kind: "toolGroup",
+        id: `tool-group-${pendingTools[0].id}-${pendingTools.at(-1)?.id}`,
+        items: pendingTools,
+      })
+    }
+    pendingTools = []
+  }
+
+  items.forEach((item) => {
+    if (item.role === "tool" && shouldGroupToolItem(item)) {
+      pendingTools.push(item)
+      return
+    }
+    flushTools()
+    grouped.push({ kind: "single", item })
+  })
+  flushTools()
+
+  return grouped
+}
+
+function shouldGroupToolItem(item: ChatItem) {
+  if (item.role !== "tool") {
+    return false
+  }
+  return false
+}
+
+function chatRenderItemSpacingClass(
+  item: ChatRenderItem,
+  previousItem?: ChatRenderItem
+) {
+  return chatItemSpacingClass(
+    chatRenderItemPrimaryItem(item),
+    previousItem ? chatRenderItemPrimaryItem(previousItem) : undefined
+  )
+}
+
+function chatRenderItemPrimaryItem(item: ChatRenderItem) {
+  return item.kind === "single" ? item.item : item.items[0]
+}
+
+function chatRenderItemRole(item: ChatRenderItem) {
+  return item.kind === "single" ? item.item.role : "tool"
+}
+
+function chatRenderItemId(item: ChatRenderItem) {
+  return item.kind === "single" ? item.item.id : item.id
 }
 
 function footerItemIdsForVisibleItems(items: ChatItem[], isAgentWorking: boolean) {
@@ -114,29 +203,17 @@ const ChatItemView = memo(function ChatItemView({
   sessionId,
   t,
 }: {
-  item: ChatItem
+  item: ChatRenderItem
   showAssistantFooter: boolean
   onBranchFromMessage: (itemId: string) => void
   projectPath?: string
   sessionId?: string
   t: ReturnType<typeof getMessages>
 }) {
-  if (item.role === "thinking") {
-    if (item.status === "finished") {
-      return null
-    }
-
+  if (item.kind === "toolGroup") {
     return (
-      <div className="border-l border-border/70 py-1 pr-2 pl-3 text-xs leading-5 text-muted-foreground/70 italic">
-        {item.text || t.chat.thinking}
-      </div>
-    )
-  }
-
-  if (item.role === "tool") {
-    return (
-      <ToolCallView
-        item={item}
+      <ToolCallGroupView
+        items={item.items}
         projectPath={projectPath}
         sessionId={sessionId}
         t={t}
@@ -144,15 +221,44 @@ const ChatItemView = memo(function ChatItemView({
     )
   }
 
-  if (item.role === "system" || item.role === "error") {
+  const chatItem = item.item
+  if (chatItem.role === "thinking") {
+    if (chatItem.status === "finished") {
+      return null
+    }
+
+    return (
+      <div className="border-l border-border/70 py-1 pr-2 pl-3 text-xs leading-5 text-muted-foreground/70 italic">
+        {chatItem.text || t.chat.thinking}
+      </div>
+    )
+  }
+
+  if (chatItem.role === "tool") {
+    return (
+      <ToolCallView
+        item={chatItem}
+        projectPath={projectPath}
+        sessionId={sessionId}
+        t={t}
+      />
+    )
+  }
+
+  if (chatItem.role === "system" || chatItem.role === "error") {
+    const isStreamingSystemMessage =
+      chatItem.role === "system" && chatItem.status === "streaming"
     return (
       <div
         className={[
-          "text-xs leading-5",
-          item.role === "error" ? "text-destructive" : "text-muted-foreground",
+          "flex items-center gap-1.5 text-xs leading-5",
+          chatItem.role === "error" ? "text-destructive" : "text-muted-foreground",
         ].join(" ")}
       >
-        {item.text}
+        <span>{chatItem.text}</span>
+        {isStreamingSystemMessage ? (
+          <LoaderCircle size={13} className="animate-spin text-muted-foreground/70" />
+        ) : null}
       </div>
     )
   }
@@ -161,34 +267,35 @@ const ChatItemView = memo(function ChatItemView({
     <article
       className={[
         "group/message ousia-chat-message-text select-text text-sm leading-5",
-        item.role === "user"
+        chatItem.role === "user"
           ? "ousia-squircle-corners ml-auto w-fit rounded-[18px] bg-card px-3 py-2 text-card-foreground"
           : "text-foreground",
       ].join(" ")}
     >
-      {item.role === "assistant" ? (
+      {chatItem.role === "assistant" ? (
         <Streamdown
-          mode={item.status === "streaming" ? "streaming" : "static"}
+          mode={chatItem.status === "streaming" ? "streaming" : "static"}
           animated
-          isAnimating={item.status === "streaming"}
+          isAnimating={chatItem.status === "streaming"}
+          controls={false}
           linkSafety={{ enabled: false }}
           className="ousia-chat-markdown space-y-0 text-sm leading-5 break-words"
         >
-          {item.text}
+          {chatItem.text}
         </Streamdown>
       ) : (
         <>
-          {item.attachments?.length ? (
-            <MessageAttachmentList attachments={item.attachments} />
+          {chatItem.attachments?.length ? (
+            <MessageAttachmentList attachments={chatItem.attachments} />
           ) : null}
-          {item.text ? (
-            <p className="m-0 break-words whitespace-pre-wrap">{item.text}</p>
+          {chatItem.text ? (
+            <p className="m-0 break-words whitespace-pre-wrap">{chatItem.text}</p>
           ) : null}
         </>
       )}
       {showAssistantFooter ? (
         <AssistantMessageFooter
-          item={item}
+          item={chatItem}
           onBranchFromMessage={onBranchFromMessage}
           t={t}
         />

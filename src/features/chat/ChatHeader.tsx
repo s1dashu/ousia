@@ -1,4 +1,5 @@
 import {
+  ArrowShrink,
   Check,
   Copy,
   MoreHorizontal,
@@ -20,12 +21,14 @@ export type ChatCopyStatus = "idle" | "copied" | "failed"
 type ChatHeaderProps = {
   copyStatus: ChatCopyStatus
   currentSession: SessionRecord | undefined
+  isCompacting: boolean
   isSessionMenuOpen: boolean
   isSidebarCollapsed: boolean
   isScrolled: boolean
   isWindowFullscreen: boolean
   onCopySessionHistory: () => void
   onExportSession: (format: "markdown" | "html" | "jsonl") => void
+  onManualCompact: () => void
   onSessionMenuOpenChange: (open: boolean) => void
   t: ReturnType<typeof getMessages>
 }
@@ -33,12 +36,14 @@ type ChatHeaderProps = {
 export function ChatHeader({
   copyStatus,
   currentSession,
+  isCompacting,
   isSessionMenuOpen,
   isSidebarCollapsed,
   isScrolled,
   isWindowFullscreen,
   onCopySessionHistory,
   onExportSession,
+  onManualCompact,
   onSessionMenuOpenChange,
   t,
 }: ChatHeaderProps) {
@@ -62,69 +67,80 @@ export function ChatHeader({
           <h1 className="window-drag truncate text-sm leading-none font-normal">
             {currentSession?.title ?? t.app.newSession}
           </h1>
-          <DropdownMenu
-            modal={false}
-            open={isSessionMenuOpen}
-            onOpenChange={onSessionMenuOpenChange}
-          >
-            <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="window-no-drag pointer-events-auto ml-1 shrink-0"
-                  aria-label={t.chat.moreSessionActions}
-                >
-                  <MoreHorizontal size={18} />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="start"
-              className="w-auto rounded-md p-1"
-            >
-              <DropdownMenuItem
-                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-                onClick={onCopySessionHistory}
-              >
-                {copyStatus === "copied" ? (
-                  <Check size={18} className="text-neutral-500" />
-                ) : (
-                  <Copy size={18} className="text-neutral-500" />
-                )}
-                <span className="flex-1">
-                  {copyStatus === "copied"
-                    ? t.app.copied
-                    : copyStatus === "failed"
-                      ? t.app.copyFailed
-                      : t.chat.copyHistory}
-                </span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-                onClick={() => onExportSession("markdown")}
-              >
-                <Copy size={18} className="text-neutral-500" />
-                <span className="flex-1">{t.chat.exportMarkdown}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-                onClick={() => onExportSession("html")}
-              >
-                <Copy size={18} className="text-neutral-500" />
-                <span className="flex-1">{t.chat.exportHtml}</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-                onClick={() => onExportSession("jsonl")}
-              >
-                <Copy size={18} className="text-neutral-500" />
-                <span className="flex-1">{t.chat.exportJsonl}</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </div>
       </div>
-      <div className="window-drag pointer-events-none relative z-10 flex shrink-0 items-center gap-1" />
+      <div className="window-drag pointer-events-none relative z-10 flex shrink-0 items-center justify-end gap-1">
+        <DropdownMenu
+          modal={false}
+          open={isSessionMenuOpen}
+          onOpenChange={onSessionMenuOpenChange}
+        >
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="window-no-drag pointer-events-auto shrink-0"
+              aria-label={t.chat.moreSessionActions}
+            >
+              <MoreHorizontal size={18} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-auto rounded-md p-1"
+          >
+            <DropdownMenuItem
+              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+              disabled={isCompacting || !currentSession}
+              onClick={onManualCompact}
+            >
+              <ArrowShrink size={18} className="text-neutral-500" />
+              <span className="flex-1">
+                {isCompacting ? t.chat.compacting : t.chat.manualCompact}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+              onClick={onCopySessionHistory}
+            >
+              {copyStatus === "copied" ? (
+                <Check size={18} className="text-neutral-500" />
+              ) : (
+                <Copy size={18} className="text-neutral-500" />
+              )}
+              <span className="flex-1">
+                {copyStatus === "copied"
+                  ? t.app.copied
+                  : copyStatus === "failed"
+                    ? t.app.copyFailed
+                    : t.chat.copyHistory}
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+              onClick={() => onExportSession("markdown")}
+            >
+              <Copy size={18} className="text-neutral-500" />
+              <span className="flex-1">{t.chat.exportMarkdown}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+              onClick={() => onExportSession("html")}
+            >
+              <Copy size={18} className="text-neutral-500" />
+              <span className="flex-1">{t.chat.exportHtml}</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
+              onClick={() => onExportSession("jsonl")}
+            >
+              <Copy size={18} className="text-neutral-500" />
+              <span className="flex-1">{t.chat.exportJsonl}</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </header>
   )
 }

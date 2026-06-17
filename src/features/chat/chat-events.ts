@@ -149,6 +149,29 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
         text: event.text,
       })
     }
+  } else if (event.type === "status_message") {
+    const index = next.findIndex((item) => item.id === event.id)
+    const role = event.role ?? "system"
+    if (index >= 0) {
+      const item = next[index]
+      if (item.role === "system" || item.role === "error") {
+        next[index] = {
+          ...item,
+          role,
+          text: event.text,
+          status: event.status,
+          timestamp: event.timestamp,
+        }
+      }
+      return next
+    }
+    next.push({
+      id: event.id,
+      role,
+      text: event.text,
+      status: event.status,
+      timestamp: event.timestamp,
+    })
   } else if (event.type === "error") {
     next.push({ id: event.id, role: "error", text: event.text })
   }
