@@ -45,7 +45,7 @@ const sidebarSectionIconSize = 14
 const sidebarIconStrokeWidth = 1.5
 const sidebarActionButtonClass = "size-6 justify-self-end"
 const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
-const sidebarProjectActionButtonClass = "size-6 justify-self-center"
+const sidebarProjectActionButtonClass = "size-6 justify-self-end"
 const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
@@ -396,7 +396,7 @@ function SortableProjectSection({
     <section ref={setNodeRef} style={style} className="min-w-0">
       <div
         className={[
-          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-1 gap-y-1 rounded-md active:cursor-grabbing",
+          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing",
           sidebarProjectRowStateClass,
           sidebarProjectLeadGridClass,
           sidebarProjectRowXClass,

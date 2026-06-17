@@ -247,6 +247,8 @@ export function ChatArea({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputScrollTopBeforeResizeRef = useRef(0)
   const followLatestFrameRef = useRef(0)
+  const programmaticScrollResetFrameRef = useRef(0)
+  const programmaticScrollResetTimerRef = useRef(0)
   const olderHistoryScrollAnchorRef = useRef<{
     height: number
     top: number
@@ -332,6 +334,45 @@ export function ChatArea({
     return node.scrollHeight - node.scrollTop - node.clientHeight < 24
   }
 
+  const clearProgrammaticScrollReset = useCallback(() => {
+    if (programmaticScrollResetFrameRef.current) {
+      window.cancelAnimationFrame(programmaticScrollResetFrameRef.current)
+      programmaticScrollResetFrameRef.current = 0
+    }
+    if (programmaticScrollResetTimerRef.current) {
+      window.clearTimeout(programmaticScrollResetTimerRef.current)
+      programmaticScrollResetTimerRef.current = 0
+    }
+  }, [])
+
+  const releaseProgrammaticScrollAfterLayout = useCallback(
+    (behavior: ScrollBehavior) => {
+      clearProgrammaticScrollReset()
+
+      const release = () => {
+        isProgrammaticScrollRef.current = false
+        programmaticScrollResetFrameRef.current = 0
+        if (programmaticScrollResetTimerRef.current) {
+          window.clearTimeout(programmaticScrollResetTimerRef.current)
+          programmaticScrollResetTimerRef.current = 0
+        }
+      }
+
+      if (behavior === "smooth") {
+        programmaticScrollResetTimerRef.current = window.setTimeout(release, 450)
+        return
+      }
+
+      programmaticScrollResetFrameRef.current = window.requestAnimationFrame(() => {
+        programmaticScrollResetFrameRef.current = window.requestAnimationFrame(
+          release
+        )
+      })
+      programmaticScrollResetTimerRef.current = window.setTimeout(release, 120)
+    },
+    [clearProgrammaticScrollReset]
+  )
+
   const performLatestScroll = useCallback((behavior: ScrollBehavior = "auto") => {
     const node = scrollRef.current
     if (!node) {
@@ -343,15 +384,11 @@ export function ChatArea({
       behavior,
     })
     setShowScrollToLatest(false)
-    window.setTimeout(
-      () => {
-        isProgrammaticScrollRef.current = false
-      },
-      behavior === "smooth" ? 450 : 0
-    )
-  }, [])
+    releaseProgrammaticScrollAfterLayout(behavior)
+  }, [releaseProgrammaticScrollAfterLayout])
 
   const scrollToLatest = useCallback((behavior: ScrollBehavior = "auto") => {
+    isFollowingLatestRef.current = true
     performLatestScroll(behavior)
     setIsFollowingLatest(true)
   }, [performLatestScroll])
@@ -381,6 +418,12 @@ export function ChatArea({
   useEffect(() => {
     isFollowingLatestRef.current = isFollowingLatest
   }, [isFollowingLatest])
+
+  useEffect(() => {
+    return () => {
+      clearProgrammaticScrollReset()
+    }
+  }, [clearProgrammaticScrollReset])
 
   useLayoutEffect(() => {
     if (!isFollowingLatest) {
@@ -558,12 +601,19 @@ export function ChatArea({
     }
     if (isProgrammaticScrollRef.current) {
       if (isAtLatest) {
+        clearProgrammaticScrollReset()
         isProgrammaticScrollRef.current = false
       }
       return
     }
+    isFollowingLatestRef.current = isAtLatest
     setIsFollowingLatest(isAtLatest)
     setShowScrollToLatest(!isAtLatest)
+  }
+
+  function handleManualScrollIntent() {
+    clearProgrammaticScrollReset()
+    isProgrammaticScrollRef.current = false
   }
 
   function updateThinkingLevel(thinkingLevel: OusiaThinkingLevel) {
@@ -1205,6 +1255,9 @@ export function ChatArea({
           CHAT_HORIZONTAL_PADDING_CLASS
         )}
         onScroll={handleChatScroll}
+        onWheelCapture={handleManualScrollIntent}
+        onTouchStartCapture={handleManualScrollIntent}
+        onPointerDownCapture={handleManualScrollIntent}
       >
         <div ref={chatContentRef}>
           {isLoadingOlderHistory ? (

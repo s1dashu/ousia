@@ -214,7 +214,7 @@ export function ToolCallView({
         </span>
         <span
           className={cn(
-            "min-w-0 flex-1 truncate text-sm font-medium text-muted-foreground/85",
+            "min-w-0 flex-1 truncate text-sm font-normal text-muted-foreground/85",
             displayItem.status === "failed" && toolFailureTextClass
           )}
           title={summary}
@@ -292,7 +292,7 @@ export function ToolCallGroupView({
         <span className="flex size-5 shrink-0 items-center justify-center">
           {renderToolGroupIcon(items)}
         </span>
-        <span className="min-w-0 truncate text-sm font-medium text-muted-foreground/85">
+        <span className="min-w-0 truncate text-sm font-normal text-muted-foreground/85">
           {formatToolGroupSummary(items, t)}
         </span>
         {items.some((item) => item.status === "running") ? (
