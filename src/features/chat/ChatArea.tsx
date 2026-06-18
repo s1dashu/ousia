@@ -30,7 +30,6 @@ import type {
 } from "@/app/app-state"
 import { isDefaultSessionTitle } from "@/app/i18n"
 import {
-  findRegistryModel,
   getConfiguredModelPresets,
   modelLabel,
   modelPresetValue,
@@ -285,10 +284,10 @@ export function ChatArea({
     settings.modelProviders,
     modelRegistry
   )
-  const selectedModelPreset = findRegistryModel(
-    modelRegistry,
-    settings.modelProvider,
-    settings.modelId
+  const selectedModelPreset = configuredModelPresets.find(
+    (model) =>
+      model.provider === settings.modelProvider &&
+      model.modelId === settings.modelId
   )
   const activeThinkingLevels =
     selectedModelPreset?.thinkingLevels ?? [settings.thinkingLevel]
@@ -298,7 +297,7 @@ export function ChatArea({
     ? settings.thinkingLevel
     : defaultThinkingLevelFor(activeThinkingLevels)
   const selectedModelLabel =
-    selectedModelPreset ? modelLabel(selectedModelPreset) : settings.modelId
+    selectedModelPreset ? modelLabel(selectedModelPreset) : t.chat.model
   const providerKeyDialogProviders =
     modelRegistry?.providers.filter((provider) => provider.models.length > 0) ??
     []
@@ -1718,7 +1717,7 @@ export function ChatArea({
                     <span className="min-w-0 truncate text-foreground">
                       {selectedModelLabel}
                     </span>
-                    {selectedThinkingLevel !== "off" ? (
+                    {selectedModelPreset && selectedThinkingLevel !== "off" ? (
                       <span className="shrink-0 text-muted-foreground">
                         {chatThinkingLabels[selectedThinkingLevel]}
                       </span>
@@ -1753,9 +1752,18 @@ export function ChatArea({
                       ))}
                     </DropdownMenuRadioGroup>
                     <DropdownMenuSeparator className="my-2 bg-neutral-200" />
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                      {t.chat.model}
-                    </DropdownMenuLabel>
+                    <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-1">
+                      <span className="text-sm text-neutral-500">
+                        {t.chat.model}
+                      </span>
+                      <button
+                        type="button"
+                        className="text-xs leading-5 font-medium whitespace-nowrap text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline focus-visible:text-neutral-950 focus-visible:underline focus-visible:outline-none"
+                        onClick={() => openProviderKeyDialog()}
+                      >
+                        {t.chat.addModelProvider}
+                      </button>
+                    </div>
                     <DropdownMenuRadioGroup
                       value={
                         selectedModelPreset
