@@ -261,16 +261,16 @@ export function SettingsPage({
   }
 
   function deleteProvider(providerId: string) {
-    if (settings.modelProviders.length <= 1) {
-      return
-    }
     const nextProviders = settings.modelProviders.filter(
       (provider) => provider.id !== providerId
     )
+    const fallbackProviderId = "deepseek"
     const nextProviderId =
-      settings.modelProvider === providerId
-        ? (nextProviders[0]?.id ?? settings.modelProvider)
-        : settings.modelProvider
+      nextProviders.length === 0
+        ? fallbackProviderId
+        : settings.modelProvider === providerId
+          ? (nextProviders[0]?.id ?? settings.modelProvider)
+          : settings.modelProvider
     const nextProviderModel = modelsForProvider(
       modelRegistry,
       nextProviderId
@@ -280,7 +280,9 @@ export function SettingsPage({
       modelProviders: nextProviders,
       modelProvider: nextProviderId,
       modelId:
-        nextProviderModel?.modelId ?? nextDefaultModel?.modelId ?? settings.modelId,
+        nextProviderModel?.modelId ??
+        nextDefaultModel?.modelId ??
+        (nextProviders.length === 0 ? "deepseek-v4-flash" : settings.modelId),
     })
     setVisibleProviderApiKeyIds((current) => {
       const nextIds = new Set(current)
@@ -741,7 +743,6 @@ export function SettingsPage({
                         size="icon-sm"
                         className="ousia-squircle-corners justify-self-end rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
                         aria-label={`${t.app.delete} ${provider.id}`}
-                        disabled={draft.modelProviders.length <= 1}
                         onClick={() => deleteProvider(provider.id)}
                       >
                         <Trash2 size={18} />

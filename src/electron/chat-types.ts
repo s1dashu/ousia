@@ -157,19 +157,12 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   thinkingLevel: "medium",
   modelProvider: "deepseek",
   modelId: "deepseek-v4-flash",
-  modelProviders: [
-    {
-      id: "deepseek",
-      apiKey: "",
-    },
-  ],
+  modelProviders: [],
 }
 
 export function normalizeOusiaModelProviders(
   settings: Partial<OusiaAppSettings>
 ): OusiaModelProviderConfig[] {
-  const selectedProvider =
-    settings.modelProvider?.trim() || defaultOusiaAppSettings.modelProvider
   const providers = new Map<string, OusiaModelProviderConfig>()
 
   for (const provider of settings.modelProviders ?? []) {
@@ -180,13 +173,6 @@ export function normalizeOusiaModelProviders(
     providers.set(id, {
       id,
       apiKey: provider.apiKey.trim(),
-    })
-  }
-
-  if (!providers.has(selectedProvider)) {
-    providers.set(selectedProvider, {
-      id: selectedProvider,
-      apiKey: "",
     })
   }
 

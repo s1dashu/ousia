@@ -792,8 +792,20 @@ export function ChatArea({
       return true
     }
     openProviderKeyDialog()
+    onLocalEvent({
+      type: "status_message",
+      id: `provider-api-key-${Date.now()}`,
+      status: "finished",
+      text: t.chat.providerApiKeyRequiredInfo,
+      timestamp: new Date().toISOString(),
+    })
     return false
-  }, [openProviderKeyDialog, settings])
+  }, [
+    onLocalEvent,
+    openProviderKeyDialog,
+    settings,
+    t.chat.providerApiKeyRequiredInfo,
+  ])
 
   function saveProviderKeyFromDialog() {
     const apiKey = providerKeyDialogApiKey.trim()
@@ -862,7 +874,7 @@ export function ChatArea({
       }
       const apiKey = getOusiaModelProviderApiKey(settings)?.trim()
       if (!apiKey) {
-        openProviderKeyDialog()
+        ensureSelectedProviderApiKey()
         return
       }
       if (
@@ -930,7 +942,7 @@ export function ChatArea({
       items.length,
       onGenerateSessionTitle,
       onLocalEvent,
-      openProviderKeyDialog,
+      ensureSelectedProviderApiKey,
       scrollToLatest,
       selectedModelPreset,
       selectedThinkingLevel,
