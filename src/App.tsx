@@ -39,8 +39,6 @@ import { SettingsPage } from "@/features/settings/SettingsPage"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 import { Sidebar } from "@/features/sidebar/Sidebar"
 
-const SESSION_TITLE_MODEL_ID = "deepseek-v4-flash"
-
 const MIN_SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSE_THRESHOLD = 120
 const MAX_SIDEBAR_WIDTH = 320
@@ -1154,16 +1152,18 @@ export function App() {
     if (!window.ousia || titleGenerationSessionIdsRef.current.has(sessionId)) {
       return
     }
+    const apiKey = getOusiaModelProviderApiKey(settings)?.trim()
+    if (!apiKey) {
+      return
+    }
     titleGenerationSessionIdsRef.current.add(sessionId)
     void window.ousia
       .generateChatTitle({
         prompt: firstPrompt,
         model: {
-          provider: "deepseek",
-          modelId: SESSION_TITLE_MODEL_ID,
-          apiKey:
-            getOusiaModelProviderApiKey(settings, "deepseek")?.trim() ||
-            undefined,
+          provider: settings.modelProvider,
+          modelId: settings.modelId,
+          apiKey,
         },
       })
       .then((result) => {

@@ -3,7 +3,6 @@ import {
   Eye,
   EyeOff,
   FolderOpen,
-  Pencil,
   Plus,
   Trash2,
   X,
@@ -85,13 +84,9 @@ export function SettingsPage({
   const [isAddProviderDialogOpen, setIsAddProviderDialogOpen] = useState(false)
   const [newProviderId, setNewProviderId] = useState("")
   const [newProviderApiKey, setNewProviderApiKey] = useState("")
-  const [newProviderUsesEnvironment, setNewProviderUsesEnvironment] =
-    useState(false)
   const [visibleProviderApiKeyIds, setVisibleProviderApiKeyIds] = useState<
     Set<string>
   >(() => new Set())
-  const [editingEnvironmentProviderIds, setEditingEnvironmentProviderIds] =
-    useState<Set<string>>(() => new Set())
   const { setTheme } = useTheme()
   const t = getMessages(draft.language)
   const themeOptions: Array<{
@@ -209,7 +204,7 @@ export function SettingsPage({
     if (
       !provider ||
       draft.modelProviders.some((configured) => configured.id === id) ||
-      (!newProviderUsesEnvironment && !newProviderApiKey.trim())
+      !newProviderApiKey.trim()
     ) {
       return
     }
@@ -221,13 +216,12 @@ export function SettingsPage({
         ...draft.modelProviders,
         {
           id,
-          apiKey: newProviderUsesEnvironment ? "" : newProviderApiKey.trim(),
+          apiKey: newProviderApiKey.trim(),
         },
       ],
     })
     setNewProviderId("")
     setNewProviderApiKey("")
-    setNewProviderUsesEnvironment(false)
     setIsAddProviderDialogOpen(false)
   }
 
@@ -293,11 +287,6 @@ export function SettingsPage({
       nextIds.delete(providerId)
       return nextIds
     })
-    setEditingEnvironmentProviderIds((current) => {
-      const nextIds = new Set(current)
-      nextIds.delete(providerId)
-      return nextIds
-    })
   }
 
   function toggleProviderApiKeyVisibility(providerId: string) {
@@ -308,23 +297,6 @@ export function SettingsPage({
       } else {
         nextIds.add(providerId)
       }
-      return nextIds
-    })
-  }
-
-  function editEnvironmentProviderApiKey(providerId: string) {
-    setEditingEnvironmentProviderIds((current) => {
-      const nextIds = new Set(current)
-      nextIds.add(providerId)
-      return nextIds
-    })
-  }
-
-  function cancelEnvironmentProviderApiKeyEdit(providerId: string) {
-    updateProviderDraft(providerId, "")
-    setEditingEnvironmentProviderIds((current) => {
-      const nextIds = new Set(current)
-      nextIds.delete(providerId)
       return nextIds
     })
   }
@@ -342,14 +314,11 @@ export function SettingsPage({
   const hasAddableProvider = addableProviders.some(
     (provider) => provider.id === newProviderId
   )
-  const canAddProvider =
-    hasAddableProvider &&
-    (newProviderUsesEnvironment || Boolean(newProviderApiKey.trim()))
+  const canAddProvider = hasAddableProvider && Boolean(newProviderApiKey.trim())
 
   function openAddProviderDialog() {
     setNewProviderId(addableProviders[0]?.id ?? "")
     setNewProviderApiKey("")
-    setNewProviderUsesEnvironment(false)
     setIsAddProviderDialogOpen(true)
   }
 
@@ -708,8 +677,6 @@ export function SettingsPage({
                   const providerHasApiKey = Boolean(provider.apiKey.trim())
                   const isProviderApiKeyVisible =
                     visibleProviderApiKeyIds.has(provider.id)
-                  const isEditingEnvironmentProvider =
-                    editingEnvironmentProviderIds.has(provider.id)
 
                   return (
                     <div
@@ -725,44 +692,17 @@ export function SettingsPage({
                         <Input
                           aria-label={`${provider.id} API Key`}
                           className="ousia-squircle-corners min-w-0 rounded-xl border-[0.5px] border-foreground/10 bg-background/85 pr-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] focus-visible:bg-background disabled:opacity-100 dark:bg-input/45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-visible:bg-input/60"
-                          disabled={
-                            !providerHasApiKey && !isEditingEnvironmentProvider
-                          }
-                          value={
-                            providerHasApiKey || isEditingEnvironmentProvider
-                              ? provider.apiKey
-                              : ""
-                          }
+                          value={provider.apiKey}
                           onChange={(event) =>
                             updateProviderDraft(provider.id, event.target.value)
                           }
-                          onBlur={() => {
-                            commitProviderApiKey(provider.id)
-                            if (!provider.apiKey.trim()) {
-                              setEditingEnvironmentProviderIds((current) => {
-                                const nextIds = new Set(current)
-                                nextIds.delete(provider.id)
-                                return nextIds
-                              })
-                            }
-                          }}
+                          onBlur={() => commitProviderApiKey(provider.id)}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
                               event.currentTarget.blur()
                             }
-                            if (
-                              event.key === "Escape" &&
-                              isEditingEnvironmentProvider
-                            ) {
-                              event.preventDefault()
-                              cancelEnvironmentProviderApiKeyEdit(provider.id)
-                            }
                           }}
-                          placeholder={
-                            providerHasApiKey || isEditingEnvironmentProvider
-                              ? "sk-..."
-                              : t.settings.useEnvironmentApiKey
-                          }
+                          placeholder="sk-..."
                           type={
                             providerHasApiKey && isProviderApiKeyVisible
                               ? "text"
@@ -790,34 +730,7 @@ export function SettingsPage({
                               <Eye size={18} />
                             )}
                           </Button>
-                        ) : isEditingEnvironmentProvider ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="ousia-squircle-corners absolute top-1/2 right-1 size-7 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
-                            aria-label={t.app.cancel}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() =>
-                              cancelEnvironmentProviderApiKeyEdit(provider.id)
-                            }
-                          >
-                            <X size={18} />
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="ousia-squircle-corners absolute top-1/2 right-1 size-7 -translate-y-1/2 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]"
-                            aria-label={`${t.app.edit} ${provider.id} API Key`}
-                            onClick={() =>
-                              editEnvironmentProviderApiKey(provider.id)
-                            }
-                          >
-                            <Pencil size={18} />
-                          </Button>
-                        )}
+                        ) : null}
                       </div>
                       <Button
                         type="button"
@@ -869,7 +782,6 @@ export function SettingsPage({
                     onValueChange={(value) => {
                       setNewProviderId(value ?? "")
                       setNewProviderApiKey("")
-                      setNewProviderUsesEnvironment(false)
                     }}
                   >
                     <SelectTrigger
@@ -897,8 +809,7 @@ export function SettingsPage({
                   <Input
                     aria-label="API Key"
                     className="ousia-squircle-corners mt-2 rounded-xl border-[0.5px] border-foreground/10 bg-white focus-visible:bg-white disabled:cursor-default disabled:bg-neutral-50 disabled:text-neutral-500 disabled:opacity-100"
-                    disabled={newProviderUsesEnvironment}
-                    value={newProviderUsesEnvironment ? "" : newProviderApiKey}
+                    value={newProviderApiKey}
                     onChange={(event) =>
                       setNewProviderApiKey(event.target.value)
                     }
@@ -908,24 +819,10 @@ export function SettingsPage({
                         addProvider()
                       }
                     }}
-                    placeholder={
-                      newProviderUsesEnvironment
-                        ? t.settings.useEnvironmentApiKey
-                        : "sk-..."
-                    }
+                    placeholder="sk-..."
                     type="password"
                   />
-                  <button
-                    type="button"
-                    className="mt-2 inline-flex text-xs leading-5 font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                    onClick={() => {
-                      setNewProviderApiKey("")
-                      setNewProviderUsesEnvironment(true)
-                    }}
-                  >
-                    {t.settings.useEnvironmentApiKey}
-                  </button>
-                  {!newProviderUsesEnvironment && !newProviderApiKey.trim() ? (
+                  {!newProviderApiKey.trim() ? (
                     <span className="mt-1 block text-xs leading-5 text-muted-foreground">
                       {t.settings.apiKeyRequired}
                     </span>

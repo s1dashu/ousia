@@ -20,6 +20,7 @@ import {
   Plus,
   SendArrowUp,
   SlidersHorizontal,
+  X,
 } from "@/components/icons/huge-icons"
 
 import type {
@@ -52,6 +53,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Tooltip,
@@ -233,6 +243,11 @@ export function ChatArea({
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [isComposerSettingsOpen, setIsComposerSettingsOpen] = useState(false)
   const [isCustomToolsDialogOpen, setIsCustomToolsDialogOpen] = useState(false)
+  const [isProviderKeyDialogOpen, setIsProviderKeyDialogOpen] =
+    useState(false)
+  const [providerKeyDialogProviderId, setProviderKeyDialogProviderId] =
+    useState("")
+  const [providerKeyDialogApiKey, setProviderKeyDialogApiKey] = useState("")
   const [copyStatus, setCopyStatus] = useState<ChatCopyStatus>("idle")
   const [contextUsageState, setContextUsageState] = useState<{
     key: string
@@ -284,6 +299,20 @@ export function ChatArea({
     : defaultThinkingLevelFor(activeThinkingLevels)
   const selectedModelLabel =
     selectedModelPreset ? modelLabel(selectedModelPreset) : settings.modelId
+  const providerKeyDialogProviders =
+    modelRegistry?.providers.filter((provider) => provider.models.length > 0) ??
+    []
+  const providerKeyDialogSelectItems = providerKeyDialogProviders.map(
+    (provider) => ({
+      label: provider.name,
+      value: provider.id,
+    })
+  )
+  const providerKeyDialogProvider = providerKeyDialogProviders.find(
+    (provider) => provider.id === providerKeyDialogProviderId
+  )
+  const canSaveProviderKey =
+    Boolean(providerKeyDialogProvider) && Boolean(providerKeyDialogApiKey.trim())
   const showTurnWaitIndicator = useDelayedTurnWaitIndicator(
     shouldShowTurnWaitIndicator(items, isAgentWorking)
   )
@@ -739,6 +768,74 @@ export function ChatArea({
     )
   }
 
+  const openProviderKeyDialog = useCallback(() => {
+    const providerOptions =
+      modelRegistry?.providers.filter((provider) => provider.models.length > 0) ??
+      []
+    const provider =
+      providerOptions.find((item) => item.id === "deepseek") ??
+      providerOptions.find((item) => item.id === settings.modelProvider) ??
+      providerOptions[0]
+    const providerId = provider?.id ?? settings.modelProvider
+    setProviderKeyDialogProviderId(providerId)
+    setProviderKeyDialogApiKey(
+      getOusiaModelProviderApiKey(settings, providerId)?.trim() ?? ""
+    )
+    setIsComposerSettingsOpen(false)
+    setIsModelMenuOpen(false)
+    setOpenSessionMenuKey(null)
+    setIsProviderKeyDialogOpen(true)
+  }, [modelRegistry, settings])
+
+  const ensureSelectedProviderApiKey = useCallback(() => {
+    if (getOusiaModelProviderApiKey(settings)?.trim()) {
+      return true
+    }
+    openProviderKeyDialog()
+    return false
+  }, [openProviderKeyDialog, settings])
+
+  function saveProviderKeyFromDialog() {
+    const apiKey = providerKeyDialogApiKey.trim()
+    const provider = providerKeyDialogProvider
+    const defaultModel = provider?.models[0]
+    if (!provider || !defaultModel || !apiKey) {
+      return
+    }
+    const nextModelProviders = settings.modelProviders.some(
+      (configured) => configured.id === provider.id
+    )
+      ? settings.modelProviders.map((configured) =>
+          configured.id === provider.id
+            ? { ...configured, apiKey }
+            : configured
+        )
+      : [
+          ...settings.modelProviders,
+          {
+            id: provider.id,
+            apiKey,
+          },
+        ]
+    const thinkingLevel = defaultModel.thinkingLevels.includes(
+      settings.thinkingLevel
+    )
+      ? settings.thinkingLevel
+      : defaultThinkingLevelFor(defaultModel.thinkingLevels)
+
+    onSettingsChange(
+      normalizeOusiaAppSettings({
+        ...settings,
+        modelProvider: provider.id,
+        modelId: defaultModel.modelId,
+        thinkingLevel,
+        modelProviders: nextModelProviders,
+      })
+    )
+    setProviderKeyDialogApiKey("")
+    setIsProviderKeyDialogOpen(false)
+  }
+
   const sendMessage = useCallback(
     async ({
       text,
@@ -761,6 +858,11 @@ export function ChatArea({
             : t.chat.noElectron,
           timestamp: new Date().toISOString(),
         })
+        return
+      }
+      const apiKey = getOusiaModelProviderApiKey(settings)?.trim()
+      if (!apiKey) {
+        openProviderKeyDialog()
         return
       }
       if (
@@ -799,7 +901,7 @@ export function ChatArea({
           model: {
             provider: settings.modelProvider,
             modelId: settings.modelId,
-            apiKey: getOusiaModelProviderApiKey(settings)?.trim() || undefined,
+            apiKey,
           },
         })
         if (!result.ok) {
@@ -828,6 +930,7 @@ export function ChatArea({
       items.length,
       onGenerateSessionTitle,
       onLocalEvent,
+      openProviderKeyDialog,
       scrollToLatest,
       selectedModelPreset,
       selectedThinkingLevel,
@@ -885,6 +988,9 @@ export function ChatArea({
     if ((!text && attachments.length === 0) || isSending) {
       return
     }
+    if (!ensureSelectedProviderApiKey()) {
+      return
+    }
     const outgoingAttachments = attachments
     setDraft("")
     setAttachments([])
@@ -911,6 +1017,9 @@ export function ChatArea({
     const sourceMessages = isPiQueueMessage ? piQueuedMessages : queuedMessages
     const message = sourceMessages.find((item) => item.id === id)
     if (!message) {
+      return
+    }
+    if (!ensureSelectedProviderApiKey()) {
       return
     }
     const remainingMessages = sourceMessages.filter((item) => item.id !== id)
@@ -1019,6 +1128,10 @@ export function ChatArea({
       return
     }
     const timer = window.setTimeout(() => {
+      if (!ensureSelectedProviderApiKey()) {
+        setIsQueuePausedAfterInterrupt(true)
+        return
+      }
       const [nextMessage] = queuedMessages
       setQueuedMessages((current) => current.slice(1))
       if (editingQueueId === nextMessage.id) {
@@ -1033,6 +1146,7 @@ export function ChatArea({
     return () => window.clearTimeout(timer)
   }, [
     editingQueueId,
+    ensureSelectedProviderApiKey,
     isAgentWorking,
     isQueueAutoSendPaused,
     isSending,
@@ -1073,6 +1187,13 @@ export function ChatArea({
     if (isCompacting || !window.ousia || !currentProject || !currentSession) {
       return
     }
+    if (!ensureSelectedProviderApiKey()) {
+      return
+    }
+    const apiKey = getOusiaModelProviderApiKey(settings)?.trim()
+    if (!apiKey) {
+      return
+    }
     const statusMessageId = `compact-${Date.now()}`
     setIsCompacting(true)
     onLocalEvent({
@@ -1093,7 +1214,7 @@ export function ChatArea({
         model: {
           provider: settings.modelProvider,
           modelId: settings.modelId,
-          apiKey: getOusiaModelProviderApiKey(settings)?.trim() || undefined,
+          apiKey,
         },
       })
       if (!result.ok) {
@@ -1177,6 +1298,13 @@ export function ChatArea({
     if (!window.ousia || !currentProject || !currentSession) {
       return
     }
+    if (!ensureSelectedProviderApiKey()) {
+      return
+    }
+    const apiKey = getOusiaModelProviderApiKey(settings)?.trim()
+    if (!apiKey) {
+      return
+    }
     const markdown = formatSessionHistoryForClipboard({
       items,
       projectPath: currentProject.path,
@@ -1195,7 +1323,7 @@ export function ChatArea({
       model: {
         provider: settings.modelProvider,
         modelId: settings.modelId,
-        apiKey: getOusiaModelProviderApiKey(settings)?.trim() || undefined,
+        apiKey,
       },
     })
     if (!result.ok && !result.canceled) {
@@ -1714,6 +1842,118 @@ export function ChatArea({
           </div>
         </div>
       </form>
+      <Dialog
+        open={isProviderKeyDialogOpen}
+        onOpenChange={(open) => {
+          setIsProviderKeyDialogOpen(open)
+          if (!open) {
+            setProviderKeyDialogApiKey("")
+          }
+        }}
+      >
+        <DialogContent>
+          <div className="flex items-start justify-between gap-4">
+            <DialogHeader>
+              <DialogTitle>{t.chat.providerApiKeyTitle}</DialogTitle>
+              <DialogDescription>
+                {t.chat.providerApiKeyDescription}
+              </DialogDescription>
+            </DialogHeader>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="ousia-squircle-corners mt-0.5 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.96]"
+              aria-label={t.app.close}
+              onClick={() => setIsProviderKeyDialogOpen(false)}
+            >
+              <X size={18} />
+            </Button>
+          </div>
+
+          <label className="mt-4 block">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t.settings.provider}
+            </span>
+            <Select
+              items={providerKeyDialogSelectItems}
+              value={providerKeyDialogProviderId}
+              onValueChange={(value) => {
+                const nextProviderId = value ?? ""
+                setProviderKeyDialogProviderId(nextProviderId)
+                setProviderKeyDialogApiKey(
+                  getOusiaModelProviderApiKey(settings, nextProviderId)?.trim() ??
+                    ""
+                )
+              }}
+            >
+              <SelectTrigger
+                aria-label={t.settings.provider}
+                className="ousia-squircle-corners mt-2 w-full rounded-xl border-[0.5px] border-foreground/10 bg-white hover:bg-white"
+              >
+                <SelectValue placeholder={t.settings.chooseProvider} />
+              </SelectTrigger>
+              <SelectContent align="start">
+                <SelectGroup>
+                  {providerKeyDialogProviders.map((provider) => (
+                    <SelectItem key={provider.id} value={provider.id}>
+                      {provider.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </label>
+
+          <label className="mt-4 block">
+            <span className="text-xs font-medium text-muted-foreground">
+              API Key
+            </span>
+            <Input
+              aria-label="API Key"
+              className="ousia-squircle-corners mt-2 rounded-xl border-[0.5px] border-foreground/10 bg-white focus-visible:bg-white"
+              value={providerKeyDialogApiKey}
+              onChange={(event) =>
+                setProviderKeyDialogApiKey(event.target.value)
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && canSaveProviderKey) {
+                  event.preventDefault()
+                  saveProviderKeyFromDialog()
+                }
+              }}
+              placeholder="sk-..."
+              type="password"
+            />
+            {!providerKeyDialogApiKey.trim() ? (
+              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                {t.settings.apiKeyRequired}
+              </span>
+            ) : null}
+          </label>
+
+          <DialogFooter className="mt-5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="ousia-squircle-corners h-10 rounded-2xl border-[0.5px] border-foreground/10 bg-white px-5 text-neutral-950 hover:bg-neutral-50 active:scale-[0.96]"
+              onClick={() => setIsProviderKeyDialogOpen(false)}
+            >
+              {t.app.cancel}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="ousia-squircle-corners h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800 active:scale-[0.96]"
+              disabled={!canSaveProviderKey}
+              onClick={saveProviderKeyFromDialog}
+            >
+              {t.app.add}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={isCustomToolsDialogOpen}
         onOpenChange={setIsCustomToolsDialogOpen}
