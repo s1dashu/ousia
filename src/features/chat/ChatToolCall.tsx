@@ -195,7 +195,7 @@ export function ToolCallView({
         type="button"
         aria-expanded={isOpen}
         className={cn(
-          "group flex min-h-7 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground",
+          "group flex min-h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground",
           displayItem.status === "failed" &&
             `${toolFailureTextClass} ${toolFailureHoverTextClass}`
         )}
@@ -286,7 +286,7 @@ export function ToolCallGroupView({
       <button
         type="button"
         aria-expanded={isOpen}
-        className="flex h-7 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
+        className="flex h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
         onClick={() => setIsOpen((current) => !current)}
       >
         <span className="flex size-5 shrink-0 items-center justify-center">
@@ -313,7 +313,7 @@ export function ToolCallGroupView({
       </button>
 
       {isOpen ? (
-        <div className="mt-2 space-y-2 pl-7">
+        <div className="mt-1 space-y-0.5 pl-7">
           {items.map((item) => (
             <ToolCallView
               item={item}

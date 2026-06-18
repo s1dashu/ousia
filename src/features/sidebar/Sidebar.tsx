@@ -51,7 +51,7 @@ const sidebarProjectLeadGridClass =
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarRowXClass = "pl-2 pr-0"
 const sidebarSessionRowXClass =
-  "-mx-[5px] w-[calc(100%+10px)] pl-[13px] pr-[5px]"
+  "-mx-[7px] w-[calc(100%+14px)] pl-3 pr-[7px]"
 const sidebarProjectRowXClass = "w-full pl-2 pr-0"
 const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = "pl-2 pr-0"
@@ -349,7 +349,7 @@ function SortableSessionRow({
             ].join(" ")}
             aria-hidden="true"
           >
-            <span className="size-2 rounded-full bg-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.16)]" />
+            <span className="size-2 rounded-full bg-blue-500" />
           </div>
         ) : null}
         <Button
