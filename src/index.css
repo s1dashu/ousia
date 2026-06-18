@@ -1219,7 +1219,7 @@
 .ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child:hover,
 .ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child:focus,
 .ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child:focus-within {
-  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 28%, transparent)
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 20%, transparent)
     transparent;
 }
 
@@ -1272,7 +1272,7 @@
   > div:last-child:focus-within::-webkit-scrollbar-thumb {
   background-color: color-mix(
     in oklch,
-    var(--muted-foreground) 24%,
+    var(--muted-foreground) 16%,
     transparent
   );
 }
@@ -1297,7 +1297,7 @@
   > div:last-child:focus-within::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(
     in oklch,
-    var(--muted-foreground) 36%,
+    var(--muted-foreground) 26%,
     transparent
   ) !important;
 }

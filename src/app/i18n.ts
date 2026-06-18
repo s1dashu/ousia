@@ -29,6 +29,7 @@ export const messages = {
     },
     settings: {
       general: "通用设置",
+      advanced: "高级设置",
       defaultWorkDir: "默认会话目录",
       defaultWorkDirPrompt: "默认会话目录",
       defaultWorkDirHelp: "非项目类型的会话会默认位于该目录。",
@@ -201,6 +202,7 @@ export const messages = {
     },
     settings: {
       general: "General",
+      advanced: "Advanced",
       defaultWorkDir: "Default chat directory",
       defaultWorkDirPrompt: "Default chat directory",
       defaultWorkDirHelp: "Non-project chats are created in this directory by default.",

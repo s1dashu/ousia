@@ -1474,7 +1474,7 @@ export function App() {
           />
         </div>
       )}
-      <div className="relative z-20 min-w-0 flex-1 bg-background">
+      <div className="relative z-20 min-w-0 flex-1 bg-sidebar">
         <div className="flex h-full min-w-0 overflow-visible">
           {isSettingsOpen ? (
             <SettingsPage

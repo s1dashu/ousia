@@ -391,42 +391,6 @@ export function SettingsPage({
           <section className={settingsSectionClass}>
             <h2 className="text-sm font-semibold">{t.settings.general}</h2>
             <div className={settingsFieldClass}>
-              <label className={settingsLabelClass}>
-                {t.settings.defaultWorkDir}
-              </label>
-              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                <Input
-                  className="ousia-squircle-corners flex-1 rounded-xl border-[0.5px] border-foreground/10 bg-input/30"
-                  value={draft.defaultWorkDir}
-                  onChange={(event) =>
-                    updateDraft({
-                      defaultWorkDir: event.target.value,
-                    })
-                  }
-                  onBlur={() => commitRequiredTextSetting("defaultWorkDir")}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur()
-                    }
-                  }}
-                  placeholder="~/.ousia/chat"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="ousia-squircle-corners h-9 rounded-xl border-[0.5px] border-foreground/10 bg-input/30 hover:bg-input/45"
-                  onClick={chooseDefaultWorkDir}
-                >
-                  <FolderOpen size={18} />
-                  {t.settings.choose}
-                </Button>
-              </div>
-              <div className={settingsHelpClass}>
-                {t.settings.defaultWorkDirHelp}
-              </div>
-            </div>
-            <div className={settingsFieldClass}>
               <span className={settingsLabelClass}>
                 {t.settings.language}
               </span>
@@ -990,6 +954,46 @@ export function SettingsPage({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+          </section>
+
+          <section className={settingsSectionClass}>
+            <h2 className="text-sm font-semibold">{t.settings.advanced}</h2>
+            <div className={settingsFieldClass}>
+              <label className={settingsLabelClass}>
+                {t.settings.defaultWorkDir}
+              </label>
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                <Input
+                  className="ousia-squircle-corners flex-1 rounded-xl border-[0.5px] border-foreground/10 bg-input/30"
+                  value={draft.defaultWorkDir}
+                  onChange={(event) =>
+                    updateDraft({
+                      defaultWorkDir: event.target.value,
+                    })
+                  }
+                  onBlur={() => commitRequiredTextSetting("defaultWorkDir")}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.currentTarget.blur()
+                    }
+                  }}
+                  placeholder="~/.ousia/chat"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ousia-squircle-corners h-9 rounded-xl border-[0.5px] border-foreground/10 bg-input/30 hover:bg-input/45"
+                  onClick={chooseDefaultWorkDir}
+                >
+                  <FolderOpen size={18} />
+                  {t.settings.choose}
+                </Button>
+              </div>
+              <div className={settingsHelpClass}>
+                {t.settings.defaultWorkDirHelp}
+              </div>
+            </div>
           </section>
         </div>
       </div>

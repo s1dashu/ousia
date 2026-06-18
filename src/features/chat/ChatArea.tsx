@@ -9,7 +9,9 @@ import {
   type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  type PointerEvent,
   type UIEvent,
+  type WheelEvent,
 } from "react"
 import {
   ArrowDown,
@@ -67,6 +69,7 @@ import {
   type OusiaChatAttachment,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
+  type OusiaSendDuringRunMode,
   type OusiaThinkingLevel,
 } from "@/electron/chat-types"
 import { getMessages } from "@/app/i18n"
@@ -247,6 +250,9 @@ export function ChatArea({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputScrollTopBeforeResizeRef = useRef(0)
   const followLatestFrameRef = useRef(0)
+  const manualScrollIntentTimerRef = useRef(0)
+  const manualScrollAwayFromLatestRef = useRef(false)
+  const manualScrollIntentRef = useRef(false)
   const programmaticScrollResetFrameRef = useRef(0)
   const programmaticScrollResetTimerRef = useRef(0)
   const olderHistoryScrollAnchorRef = useRef<{
@@ -256,6 +262,7 @@ export function ChatArea({
   const isFollowingLatestRef = useRef(isFollowingLatest)
   const isComposingRef = useRef(false)
   const isProgrammaticScrollRef = useRef(false)
+  const sendDuringRunModeRef = useRef(settings.sendDuringRunMode)
   const wasAgentWorkingRef = useRef(isAgentWorking)
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
@@ -282,6 +289,7 @@ export function ChatArea({
   )
   const hasDraftContent = Boolean(draft.trim() || attachments.length)
   const sendDuringRunMode = settings.sendDuringRunMode
+  sendDuringRunModeRef.current = sendDuringRunMode
   const currentContextUsageKey =
     currentProject && currentSession
       ? `${currentProject.path}::${currentSession.id}`
@@ -314,11 +322,6 @@ export function ChatArea({
     items.length > 0 &&
     (hasActualContextUsage || hasContextUsageWindow)
   const piQueuedMessages: QueuedChatMessage[] = [
-    ...queuedChatState.steering.map((text, index) => ({
-      id: `pi-steering-${index}`,
-      text,
-      attachments: [],
-    })),
     ...queuedChatState.followUp.map((text, index) => ({
       id: `pi-follow-up-${index}`,
       text,
@@ -344,6 +347,26 @@ export function ChatArea({
       programmaticScrollResetTimerRef.current = 0
     }
   }, [])
+
+  const clearManualScrollIntent = useCallback(() => {
+    manualScrollIntentRef.current = false
+    manualScrollAwayFromLatestRef.current = false
+    if (manualScrollIntentTimerRef.current) {
+      window.clearTimeout(manualScrollIntentTimerRef.current)
+      manualScrollIntentTimerRef.current = 0
+    }
+  }, [])
+
+  const markManualScrollIntent = useCallback((awayFromLatest = false) => {
+    clearManualScrollIntent()
+    manualScrollIntentRef.current = true
+    manualScrollAwayFromLatestRef.current = awayFromLatest
+    manualScrollIntentTimerRef.current = window.setTimeout(() => {
+      manualScrollIntentRef.current = false
+      manualScrollAwayFromLatestRef.current = false
+      manualScrollIntentTimerRef.current = 0
+    }, 1200)
+  }, [clearManualScrollIntent])
 
   const releaseProgrammaticScrollAfterLayout = useCallback(
     (behavior: ScrollBehavior) => {
@@ -373,19 +396,23 @@ export function ChatArea({
     [clearProgrammaticScrollReset]
   )
 
-  const performLatestScroll = useCallback((behavior: ScrollBehavior = "auto") => {
-    const node = scrollRef.current
-    if (!node) {
-      return
-    }
-    isProgrammaticScrollRef.current = true
-    node.scrollTo({
-      top: node.scrollHeight,
-      behavior,
-    })
-    setShowScrollToLatest(false)
-    releaseProgrammaticScrollAfterLayout(behavior)
-  }, [releaseProgrammaticScrollAfterLayout])
+  const performLatestScroll = useCallback(
+    (behavior: ScrollBehavior = "auto") => {
+      const node = scrollRef.current
+      if (!node) {
+        return
+      }
+      clearManualScrollIntent()
+      isProgrammaticScrollRef.current = true
+      node.scrollTo({
+        top: node.scrollHeight,
+        behavior,
+      })
+      setShowScrollToLatest(false)
+      releaseProgrammaticScrollAfterLayout(behavior)
+    },
+    [clearManualScrollIntent, releaseProgrammaticScrollAfterLayout]
+  )
 
   const scrollToLatest = useCallback((behavior: ScrollBehavior = "auto") => {
     isFollowingLatestRef.current = true
@@ -422,8 +449,9 @@ export function ChatArea({
   useEffect(() => {
     return () => {
       clearProgrammaticScrollReset()
+      clearManualScrollIntent()
     }
-  }, [clearProgrammaticScrollReset])
+  }, [clearManualScrollIntent, clearProgrammaticScrollReset])
 
   useLayoutEffect(() => {
     if (!isFollowingLatest) {
@@ -466,7 +494,12 @@ export function ChatArea({
 
     let frameId = 0
     const resizeObserver = new ResizeObserver(() => {
+      const node = scrollRef.current
+      if (!node) {
+        return
+      }
       if (!isFollowingLatestRef.current) {
+        setShowScrollToLatest(!isScrolledToLatest(node))
         return
       }
       window.cancelAnimationFrame(frameId)
@@ -606,14 +639,53 @@ export function ChatArea({
       }
       return
     }
+    if (manualScrollAwayFromLatestRef.current) {
+      isFollowingLatestRef.current = false
+      setIsFollowingLatest(false)
+      setShowScrollToLatest(!isAtLatest)
+      return
+    }
+    if (
+      !manualScrollIntentRef.current &&
+      isFollowingLatestRef.current &&
+      !isAtLatest
+    ) {
+      performLatestScroll("auto")
+      return
+    }
+    if (isAtLatest) {
+      clearManualScrollIntent()
+    }
     isFollowingLatestRef.current = isAtLatest
     setIsFollowingLatest(isAtLatest)
     setShowScrollToLatest(!isAtLatest)
   }
 
-  function handleManualScrollIntent() {
+  function handleManualScrollIntent(awayFromLatest = false) {
+    markManualScrollIntent(awayFromLatest)
+    if (awayFromLatest) {
+      isFollowingLatestRef.current = false
+      setIsFollowingLatest(false)
+      const node = scrollRef.current
+      setShowScrollToLatest(node ? !isScrolledToLatest(node) : true)
+    }
     clearProgrammaticScrollReset()
     isProgrammaticScrollRef.current = false
+  }
+
+  function handleWheelCapture(event: WheelEvent<HTMLDivElement>) {
+    handleManualScrollIntent(event.deltaY < 0)
+  }
+
+  function handleScrollPointerDown(event: PointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const scrollbarHitSize = 18
+    const isLikelyScrollbarPointer =
+      event.clientX >= rect.right - scrollbarHitSize ||
+      event.clientY >= rect.bottom - scrollbarHitSize
+    if (isLikelyScrollbarPointer) {
+      handleManualScrollIntent()
+    }
   }
 
   function updateThinkingLevel(thinkingLevel: OusiaThinkingLevel) {
@@ -632,6 +704,11 @@ export function ChatArea({
         ...patch,
       })
     )
+  }
+
+  function updateSendDuringRunMode(mode: OusiaSendDuringRunMode) {
+    sendDuringRunModeRef.current = mode
+    updateComposerSettings({ sendDuringRunMode: mode })
   }
 
   function toggleCustomAgentTool(tool: OusiaAgentToolName) {
@@ -817,7 +894,7 @@ export function ChatArea({
       return
     }
 
-    if (isAgentWorking && sendDuringRunMode === "queue") {
+    if (isAgentWorking && sendDuringRunModeRef.current === "queue") {
       queueDraftMessage(text, outgoingAttachments)
       return
     }
@@ -1255,9 +1332,9 @@ export function ChatArea({
           CHAT_HORIZONTAL_PADDING_CLASS
         )}
         onScroll={handleChatScroll}
-        onWheelCapture={handleManualScrollIntent}
-        onTouchStartCapture={handleManualScrollIntent}
-        onPointerDownCapture={handleManualScrollIntent}
+        onWheelCapture={handleWheelCapture}
+        onTouchStartCapture={() => handleManualScrollIntent()}
+        onPointerDownCapture={handleScrollPointerDown}
       >
         <div ref={chatContentRef}>
           {isLoadingOlderHistory ? (
@@ -1466,22 +1543,23 @@ export function ChatArea({
                     <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
                       {t.chat.appendMessages}
                     </DropdownMenuLabel>
-                    <DropdownMenuRadioGroup value={settings.sendDuringRunMode}>
+                    <DropdownMenuRadioGroup
+                      value={sendDuringRunMode}
+                      onValueChange={(value) =>
+                        updateSendDuringRunMode(
+                          value === "queue" ? "queue" : "steer"
+                        )
+                      }
+                    >
                       <DropdownMenuRadioItem
                         value="queue"
                         className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                        onClick={() =>
-                          updateComposerSettings({ sendDuringRunMode: "queue" })
-                        }
                       >
                         {t.settings.queue}
                       </DropdownMenuRadioItem>
                       <DropdownMenuRadioItem
                         value="steer"
                         className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                        onClick={() =>
-                          updateComposerSettings({ sendDuringRunMode: "steer" })
-                        }
                       >
                         {t.settings.steer}
                       </DropdownMenuRadioItem>
@@ -1515,7 +1593,7 @@ export function ChatArea({
                     side="top"
                     sideOffset={8}
                     align="start"
-                    className="w-72 rounded-xl p-2"
+                    className="ousia-hover-scrollbar w-72 rounded-xl p-2"
                   >
                     <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
                       Reasoning

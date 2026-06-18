@@ -57,6 +57,7 @@ const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = "pl-2 pr-0"
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
+const sidebarScrollRevealPadding = 12
 const sidebarRowStateClass =
   "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)]"
 const sidebarProjectRowStateClass =
@@ -641,14 +642,23 @@ export function Sidebar({
         if (container && target) {
           const containerRect = container.getBoundingClientRect()
           const targetRect = target.getBoundingClientRect()
-          container.scrollTo({
-            top:
-              container.scrollTop +
-              targetRect.top -
-              containerRect.top -
-              8,
-            behavior: "smooth",
-          })
+          const revealTop = containerRect.top + sidebarScrollRevealPadding
+          const revealBottom =
+            containerRect.bottom - sidebarScrollRevealPadding
+          const isTargetVisible =
+            targetRect.top >= revealTop && targetRect.bottom <= revealBottom
+
+          if (!isTargetVisible) {
+            const scrollDelta =
+              targetRect.top < revealTop
+                ? targetRect.top - revealTop
+                : targetRect.bottom - revealBottom
+
+            container.scrollTo({
+              top: container.scrollTop + scrollDelta,
+              behavior: "smooth",
+            })
+          }
         }
         onScrollTargetHandled()
       })
