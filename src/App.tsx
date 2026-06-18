@@ -298,6 +298,9 @@ export function App() {
   const [runStatusBySession, setRunStatusBySession] = useState<
     Record<string, AgentRunStatus>
   >({})
+  const [unreadCompletedSessionIds, setUnreadCompletedSessionIds] = useState<
+    Set<string>
+  >(() => new Set())
   const [queuedChatStateBySession, setQueuedChatStateBySession] = useState<
     Record<string, QueuedChatState>
   >({})
@@ -341,6 +344,9 @@ export function App() {
       : ""
   const sessionsRef = useRef(sessions)
   const selectedChatKeyRef = useRef(selectedChatKey)
+  const selectedSessionIdRef = useRef(selectedSessionId)
+  const isSettingsOpenRef = useRef(isSettingsOpen)
+  const runStatusBySessionRef = useRef(runStatusBySession)
   const selectedItems = selectedChatKey
     ? (itemsBySession[selectedChatKey] ?? [])
     : []
@@ -373,6 +379,10 @@ export function App() {
     }
     return next
   }, [projectPathForSession, runStatusBySession, sessions])
+  const unreadCompletedSessionIdSet = useMemo(
+    () => unreadCompletedSessionIds,
+    [unreadCompletedSessionIds]
+  )
   const createAppStateSnapshot = useCallback(
     (nextSettings: AppSettings = settings): InitialAppState => ({
       schemaVersion: APP_STATE_SCHEMA_VERSION,
@@ -579,6 +589,10 @@ export function App() {
   }, [sessions])
 
   useEffect(() => {
+    runStatusBySessionRef.current = runStatusBySession
+  }, [runStatusBySession])
+
+  useEffect(() => {
     itemsBySessionRef.current = itemsBySession
   }, [itemsBySession])
 
@@ -589,6 +603,14 @@ export function App() {
   useEffect(() => {
     selectedChatKeyRef.current = selectedChatKey
   }, [selectedChatKey])
+
+  useEffect(() => {
+    selectedSessionIdRef.current = selectedSessionId
+  }, [selectedSessionId])
+
+  useEffect(() => {
+    isSettingsOpenRef.current = isSettingsOpen
+  }, [isSettingsOpen])
 
   useEffect(() => {
     if (!selectedChatKey || selectedItems.length > 0) {
@@ -740,13 +762,39 @@ export function App() {
         })
       }
       if (event.type === "run_status") {
+        const nextStatus =
+          event.status === "starting" || event.status === "running"
+            ? "working"
+            : "idle"
+        const wasWorking = runStatusBySessionRef.current[targetKey] === "working"
         setRunStatusBySession((current) => ({
           ...current,
-          [targetKey]:
-            event.status === "starting" || event.status === "running"
-              ? "working"
-              : "idle",
+          [targetKey]: nextStatus,
         }))
+        runStatusBySessionRef.current = {
+          ...runStatusBySessionRef.current,
+          [targetKey]: nextStatus,
+        }
+        if (
+          targetSession &&
+          wasWorking &&
+          nextStatus === "idle" &&
+          (event.status === "finished" || event.status === "error")
+        ) {
+          const isViewed =
+            selectedSessionIdRef.current === targetSession.id &&
+            !isSettingsOpenRef.current
+          if (!isViewed) {
+            setUnreadCompletedSessionIds((current) => {
+              if (current.has(targetSession.id)) {
+                return current
+              }
+              const next = new Set(current)
+              next.add(targetSession.id)
+              return next
+            })
+          }
+        }
       }
       if (event.type === "queue_update") {
         setQueuedChatStateBySession((current) => ({
@@ -1094,6 +1142,16 @@ export function App() {
     for (const session of removedSessions) {
       draftSessionKeysRef.current.delete(chatKey(project.path, session.id))
     }
+    setUnreadCompletedSessionIds((current) => {
+      if (!removedSessions.some((session) => current.has(session.id))) {
+        return current
+      }
+      const next = new Set(current)
+      for (const session of removedSessions) {
+        next.delete(session.id)
+      }
+      return next
+    })
 
     if (selectedSession?.projectId === projectId) {
       const nextSession = remainingSessions[0]
@@ -1104,6 +1162,14 @@ export function App() {
 
   function handleSelectSession(sessionId: string) {
     setSelectedSessionId(sessionId)
+    setUnreadCompletedSessionIds((current) => {
+      if (!current.has(sessionId)) {
+        return current
+      }
+      const next = new Set(current)
+      next.delete(sessionId)
+      return next
+    })
     setIsSettingsOpen(false)
   }
 
@@ -1285,6 +1351,14 @@ export function App() {
       delete next[targetKey]
       return next
     })
+    setUnreadCompletedSessionIds((current) => {
+      if (!current.has(sessionId)) {
+        return current
+      }
+      const next = new Set(current)
+      next.delete(sessionId)
+      return next
+    })
     if (selectedSessionId === sessionId) {
       const nextSession = remaining[0]
       setSelectedSessionId(nextSession?.id ?? "")
@@ -1464,6 +1538,7 @@ export function App() {
             sidebarSectionOrder={sidebarSectionOrder}
             scrollTargetSessionId={sidebarScrollTargetSessionId}
             sessionRunStatusById={sidebarRunStatusBySessionId}
+            unreadCompletedSessionIds={unreadCompletedSessionIdSet}
             sessions={sessions}
             language={settings.language}
             style={{ width: "var(--ousia-sidebar-live-width)" }}

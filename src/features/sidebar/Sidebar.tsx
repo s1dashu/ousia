@@ -101,6 +101,7 @@ type SidebarProps = {
   sidebarSectionOrder: OusiaSidebarSectionId[]
   scrollTargetSessionId: string
   sessionRunStatusById: Record<string, "idle" | "working">
+  unreadCompletedSessionIds: Set<string>
   sessions: SessionRecord[]
   language: OusiaLanguage
   style: CSSProperties
@@ -120,6 +121,7 @@ type SortableSessionRowProps = {
   projectChild?: boolean
   selectedSessionId: string
   session: SessionRecord
+  sessionHasUnreadCompletion: boolean
   sessionRunStatus: "idle" | "working"
   t: I18nMessages
 }
@@ -241,6 +243,7 @@ function SortableSessionRow({
   projectChild,
   selectedSessionId,
   session,
+  sessionHasUnreadCompletion,
   sessionRunStatus,
   t,
 }: SortableSessionRowProps) {
@@ -337,6 +340,16 @@ function SortableSessionRow({
             title={t.sidebar.running}
           >
             <span className="size-3.5 animate-spin rounded-full border-2 border-sidebar-accent-foreground/20 border-t-sidebar-accent-foreground" />
+          </div>
+        ) : sessionHasUnreadCompletion ? (
+          <div
+            className={[
+              "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
+              "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
+            ].join(" ")}
+            aria-hidden="true"
+          >
+            <span className="size-2 rounded-full bg-blue-500 shadow-[0_0_0_2px_rgba(59,130,246,0.16)]" />
           </div>
         ) : null}
         <Button
@@ -580,6 +593,7 @@ export function Sidebar({
   sidebarSectionOrder,
   scrollTargetSessionId,
   sessionRunStatusById,
+  unreadCompletedSessionIds,
   sessions,
   language,
   style,
@@ -787,6 +801,7 @@ export function Sidebar({
         projectChild={options.projectChild}
         selectedSessionId={selectedSessionId}
         session={session}
+        sessionHasUnreadCompletion={unreadCompletedSessionIds.has(session.id)}
         sessionRunStatus={sessionRunStatusById[session.id] ?? "idle"}
         t={t}
       />
