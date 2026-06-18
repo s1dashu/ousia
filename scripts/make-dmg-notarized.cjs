@@ -2,7 +2,7 @@
 
 const { runMacBuild } = require("./mac-build.cjs")
 
-runMacBuild({ makeDmg: true }).catch((error) => {
+runMacBuild({ makeDmg: true, notarize: true, sign: true }).catch((error) => {
   console.error(error)
   process.exit(error.exitCode ?? 1)
 })

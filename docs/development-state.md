@@ -8,6 +8,20 @@ npm run lint
 npm start
 ```
 
+Packaging commands:
+
+```bash
+npm run package
+npm run make
+npm run make:dmg:notarized
+```
+
+- `npm run package` builds only `out/Ousia-darwin-arm64/Ousia.app` for local
+  production smoke testing.
+- `npm run make` builds a fast local DMG without signing or notarization.
+- `npm run make:dmg:notarized` signs, notarizes, staples, and verifies the app
+  and DMG for release distribution.
+
 Useful log tail:
 
 ```bash
