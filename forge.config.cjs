@@ -56,7 +56,7 @@ module.exports = {
         }
       : {}),
     ignore: (file) => {
-      if (!file) {
+      if (!file || file === "/") {
         return false
       }
 
