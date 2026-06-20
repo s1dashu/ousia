@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
@@ -207,6 +208,13 @@ function defaultThinkingLevelFor(levels: OusiaThinkingLevel[]) {
     : (levels[0] ?? DEFAULT_CHAT_THINKING_LEVEL)
 }
 
+function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
+  return (
+    item.id.startsWith("provider-api-key-") &&
+    (item.role === "system" || item.role === "error")
+  )
+}
+
 export function ChatArea({
   currentProject,
   currentSession,
@@ -323,6 +331,16 @@ export function ChatArea({
   )
   const canSaveProviderKey =
     Boolean(providerKeyDialogProvider) && Boolean(providerKeyDialogApiKey.trim())
+  const hasSelectedProviderApiKey = Boolean(
+    getOusiaModelProviderApiKey(settings)?.trim()
+  )
+  const visibleChatItems = useMemo(() => {
+    if (!hasSelectedProviderApiKey) {
+      return items
+    }
+
+    return items.filter((item) => !isProviderApiKeyRequiredStatusItem(item))
+  }, [hasSelectedProviderApiKey, items])
   const showTurnWaitIndicator = useDelayedTurnWaitIndicator(
     shouldShowTurnWaitIndicator(items, isAgentWorking)
   )
@@ -1633,7 +1651,7 @@ export function ChatArea({
             </div>
           ) : null}
           <ChatMessageList
-            items={items}
+            items={visibleChatItems}
             isAgentWorking={isAgentWorking}
             onBranchFromMessage={onBranchFromMessage}
             projectPath={currentProject?.path}
