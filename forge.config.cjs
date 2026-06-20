@@ -17,7 +17,8 @@ const shouldNotarizeMac = Boolean(
     process.env.APPLE_TEAM_ID
 )
 
-const dmgWindowSize = { width: 658, height: 520 }
+const dmgBackground = join(__dirname, "assets", "dmg-background.png")
+const dmgWindowSize = { width: 658, height: 498 }
 const hiddenDmgSupportFiles = [
   ".background",
   ".DS_Store",
@@ -28,10 +29,11 @@ const piCodingAgentPackagePath =
   "/node_modules/@earendil-works/pi-coding-agent"
 
 const macDmgConfig = {
+  background: dmgBackground,
   icon: macIcon,
   contents: (options) => [
-    { x: 192, y: 344, type: "file", path: options.appPath },
-    { x: 448, y: 344, type: "link", path: "/Applications" },
+    { x: 200, y: 286, type: "file", path: options.appPath },
+    { x: 458, y: 286, type: "link", path: "/Applications" },
     // Finder shows dotfiles when AppleShowAllFiles is enabled, so keep
     // appdmg's support files outside the initial installer window.
     ...hiddenDmgSupportFiles.map((path, index) => ({
@@ -42,6 +44,7 @@ const macDmgConfig = {
     })),
   ],
   additionalDMGOptions: {
+    "background-color": "#fbfbfb",
     window: { size: dmgWindowSize },
     ...(shouldSignMac
       ? {
