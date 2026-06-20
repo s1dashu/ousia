@@ -1053,7 +1053,9 @@ export function App() {
       addProject(rawPath, projectNameFromPath(rawPath))
       return
     }
-    const result = await window.ousia.openProjectDirectory()
+    const result = await window.ousia.openProjectDirectory({
+      defaultPath: settings.defaultWorkDir,
+    })
     if (result.canceled) {
       return
     }

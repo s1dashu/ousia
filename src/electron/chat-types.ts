@@ -137,6 +137,8 @@ export type OusiaAppStateSaveResult = {
 }
 
 export const OUSIA_APP_STATE_SCHEMA_VERSION = 2
+export const OUSIA_DEFAULT_WORK_DIR = "~/Documents/Ousia"
+export const OUSIA_LEGACY_DEFAULT_WORK_DIR = "~/.ousia/chat"
 
 export const defaultOusiaAppSettings: OusiaAppSettings = {
   appearanceColorScale: "paper",
@@ -144,7 +146,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   appFontFamily: "system",
   chatFontFamily: "system",
   language: "zh",
-  defaultWorkDir: "~/.ousia/chat",
+  defaultWorkDir: OUSIA_DEFAULT_WORK_DIR,
   sendDuringRunMode: "steer",
   agentMode: "standard",
   customAgentTools: ["read", "write", "edit", "bash", "grep", "find", "ls"],
@@ -225,6 +227,11 @@ export function normalizeOusiaAppSettings(
       )
     : defaultOusiaAppSettings.customAgentTools
 
+  const normalizedDefaultWorkDir =
+    merged.defaultWorkDir.trim() === OUSIA_LEGACY_DEFAULT_WORK_DIR
+      ? OUSIA_DEFAULT_WORK_DIR
+      : merged.defaultWorkDir.trim()
+
   return {
     ...normalizedBaseSettings,
     appearanceColorScale,
@@ -232,7 +239,7 @@ export function normalizeOusiaAppSettings(
     chatFontFamily,
     language: merged.language === "en" ? "en" : "zh",
     defaultWorkDir:
-      merged.defaultWorkDir.trim() || defaultOusiaAppSettings.defaultWorkDir,
+      normalizedDefaultWorkDir || defaultOusiaAppSettings.defaultWorkDir,
     sendDuringRunMode:
       merged.sendDuringRunMode === "queue" ? "queue" : "steer",
     agentMode:
@@ -653,6 +660,10 @@ export type OusiaOpenProjectResult =
       path: string
       name: string
     }
+
+export type OusiaDirectoryPickerOptions = {
+  defaultPath?: string
+}
 
 export type OusiaSelectDirectoryResult =
   | {

@@ -21,6 +21,7 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaDirectoryPickerOptions,
   OusiaModelRegistryResult,
   OusiaOpenProjectResult,
   OusiaSelectDirectoryResult,
@@ -60,8 +61,12 @@ declare global {
         payload: OusiaChatCompactPayload
       ): Promise<OusiaChatCompactResult>
       listModels(): Promise<OusiaModelRegistryResult>
-      openProjectDirectory(): Promise<OusiaOpenProjectResult>
-      selectDirectory(): Promise<OusiaSelectDirectoryResult>
+      openProjectDirectory(
+        options?: OusiaDirectoryPickerOptions
+      ): Promise<OusiaOpenProjectResult>
+      selectDirectory(
+        options?: OusiaDirectoryPickerOptions
+      ): Promise<OusiaSelectDirectoryResult>
       getWindowFullscreenState(): Promise<OusiaWindowFullscreenEvent>
       getWindowZoomState(): Promise<OusiaWindowZoomEvent>
       onChatEvent(callback: (event: OusiaChatEvent) => void): () => void

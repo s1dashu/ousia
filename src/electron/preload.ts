@@ -21,6 +21,7 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaDirectoryPickerOptions,
   OusiaModelRegistryResult,
   OusiaOpenProjectResult,
   OusiaSelectDirectoryResult,
@@ -115,11 +116,15 @@ const api = {
   listModels(): Promise<OusiaModelRegistryResult> {
     return ipcRenderer.invoke("ousia:models:list")
   },
-  openProjectDirectory(): Promise<OusiaOpenProjectResult> {
-    return ipcRenderer.invoke("ousia:project:open")
+  openProjectDirectory(
+    options?: OusiaDirectoryPickerOptions
+  ): Promise<OusiaOpenProjectResult> {
+    return ipcRenderer.invoke("ousia:project:open", options)
   },
-  selectDirectory(): Promise<OusiaSelectDirectoryResult> {
-    return ipcRenderer.invoke("ousia:directory:select")
+  selectDirectory(
+    options?: OusiaDirectoryPickerOptions
+  ): Promise<OusiaSelectDirectoryResult> {
+    return ipcRenderer.invoke("ousia:directory:select", options)
   },
   getWindowFullscreenState(): Promise<OusiaWindowFullscreenResult> {
     return ipcRenderer.invoke("ousia:window:fullscreen-state")

@@ -5,6 +5,7 @@ import {
   ipcMain,
   type OpenDialogOptions,
 } from "electron"
+import { mkdirSync } from "node:fs"
 import { basename } from "node:path"
 
 import { createAgentConversationModule } from "./agent-conversations.js"
@@ -23,8 +24,10 @@ import type {
   OusiaChatInterruptPayload,
   OusiaChatSendPayload,
   OusiaChatToolPayloadPayload,
+  OusiaDirectoryPickerOptions,
   OusiaSelectDirectoryResult,
 } from "./chat-types.js"
+import { expandHomePath } from "./host-paths.js"
 import { listPiModels } from "./model-registry.js"
 import {
   installRuntimeLogger,
@@ -143,8 +146,17 @@ ipcMain.handle("ousia:chat:compact", (_event, payload: OusiaChatCompactPayload) 
 
 ipcMain.handle("ousia:models:list", () => listPiModels(app.getPath("userData")))
 
-async function selectDirectory(): Promise<OusiaSelectDirectoryResult> {
+async function selectDirectory(
+  pickerOptions: OusiaDirectoryPickerOptions = {}
+): Promise<OusiaSelectDirectoryResult> {
+  const defaultPath = pickerOptions.defaultPath?.trim()
+    ? expandHomePath(pickerOptions.defaultPath)
+    : undefined
+  if (defaultPath) {
+    mkdirSync(defaultPath, { recursive: true })
+  }
   const options: OpenDialogOptions = {
+    ...(defaultPath ? { defaultPath } : {}),
     properties: ["openDirectory", "createDirectory"],
   }
   const result = mainWindow
@@ -159,20 +171,26 @@ async function selectDirectory(): Promise<OusiaSelectDirectoryResult> {
   }
 }
 
-ipcMain.handle("ousia:directory:select", () => selectDirectory())
+ipcMain.handle(
+  "ousia:directory:select",
+  (_event, options?: OusiaDirectoryPickerOptions) => selectDirectory(options)
+)
 
-ipcMain.handle("ousia:project:open", async () => {
-  const result = await selectDirectory()
-  if (result.canceled) {
-    return result
+ipcMain.handle(
+  "ousia:project:open",
+  async (_event, options?: OusiaDirectoryPickerOptions) => {
+    const result = await selectDirectory(options)
+    if (result.canceled) {
+      return result
+    }
+    const path = result.path
+    return {
+      canceled: false,
+      path,
+      name: basename(path),
+    }
   }
-  const path = result.path
-  return {
-    canceled: false,
-    path,
-    name: basename(path),
-  }
-})
+)
 
 ipcMain.handle("ousia:window:fullscreen-state", () =>
   windowHost.getWindowFullscreenState()

@@ -1,5 +1,11 @@
 import { app } from "electron"
-import { existsSync, mkdirSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmdirSync,
+} from "node:fs"
 import { readFile, rename, unlink, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import {
@@ -8,6 +14,7 @@ import {
   createDefaultOusiaWindowState,
   defaultOusiaAppSettings,
   normalizeOusiaAppSettings,
+  OUSIA_LEGACY_DEFAULT_WORK_DIR,
   OUSIA_APP_STATE_SCHEMA_VERSION,
   type OusiaAppSettings,
   type OusiaAppState,
@@ -107,11 +114,54 @@ function normalizeSettings(settings: OusiaAppSettings): OusiaAppSettings {
     ...settings,
   })
 
+  migrateLegacyDefaultWorkDir()
+
   if (nextSettings.defaultWorkDir === defaultOusiaAppSettings.defaultWorkDir) {
     mkdirSync(expandHomePath(nextSettings.defaultWorkDir), { recursive: true })
   }
 
   return nextSettings
+}
+
+function migrateLegacyDefaultWorkDir() {
+  const legacyDefaultWorkDir = expandHomePath(OUSIA_LEGACY_DEFAULT_WORK_DIR)
+  const defaultWorkDir = expandHomePath(defaultOusiaAppSettings.defaultWorkDir)
+  if (
+    legacyDefaultWorkDir === defaultWorkDir ||
+    !existsSync(legacyDefaultWorkDir)
+  ) {
+    return
+  }
+
+  mkdirSync(defaultWorkDir, { recursive: true })
+  for (const entry of readdirSync(legacyDefaultWorkDir)) {
+    const sourcePath = join(legacyDefaultWorkDir, entry)
+    const targetPath = join(defaultWorkDir, entry)
+    if (existsSync(targetPath)) {
+      writeRuntimeLog("app-state", "warn", {
+        message: "Skipped legacy default work dir item because target exists",
+        sourcePath,
+        targetPath,
+      })
+      continue
+    }
+    renameSync(sourcePath, targetPath)
+  }
+
+  try {
+    rmdirSync(legacyDefaultWorkDir)
+    writeRuntimeLog("app-state", "info", {
+      message: "Migrated legacy default work dir",
+      from: legacyDefaultWorkDir,
+      to: defaultWorkDir,
+    })
+  } catch (error) {
+    writeRuntimeLog("app-state", "warn", {
+      message: "Legacy default work dir was migrated but not removed",
+      error: error instanceof Error ? error.message : String(error),
+      path: legacyDefaultWorkDir,
+    })
+  }
 }
 
 function normalizeProjects(projects: unknown): OusiaProjectRecord[] {

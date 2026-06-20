@@ -188,7 +188,9 @@ export function SettingsPage({
       applySettings({ defaultWorkDir: rawPath.trim() })
       return
     }
-    const result = await window.ousia.selectDirectory()
+    const result = await window.ousia.selectDirectory({
+      defaultPath: draft.defaultWorkDir,
+    })
     if (result.canceled) {
       return
     }
@@ -865,7 +867,7 @@ export function SettingsPage({
                       event.currentTarget.blur()
                     }
                   }}
-                  placeholder="~/.ousia/chat"
+                  placeholder="~/Documents/Ousia"
                 />
                 <Button
                   type="button"

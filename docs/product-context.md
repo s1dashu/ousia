@@ -15,7 +15,7 @@ In scope:
 - Agent chat backed by Pi coding agent in Electron main.
 - Project/session isolated cwd for agent work.
 - User settings for appearance mode, Radix color scale, model provider API
-  keys, model, thinking level, and default chat directory.
+  keys, model, thinking level, and default workspace folder.
 
 Out of scope:
 
@@ -37,5 +37,5 @@ panel.
 
 - Sidebar: left project/session/settings navigation.
 - Chat: central conversation surface for the Pi coding agent.
-- Default chat directory: directory used by unassigned sessions, currently
-  `~/.ousia/chat`.
+- Default workspace folder: user-visible directory used by unassigned sessions
+  and as the starting point for creating projects, currently `~/Documents/Ousia`.
