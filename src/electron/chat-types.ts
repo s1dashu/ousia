@@ -39,11 +39,8 @@ export type OusiaAgentToolName =
 export type OusiaLanguage = "zh" | "en"
 export const OUSIA_FONT_FAMILIES = [
   "system",
-  "pingfang",
-  "microsoftYaHei",
-  "sourceHanSans",
-  "zhuqueFangsong",
   "lxgwWenkai",
+  "zhuqueFangsong",
 ] as const
 export type OusiaFontFamily = (typeof OUSIA_FONT_FAMILIES)[number]
 
@@ -179,15 +176,6 @@ export function normalizeOusiaModelProviders(
   return [...providers.values()]
 }
 
-type LegacyOusiaFontSettings = {
-  fontFamily?: OusiaFontFamily
-}
-
-type LegacyOusiaSessionInfoSettings = {
-  showContextUsage?: boolean
-  showSessionInfo?: boolean
-}
-
 function normalizeOusiaFontFamily(
   fontFamily: OusiaFontFamily | undefined
 ): OusiaFontFamily | undefined {
@@ -197,13 +185,8 @@ function normalizeOusiaFontFamily(
 }
 
 export function normalizeOusiaAppSettings(
-  settings: (
-    Partial<OusiaAppSettings> &
-      LegacyOusiaFontSettings &
-      LegacyOusiaSessionInfoSettings
-  ) = {}
+  settings: Partial<OusiaAppSettings> = {}
 ): OusiaAppSettings {
-  const legacyFontFamily = normalizeOusiaFontFamily(settings.fontFamily)
   const merged = {
     ...defaultOusiaAppSettings,
     ...settings,
@@ -217,21 +200,15 @@ export function normalizeOusiaAppSettings(
     : defaultOusiaAppSettings.appearanceColorScale
   const appFontFamily =
     normalizeOusiaFontFamily(settings.appFontFamily) ??
-    legacyFontFamily ??
     defaultOusiaAppSettings.appFontFamily
   const chatFontFamily =
     normalizeOusiaFontFamily(settings.chatFontFamily) ??
-    legacyFontFamily ??
     defaultOusiaAppSettings.chatFontFamily
   const {
-    fontFamily: _legacyFontFamily,
-    showContextUsage: _legacyShowContextUsage,
-    showSessionInfo: _legacyShowSessionInfo,
+    showContextUsage: _showContextUsage,
     ...normalizedBaseSettings
   } = merged
-  void _legacyFontFamily
-  void _legacyShowContextUsage
-  void _legacyShowSessionInfo
+  void _showContextUsage
 
   const allowedAgentTools = new Set<OusiaAgentToolName>([
     "read",
@@ -289,15 +266,6 @@ export function normalizeOusiaAppSettings(
 }
 
 export function resolveOusiaFontFamilyValue(fontFamily: OusiaFontFamily) {
-  if (fontFamily === "pingfang") {
-    return '"PingFang SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-  }
-  if (fontFamily === "microsoftYaHei") {
-    return '"Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-  }
-  if (fontFamily === "sourceHanSans") {
-    return '"Ousia Source Han Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-  }
   if (fontFamily === "zhuqueFangsong") {
     return '"Ousia Zhuque Fangsong", "Songti SC", serif'
   }

@@ -7,33 +7,6 @@
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
-  font-family: "Ousia Source Han Sans SC";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./assets/fonts/debug/source-han-sans-sc/SourceHanSansCN-Regular.otf")
-    format("opentype");
-}
-
-@font-face {
-  font-family: "Ousia Source Han Sans SC";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("./assets/fonts/debug/source-han-sans-sc/SourceHanSansCN-Medium.otf")
-    format("opentype");
-}
-
-@font-face {
-  font-family: "Ousia Source Han Sans SC";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./assets/fonts/debug/source-han-sans-sc/SourceHanSansCN-Bold.otf")
-    format("opentype");
-}
-
-@font-face {
   font-family: "Ousia LXGW WenKai";
   font-style: normal;
   font-weight: 300;

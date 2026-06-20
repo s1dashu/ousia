@@ -135,11 +135,8 @@ export function SettingsPage({
     value: OusiaFontFamily
   }> = [
     { label: t.settings.fontSystem, value: "system" },
-    { label: t.settings.fontPingFang, value: "pingfang" },
-    { label: t.settings.fontMicrosoftYaHei, value: "microsoftYaHei" },
-    { label: t.settings.fontSourceHanSans, value: "sourceHanSans" },
-    { label: t.settings.fontZhuqueFangsong, value: "zhuqueFangsong" },
     { label: t.settings.fontLxgwWenkai, value: "lxgwWenkai" },
+    { label: t.settings.fontZhuqueFangsong, value: "zhuqueFangsong" },
   ]
 
   useEffect(() => {
@@ -452,11 +449,6 @@ export function SettingsPage({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              {draft.appFontFamily === "microsoftYaHei" ? (
-                <div className={settingsHelpClass}>
-                  {t.settings.fontFamilyHelp}
-                </div>
-              ) : null}
             </div>
 
             <div className={settingsFieldClass}>
@@ -488,11 +480,6 @@ export function SettingsPage({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-              {draft.chatFontFamily === "microsoftYaHei" ? (
-                <div className={settingsHelpClass}>
-                  {t.settings.fontFamilyHelp}
-                </div>
-              ) : null}
             </div>
 
             <div className={settingsFieldClass}>
@@ -865,7 +852,7 @@ export function SettingsPage({
               </label>
               <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                 <Input
-                  className="ousia-squircle-corners flex-1 rounded-xl border-[0.5px] border-foreground/10 bg-input/30"
+                  className="ousia-squircle-corners flex-1 rounded-xl border-[0.5px] border-foreground/10 bg-background/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] focus-visible:bg-background dark:bg-input/45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-visible:bg-input/60"
                   value={draft.defaultWorkDir}
                   onChange={(event) =>
                     updateDraft({
@@ -884,7 +871,7 @@ export function SettingsPage({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="ousia-squircle-corners h-9 rounded-xl border-[0.5px] border-foreground/10 bg-input/30 hover:bg-input/45"
+                  className="ousia-squircle-corners h-9 rounded-xl border-[0.5px] border-foreground/10 bg-background/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] hover:bg-background dark:bg-input/45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] dark:hover:bg-input/60"
                   onClick={chooseDefaultWorkDir}
                 >
                   <FolderOpen size={18} />
