@@ -20,6 +20,7 @@ const staleMakeDirs = [
   join(outDir, "dmgroot"),
   join(outDir, "manual"),
 ]
+const dmgVolumeName = "Ousia"
 const nativeDmgDependencies = ["macos-alias", "fs-xattr"]
 const forgeBin = join(rootDir, "node_modules", ".bin", "electron-forge")
 const osxSignBin = join(
@@ -224,6 +225,44 @@ function getProxyBypassDomains(service) {
     .map((line) => line.trim())
     .filter(Boolean)
     .filter((line) => !line.startsWith("There aren't any bypass domains"))
+}
+
+function listMountedDmgVolumes(volumeName) {
+  if (process.platform !== "darwin") {
+    return []
+  }
+
+  const result = capture("hdiutil", ["info"])
+  if (result.status !== 0) {
+    return []
+  }
+
+  const escapedName = volumeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const volumePattern = new RegExp(`^/Volumes/${escapedName}(?: \\d+)?$`)
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => volumePattern.test(line))
+}
+
+function detachMountedDmgVolumes(volumeName) {
+  for (const mountPath of listMountedDmgVolumes(volumeName)) {
+    console.log(`Detaching mounted ${volumeName} DMG volume: ${mountPath}`)
+    const result = capture("hdiutil", ["detach", mountPath])
+    if (result.status === 0) {
+      continue
+    }
+
+    const forcedResult = capture("hdiutil", ["detach", "-force", mountPath])
+    assert(
+      forcedResult.status === 0,
+      [
+        `Failed to detach mounted ${volumeName} DMG volume: ${mountPath}`,
+        "Eject it manually before building the DMG so Finder background aliases",
+        "are written for the canonical /Volumes/Ousia mount point.",
+      ].join("\n")
+    )
+  }
 }
 
 function setProxyBypassDomains(service, domains) {
@@ -486,6 +525,7 @@ async function buildMac(options = {}) {
 
   if (makeDmg) {
     await withHiddenAppleSigningEnv(() => {
+      detachMountedDmgVolumes(dmgVolumeName)
       run(process.execPath, [
         forgeBin,
         "make",
