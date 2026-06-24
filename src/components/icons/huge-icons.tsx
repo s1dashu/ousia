@@ -3,7 +3,8 @@ import type { SVGProps } from "react"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import {
   AlertCircleIcon,
-  ArrowDownIcon,
+  ArrowDown01Icon,
+  ArrowDown02Icon,
   ArrowShrinkIcon,
   ArrowUp02Icon,
   ArrowUpIcon,
@@ -85,9 +86,10 @@ function createHugeIcon(icon: IconSvgElement) {
   }
 }
 
-export const ArrowDown = createHugeIcon(ArrowDownIcon)
+export const ArrowDown = createHugeIcon(ArrowDown01Icon)
 export const ArrowShrink = createHugeIcon(ArrowShrinkIcon)
 export const ArrowUp = createHugeIcon(ArrowUpIcon)
+export const SendArrowDown = createHugeIcon(ArrowDown02Icon)
 export const SendArrowUp = createHugeIcon(ArrowUp02Icon)
 export const Branch = createHugeIcon(GitBranchIcon)
 export const ChatPlus = createHugeIcon(ChatAdd01Icon)

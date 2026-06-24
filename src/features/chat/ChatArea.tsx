@@ -15,10 +15,10 @@ import {
   type WheelEvent,
 } from "react"
 import {
-  ArrowDown,
   ChevronDown,
   LoaderCircle,
   Plus,
+  SendArrowDown,
   SendArrowUp,
   SlidersHorizontal,
   X,
@@ -1675,7 +1675,7 @@ export function ChatArea({
               scrollToLatest("smooth")
             }}
           >
-            <ArrowDown className="size-[18px]" strokeWidth={1.5} />
+            <SendArrowDown className="size-[18px]" strokeWidth={1.5} />
           </Button>
         </div>
       ) : null}
