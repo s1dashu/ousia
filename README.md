@@ -1,42 +1,83 @@
-# Ousia Desktop
+<p align="center">
+  <img src="./ousia-logo.png" alt="Ousia" width="96" />
+</p>
 
-Ousia Desktop is a simplified Electron client for running Pi coding agent
-sessions across local projects. The app focuses on a direct chat workflow:
-choose a project, start or resume a session, configure your model provider, and
-let the agent work in the selected project directory.
+<h1 align="center">Ousia Desktop</h1>
 
-## Status
+<p align="center">
+  A quiet desktop client for running Pi coding agent sessions across local projects.
+</p>
 
-This repository is early and pre-release. The current app is intentionally
-small: sidebar navigation, chat, project/session persistence, settings, and the
-Electron bridge to Pi coding agent. The older Ousia extension and workspace-tab
-surfaces are not part of this branch.
+<p align="center">
+  <a href="https://github.com/s1dashu/ousia-desktop/releases/latest"><strong>Download the latest macOS DMG</strong></a>
+  ·
+  <a href="#getting-started">Run from source</a>
+  ·
+  <a href="#development">Development</a>
+</p>
 
-## Features
+## Download
 
-- Electron + Vite + React desktop shell.
-- Project and session navigation in the sidebar.
-- Chat streaming backed by `@earendil-works/pi-coding-agent`.
-- Per-project/session cwd isolation for agent tool execution.
-- File and image attachments in the chat composer.
-- Settings for language, appearance, fonts, model provider keys, model, thinking
-  level, default chat directory, and agent tool mode.
-- Runtime logs under `~/.ousia/logs/ousia-desktop.log`.
+Download the newest macOS build from
+[GitHub Releases](https://github.com/s1dashu/ousia-desktop/releases/latest).
 
-## Requirements
+The release artifact is a `.dmg` installer. Open it, drag **Ousia** into
+**Applications**, then launch the app from Applications.
 
-- Node.js 24 or newer.
-- npm 11 or newer.
-- macOS is the primary development target today. Electron Forge maker
-  configuration exists for other platforms, but release packaging has not been
-  fully validated on every OS.
+> Ousia Desktop is still pre-release software. Expect fast iteration and
+> occasional rough edges.
+
+## What It Is
+
+Ousia Desktop is a simplified Electron client for working with the Pi coding
+agent. It keeps the product surface intentionally direct: pick a project, open a
+chat session, choose a model provider, and let the agent work in that project's
+directory.
+
+This branch does not include the older Ousia extension runtime, workspace tabs,
+right-side terminal panel, browser/editor/PDF workspaces, or extension
+marketplace surfaces. The current product is the agent chat experience.
+
+## Highlights
+
+- **Project-aware agent sessions**: each chat request includes a project path
+  and session id, so Pi tool execution runs in the selected project directory.
+- **Persistent sidebar workflow**: projects, sessions, expanded sections,
+  sidebar layout, and window state are restored between launches.
+- **Streaming chat UI**: assistant Markdown is rendered with Streamdown,
+  including code blocks, tables, tool-call output, and compact status messages.
+- **Attachments in composer**: add files and images directly to a message when
+  the selected model supports them.
+- **Model/provider settings**: configure provider API keys locally, choose the
+  active model, and tune thinking level from the composer.
+- **Appearance controls**: choose theme, color scale, app/chat fonts, and chat
+  width from Settings.
+- **Local runtime logs**: Electron main, renderer, and chat failures are written
+  to `~/.ousia/logs/ousia-desktop.log`.
 
 ## Getting Started
+
+### Requirements
+
+- macOS for the primary desktop target.
+- Node.js 24 or newer.
+- npm 11 or newer.
+
+Electron Forge maker configuration exists for other platforms, but release
+packaging is currently validated for macOS first.
+
+### Run From Source
 
 ```bash
 npm install
 npm run start
 ```
+
+The app stores settings, sessions, and Pi agent data in Electron's app data
+directory. Provider API keys entered in Settings are local app state, so treat
+that machine state as sensitive.
+
+## Development
 
 Useful checks:
 
@@ -46,26 +87,19 @@ npm run lint
 npm run check
 ```
 
-Build a local Electron package:
+Build a local production app bundle:
 
 ```bash
 npm run package
 ```
 
-Create distributable artifacts:
+Create a local macOS DMG:
 
 ```bash
 npm run make
 ```
 
-## Configuration
-
-API keys must be entered in the app settings. Settings are stored in Electron's
-app data directory, including configured provider keys. Treat that local state
-as sensitive.
-
-Unsigned local macOS packages work without Apple credentials. To sign and
-notarize macOS builds, set:
+Signed and notarized release builds use Apple Developer credentials:
 
 ```bash
 APPLE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
@@ -74,9 +108,42 @@ APPLE_APP_SPECIFIC_PASSWORD="app-specific-password"
 APPLE_TEAM_ID="TEAMID"
 ```
 
-## Project Context
+Then run:
 
-The high-signal project notes live in `AGENTS.md`. More detailed context:
+```bash
+npm run make:dmg:signed
+npm run notarize:dmg -- out/make/Ousia-0.1.1-arm64.dmg
+```
+
+or:
+
+```bash
+npm run make:dmg:notarized
+```
+
+## Architecture
+
+Ousia Desktop is an Electron + Vite + React app:
+
+- `src/App.tsx` assembles the shell, sidebar/chat layout, settings state, and
+  persistence.
+- `src/features/chat/ChatArea.tsx` owns chat history, input, attachments, and
+  composer controls.
+- `src/features/settings/SettingsPage.tsx` renders app, appearance, model, and
+  agent settings.
+- `src/features/sidebar/Sidebar.tsx` handles project/session navigation.
+- `src/electron/main.ts` registers IPC for app state, chat, models, logging, and
+  window helpers.
+- `src/electron/agent-conversations.ts` hosts Pi session creation, model
+  selection, chat streaming, history, and interrupts.
+
+The renderer talks to Electron main through the narrow `window.ousia` preload
+API. Pi sessions are isolated by project/session and stored under Electron
+`userData`.
+
+## Project Docs
+
+High-signal notes for future agents live in `AGENTS.md`. More detailed context:
 
 - `docs/product-context.md`
 - `docs/design-context.md`
@@ -87,9 +154,9 @@ The high-signal project notes live in `AGENTS.md`. More detailed context:
 
 ## Third-Party Assets
 
-The bundled CJK fonts are distributed under the SIL Open Font License 1.1.
-Their license files are kept alongside the font files under
-`src/assets/fonts/debug/`. See `NOTICE` for details.
+Bundled CJK fonts are distributed under the SIL Open Font License 1.1. Their
+license files live next to the font files under `src/assets/fonts/debug/`. See
+`NOTICE` for details.
 
 ## Contributing
 

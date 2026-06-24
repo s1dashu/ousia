@@ -28,6 +28,12 @@ export type OusiaAppStateSchemaVersion = 2
 export type OusiaThemePreference = "dark" | "light" | "system"
 export type OusiaSendDuringRunMode = "steer" | "queue"
 export type OusiaAgentMode = "standard" | "readOnly" | "noTerminal" | "custom"
+export const OUSIA_CHAT_CONTENT_WIDTHS = [
+  "standard",
+  "wide",
+  "extraWide",
+] as const
+export type OusiaChatContentWidth = (typeof OUSIA_CHAT_CONTENT_WIDTHS)[number]
 export type OusiaAgentToolName =
   | "read"
   | "write"
@@ -62,6 +68,7 @@ export type OusiaAppSettings = {
   theme: OusiaThemePreference
   appFontFamily: OusiaFontFamily
   chatFontFamily: OusiaFontFamily
+  chatContentWidth: OusiaChatContentWidth
   language: OusiaLanguage
   defaultWorkDir: string
   sendDuringRunMode: OusiaSendDuringRunMode
@@ -145,6 +152,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   theme: "light",
   appFontFamily: "system",
   chatFontFamily: "system",
+  chatContentWidth: "standard",
   language: "zh",
   defaultWorkDir: OUSIA_DEFAULT_WORK_DIR,
   sendDuringRunMode: "steer",
@@ -186,6 +194,15 @@ function normalizeOusiaFontFamily(
     : undefined
 }
 
+function normalizeOusiaChatContentWidth(
+  chatContentWidth: OusiaChatContentWidth | undefined
+): OusiaChatContentWidth | undefined {
+  return chatContentWidth &&
+    OUSIA_CHAT_CONTENT_WIDTHS.includes(chatContentWidth)
+    ? chatContentWidth
+    : undefined
+}
+
 export function normalizeOusiaAppSettings(
   settings: Partial<OusiaAppSettings> = {}
 ): OusiaAppSettings {
@@ -206,6 +223,9 @@ export function normalizeOusiaAppSettings(
   const chatFontFamily =
     normalizeOusiaFontFamily(settings.chatFontFamily) ??
     defaultOusiaAppSettings.chatFontFamily
+  const chatContentWidth =
+    normalizeOusiaChatContentWidth(settings.chatContentWidth) ??
+    defaultOusiaAppSettings.chatContentWidth
   const {
     showContextUsage: _showContextUsage,
     ...normalizedBaseSettings
@@ -237,6 +257,7 @@ export function normalizeOusiaAppSettings(
     appearanceColorScale,
     appFontFamily,
     chatFontFamily,
+    chatContentWidth,
     language: merged.language === "en" ? "en" : "zh",
     defaultWorkDir:
       normalizedDefaultWorkDir || defaultOusiaAppSettings.defaultWorkDir,
@@ -280,6 +301,18 @@ export function resolveOusiaFontFamilyValue(fontFamily: OusiaFontFamily) {
     return '"Ousia LXGW WenKai", "Kaiti SC", serif'
   }
   return '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
+}
+
+export function resolveOusiaChatContentWidthValue(
+  chatContentWidth: OusiaChatContentWidth
+) {
+  if (chatContentWidth === "extraWide") {
+    return "64rem"
+  }
+  if (chatContentWidth === "wide") {
+    return "56rem"
+  }
+  return "48rem"
 }
 
 export function getOusiaModelProviderApiKey(

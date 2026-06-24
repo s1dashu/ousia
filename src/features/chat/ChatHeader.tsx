@@ -50,7 +50,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        "window-drag absolute top-0 right-0 left-px z-30 grid h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 rounded-tl-[calc(var(--ousia-chat-panel-radius)-1px)] pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter]",
+        "window-drag absolute inset-x-0 top-0 z-30 grid h-10 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter]",
         isScrolled
           ? "bg-white shadow-none dark:bg-card"
           : "bg-white shadow-none dark:bg-card"
@@ -59,7 +59,7 @@ export function ChatHeader({
       <div className="window-drag absolute inset-0" aria-hidden="true" />
       <div
         className={cn(
-          "window-drag pointer-events-none relative z-10 flex min-w-0 items-center gap-3 self-stretch",
+          "window-drag relative z-10 flex min-w-0 items-center gap-3 self-stretch",
           isSidebarCollapsed && (isWindowFullscreen ? "pl-10" : "pl-[108px]")
         )}
       >
@@ -69,7 +69,7 @@ export function ChatHeader({
           </h1>
         </div>
       </div>
-      <div className="window-drag pointer-events-none relative z-10 flex shrink-0 items-center justify-end gap-1">
+      <div className="window-drag relative z-10 flex shrink-0 items-center justify-end gap-1">
         <DropdownMenu
           modal={false}
           open={isSessionMenuOpen}

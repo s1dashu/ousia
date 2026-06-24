@@ -26,6 +26,7 @@ import {
 import {
   getOusiaModelProviderApiKey,
   normalizeOusiaAppSettings,
+  resolveOusiaChatContentWidthValue,
   resolveOusiaFontFamilyValue,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
@@ -602,6 +603,13 @@ export function App() {
       resolveOusiaFontFamilyValue(settings.chatFontFamily)
     )
   }, [settings.chatFontFamily])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--ousia-chat-content-max-width",
+      resolveOusiaChatContentWidthValue(settings.chatContentWidth)
+    )
+  }, [settings.chatContentWidth])
 
   useEffect(() => {
     if (!isAppStateLoaded) {

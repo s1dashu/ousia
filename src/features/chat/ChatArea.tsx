@@ -1601,7 +1601,7 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card"
+        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-none dark:bg-card"
       )}
       style={style}
       onKeyDownCapture={handleChatKeyDownCapture}
@@ -1668,7 +1668,7 @@ export function ChatArea({
             type="button"
             variant="secondary"
             size="icon-sm"
-            className="pointer-events-auto absolute bottom-3 left-1/2 size-6 -translate-x-1/2 rounded-full border-[0.5px] border-foreground/10 bg-popover/90 text-popover-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur hover:bg-popover/95 dark:border-foreground/10 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
+            className="pointer-events-auto absolute bottom-1 left-1/2 size-6 -translate-x-1/2 rounded-full border-[0.5px] border-foreground/10 bg-popover/90 text-popover-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur hover:bg-popover/95 dark:border-foreground/10 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
             aria-label={t.chat.scrollToLatest}
             onClick={() => {
               markCurrentSessionViewed()

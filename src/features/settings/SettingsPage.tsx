@@ -34,6 +34,7 @@ import {
   normalizeOusiaAppSettings,
   type OusiaAgentMode,
   type OusiaAppearanceColorScale,
+  type OusiaChatContentWidth,
   type OusiaFontFamily,
   type OusiaLanguage,
   type OusiaModelRegistryResult,
@@ -137,6 +138,14 @@ export function SettingsPage({
     { label: t.settings.fontSystem, value: "system" },
     { label: t.settings.fontLxgwWenkai, value: "lxgwWenkai" },
     { label: t.settings.fontZhuqueFangsong, value: "zhuqueFangsong" },
+  ]
+  const chatContentWidthOptions: Array<{
+    label: string
+    value: OusiaChatContentWidth
+  }> = [
+    { label: t.settings.chatWidthStandard, value: "standard" },
+    { label: t.settings.chatWidthWide, value: "wide" },
+    { label: t.settings.chatWidthExtraWide, value: "extraWide" },
   ]
 
   useEffect(() => {
@@ -331,7 +340,7 @@ export function SettingsPage({
   )?.description
 
   return (
-    <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-[var(--ousia-chat-panel-radius)] rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card">
+    <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-none dark:bg-card">
       <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4">
         <div
           className={cn(
@@ -475,6 +484,37 @@ export function SettingsPage({
                 <SelectContent align="start">
                   <SelectGroup>
                     {fontFamilyOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>
+                {t.settings.chatContentWidth}
+              </span>
+              <Select
+                items={chatContentWidthOptions}
+                value={draft.chatContentWidth}
+                onValueChange={(value) =>
+                  applySettings({
+                    chatContentWidth: value as OusiaChatContentWidth,
+                  })
+                }
+              >
+                <SelectTrigger
+                  aria-label={t.settings.chatContentWidth}
+                  className={settingsControlClass}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    {chatContentWidthOptions.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
                         {option.label}
                       </SelectItem>
