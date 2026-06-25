@@ -55,6 +55,9 @@ match the task.
   `0.5px` foreground/10 border and the shared
   `--ousia-floating-panel-shadow`, which is slightly stronger than the composer
   shadow; avoid thicker borders, diffuse shadows, or ad hoc panel shadows.
+- Before building a fresh app package, check whether there are code changes. If
+  code has changed since the previous package, bump the app version first so the
+  new package has a new version number.
 - Follow the project icon policy in `docs/design-context.md`: use HugeIcons for
   interface icons and route imports through `src/components/icons/huge-icons.tsx`.
 - Before changing shadcn/ui primitives, compare against the generated reference
