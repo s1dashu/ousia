@@ -55,6 +55,7 @@ const sidebarSessionRowXClass =
 const sidebarProjectRowXClass = "w-full pl-2 pr-0"
 const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = "pl-[5px] pr-0"
+const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
 const sidebarScrollRevealPadding = 12
@@ -601,6 +602,8 @@ export function Sidebar({
   const t = getMessages(language)
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingSessionTitle, setEditingSessionTitle] = useState("")
+  const [isDefaultSessionListCompact, setIsDefaultSessionListCompact] =
+    useState(true)
   const [compactProjectSessionIds, setCompactProjectSessionIds] = useState<
     string[]
   >([])
@@ -611,6 +614,12 @@ export function Sidebar({
   const editingInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
+  const canCompactDefaultSessions =
+    defaultSessions.length > sidebarDefaultSessionPreviewCount
+  const visibleDefaultSessions =
+    canCompactDefaultSessions && isDefaultSessionListCompact
+      ? defaultSessions.slice(0, sidebarDefaultSessionPreviewCount)
+      : defaultSessions
   const sidebarInnerWidth =
     typeof style.width === "number" ? Math.max(176, style.width - 24) : 220
   const visibleSidebarSectionOrder =
@@ -821,12 +830,12 @@ export function Sidebar({
         onToggleCollapsed={toggleSidebarSection}
       >
         <SortableContext
-          items={defaultSessions.map((session) => session.id)}
+          items={visibleDefaultSessions.map((session) => session.id)}
           strategy={verticalListSortingStrategy}
         >
           <div className={sidebarListGapClass}>
             {defaultSessions.length ? (
-              defaultSessions.map((session) =>
+              visibleDefaultSessions.map((session) =>
                 renderSessionRow(session, {
                   groupId: defaultSessionGroupId,
                 })
@@ -836,6 +845,26 @@ export function Sidebar({
                 {t.sidebar.noSessions}
               </div>
             )}
+            {canCompactDefaultSessions ? (
+              <button
+                type="button"
+                className={[
+                  "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
+                  sidebarSingleActionGridClass,
+                  sidebarSessionRowXClass,
+                ].join(" ")}
+                onMouseDown={handleTextButtonMouseDown}
+                onClick={() => {
+                  setIsDefaultSessionListCompact((current) => !current)
+                }}
+              >
+                <span>
+                  {isDefaultSessionListCompact
+                    ? t.sidebar.showMore
+                    : t.sidebar.showLess}
+                </span>
+              </button>
+            ) : null}
           </div>
         </SortableContext>
       </SortableSidebarSection>
