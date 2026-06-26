@@ -27,6 +27,7 @@ import type {
   OusiaSelectDirectoryResult,
   OusiaWindowFullscreenEvent,
   OusiaWindowFullscreenResult,
+  OusiaWindowThemePayload,
   OusiaWindowZoomEvent,
   OusiaWindowZoomResult,
 } from "./chat-types.js"
@@ -131,6 +132,9 @@ const api = {
   },
   getWindowZoomState(): Promise<OusiaWindowZoomResult> {
     return ipcRenderer.invoke("ousia:window:zoom-state")
+  },
+  setWindowTheme(payload: OusiaWindowThemePayload): void {
+    ipcRenderer.send("ousia:window:theme", payload)
   },
   onChatEvent(callback: (event: OusiaChatEvent) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: OusiaChatEvent) =>

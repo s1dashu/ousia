@@ -44,8 +44,8 @@ function readStoredThemePreference(): AppSettings["theme"] | null {
 }
 
 export async function loadInitialAppState(): Promise<InitialAppState> {
-  const storedTheme = readStoredThemePreference()
   if (!window.ousia) {
+    const storedTheme = readStoredThemePreference()
     const state = createDefaultAppState()
     return storedTheme
       ? {
@@ -57,16 +57,7 @@ export async function loadInitialAppState(): Promise<InitialAppState> {
         }
       : state
   }
-  const state = await window.ousia.loadAppState()
-  return storedTheme
-    ? {
-        ...state,
-        settings: {
-          ...state.settings,
-          theme: storedTheme,
-        },
-      }
-    : state
+  return window.ousia.loadAppState()
 }
 
 export async function saveAppState(state: InitialAppState) {

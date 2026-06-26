@@ -26,6 +26,7 @@ import type {
   OusiaOpenProjectResult,
   OusiaSelectDirectoryResult,
   OusiaWindowFullscreenEvent,
+  OusiaWindowThemePayload,
   OusiaWindowZoomEvent,
 } from "../electron/chat-types"
 
@@ -69,6 +70,7 @@ declare global {
       ): Promise<OusiaSelectDirectoryResult>
       getWindowFullscreenState(): Promise<OusiaWindowFullscreenEvent>
       getWindowZoomState(): Promise<OusiaWindowZoomEvent>
+      setWindowTheme(payload: OusiaWindowThemePayload): void
       onChatEvent(callback: (event: OusiaChatEvent) => void): () => void
       onWindowFullscreenChange(
         callback: (event: OusiaWindowFullscreenEvent) => void

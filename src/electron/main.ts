@@ -26,6 +26,7 @@ import type {
   OusiaChatToolPayloadPayload,
   OusiaDirectoryPickerOptions,
   OusiaSelectDirectoryResult,
+  OusiaWindowThemePayload,
 } from "./chat-types.js"
 import { expandHomePath } from "./host-paths.js"
 import { listPiModels } from "./model-registry.js"
@@ -197,6 +198,10 @@ ipcMain.handle("ousia:window:fullscreen-state", () =>
 )
 
 ipcMain.handle("ousia:window:zoom-state", () => windowHost.getWindowZoomState())
+
+ipcMain.on("ousia:window:theme", (_event, payload: OusiaWindowThemePayload) => {
+  windowHost.setWindowTheme(payload)
+})
 
 ipcMain.handle("ousia:app-state:load", () => loadAppState())
 

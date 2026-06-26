@@ -77,7 +77,7 @@ function isEditableTarget(target: EventTarget | null) {
 
 export function ThemeProvider({
   children,
-  defaultTheme = "system",
+  defaultTheme = "light",
   storageKey = "theme",
   disableTransitionOnChange = true,
   ...props
@@ -122,7 +122,8 @@ export function ThemeProvider({
 
   useIsomorphicLayoutEffect(() => {
     applyTheme(resolvedTheme)
-  }, [resolvedTheme, applyTheme])
+    window.ousia?.setWindowTheme({ theme, resolvedTheme })
+  }, [theme, resolvedTheme, applyTheme])
 
   React.useEffect(() => {
     const mediaQuery = window.matchMedia(COLOR_SCHEME_QUERY)

@@ -26,6 +26,7 @@ export type OusiaAppearanceColorScale =
 
 export type OusiaAppStateSchemaVersion = 2
 export type OusiaThemePreference = "dark" | "light" | "system"
+export type OusiaResolvedTheme = "dark" | "light"
 export type OusiaSendDuringRunMode = "steer" | "queue"
 export type OusiaAgentMode = "standard" | "readOnly" | "noTerminal" | "custom"
 export const OUSIA_CHAT_CONTENT_WIDTHS = [
@@ -128,6 +129,11 @@ export type OusiaWindowState = {
   width: number
   height: number
   isMaximized: boolean
+}
+
+export type OusiaWindowThemePayload = {
+  theme: OusiaThemePreference
+  resolvedTheme: OusiaResolvedTheme
 }
 
 export type OusiaAppState = {

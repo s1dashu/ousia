@@ -11,7 +11,9 @@ import { platform } from "node:process"
 import { join } from "node:path"
 
 import type {
+  OusiaResolvedTheme,
   OusiaThemePreference,
+  OusiaWindowThemePayload,
   OusiaWindowState,
 } from "./chat-types.js"
 import { loadAppState, saveWindowState } from "./app-state-store.js"
@@ -35,15 +37,25 @@ function isExternalUrl(url: string) {
   }
 }
 
-function resolveInitialWindowBackground(theme: OusiaThemePreference) {
-  const resolvedTheme =
-    theme === "system"
-      ? nativeTheme.shouldUseDarkColors
-        ? "dark"
-        : "light"
-      : theme
+const WINDOW_BACKGROUND_BY_THEME: Record<OusiaResolvedTheme, string> = {
+  dark: "#111110",
+  light: "#fffefb",
+}
 
-  return resolvedTheme === "dark" ? "#111111" : "#fdfbf9"
+function resolveThemePreference(theme: OusiaThemePreference): OusiaResolvedTheme {
+  if (theme === "system") {
+    return nativeTheme.shouldUseDarkColors ? "dark" : "light"
+  }
+
+  return theme
+}
+
+function windowBackgroundForTheme(theme: OusiaResolvedTheme) {
+  return WINDOW_BACKGROUND_BY_THEME[theme]
+}
+
+function applyNativeThemePreference(theme: OusiaThemePreference) {
+  nativeTheme.themeSource = theme
 }
 
 function resolveInitialWindowBounds(windowState: OusiaWindowState) {
@@ -278,6 +290,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
   async function createWindow() {
     installApplicationMenu(getMainWindow)
     const appState = await loadAppState()
+    applyNativeThemePreference(appState.settings.theme)
     const initialBounds = resolveInitialWindowBounds(appState.windowState)
 
     mainWindow = new BrowserWindow({
@@ -287,7 +300,9 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       title: "Ousia",
       titleBarStyle: "hiddenInset",
       trafficLightPosition: { x: 14, y: 15 },
-      backgroundColor: resolveInitialWindowBackground(appState.settings.theme),
+      backgroundColor: windowBackgroundForTheme(
+        resolveThemePreference(appState.settings.theme)
+      ),
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -425,6 +440,13 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
 
   return {
     createWindow,
+    setWindowTheme({ theme, resolvedTheme }: OusiaWindowThemePayload) {
+      applyNativeThemePreference(theme)
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        return
+      }
+      mainWindow.setBackgroundColor(windowBackgroundForTheme(resolvedTheme))
+    },
     getWindowFullscreenState,
     getWindowZoomState,
     getMainWindow,
