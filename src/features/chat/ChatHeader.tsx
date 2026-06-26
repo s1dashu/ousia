@@ -50,7 +50,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        "window-drag absolute inset-x-0 top-0 z-30 grid h-10 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter]",
+        "window-drag absolute inset-x-0 top-0 z-30 grid h-[var(--ousia-titlebar-height)] select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter]",
         isScrolled
           ? "bg-white shadow-none dark:bg-card"
           : "bg-white shadow-none dark:bg-card"
@@ -60,7 +60,10 @@ export function ChatHeader({
       <div
         className={cn(
           "window-drag relative z-10 flex min-w-0 items-center gap-3 self-stretch",
-          isSidebarCollapsed && (isWindowFullscreen ? "pl-10" : "pl-[108px]")
+          isSidebarCollapsed &&
+            (isWindowFullscreen
+              ? "pl-[var(--ousia-titlebar-height)]"
+              : "pl-[var(--ousia-titlebar-sidebar-offset)]")
         )}
       >
         <div className="window-drag flex min-w-0 flex-1 items-center self-stretch pl-2">

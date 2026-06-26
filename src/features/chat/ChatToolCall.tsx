@@ -11,11 +11,11 @@ import {
   Database,
   File,
   FolderOpen,
-  LoaderCircle,
   Search,
   Sparkles,
   Terminal,
 } from "@/components/icons/huge-icons"
+import { Spinner } from "@/components/ui/spinner-1"
 
 import type { getMessages } from "@/app/i18n"
 import type { ChatItem } from "@/features/chat/chat-events"
@@ -222,11 +222,9 @@ export function ToolCallView({
           {summary}
         </span>
         {displayItem.status === "running" ? (
-          <LoaderCircle
-            size={14}
-            strokeWidth={1.5}
-            className="shrink-0 animate-spin text-muted-foreground"
-          />
+          <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+            <Spinner size={14} color="currentColor" />
+          </span>
         ) : null}
         <ChevronDown
           size={15}
@@ -296,11 +294,9 @@ export function ToolCallGroupView({
           {formatToolGroupSummary(items, t)}
         </span>
         {items.some((item) => item.status === "running") ? (
-          <LoaderCircle
-            size={14}
-            strokeWidth={1.5}
-            className="shrink-0 animate-spin text-muted-foreground"
-          />
+          <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+            <Spinner size={14} color="currentColor" />
+          </span>
         ) : null}
         <ChevronDown
           size={15}

@@ -14,7 +14,7 @@ export function TitleBarTrafficLightSlot({
 
   return (
     <div
-      className="window-drag w-[70px] shrink-0"
+      className="window-drag h-[var(--ousia-titlebar-height)] w-[var(--ousia-titlebar-traffic-light-slot-width)] shrink-0"
       aria-hidden="true"
     />
   )
@@ -34,7 +34,7 @@ export function TitleBarSidebarToggle({
   return (
     <div
       className={cn(
-        "window-drag flex h-10 shrink-0 items-center gap-2",
+        "window-drag flex h-[var(--ousia-titlebar-height)] shrink-0 items-center gap-2",
         className
       )}
     >

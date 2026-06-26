@@ -985,7 +985,7 @@ export function Sidebar({
       className="ousia-sidebar-shell flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
       style={style}
     >
-      <div className="window-drag h-10 shrink-0" />
+      <div className="window-drag h-[var(--ousia-titlebar-height)] shrink-0" />
 
       <div
         ref={scrollContainerRef}

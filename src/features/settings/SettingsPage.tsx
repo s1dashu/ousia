@@ -341,12 +341,14 @@ export function SettingsPage({
 
   return (
     <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-none dark:bg-card">
-      <header className="window-drag grid h-10 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4">
+      <header className="window-drag grid h-[var(--ousia-titlebar-height)] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4">
         <div
           className={cn(
             "window-drag flex min-w-0 items-center self-stretch",
             isSidebarCollapsed &&
-              (isWindowFullscreen ? "pl-10" : "pl-[108px]")
+              (isWindowFullscreen
+                ? "pl-[var(--ousia-titlebar-height)]"
+                : "pl-[var(--ousia-titlebar-sidebar-offset)]")
           )}
         >
           <div className="window-drag flex min-w-0 flex-1 items-center self-stretch pl-2">

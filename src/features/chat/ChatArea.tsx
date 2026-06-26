@@ -1759,7 +1759,7 @@ export function ChatArea({
               }
             />
             <div className="mt-3 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
+              <div className="flex min-w-0 items-center gap-1">
                 <Button
                   type="button"
                   variant="ghost"

@@ -21,6 +21,7 @@ import { writeRuntimeLog } from "./runtime-logger.js"
 import {
   MAIN_WINDOW_MIN_HEIGHT,
   MAIN_WINDOW_MIN_WIDTH,
+  resolveMacTrafficLightPosition,
 } from "./window-constants.js"
 
 type WindowHostOptions = {
@@ -94,6 +95,23 @@ function zoomPercentForWindow(window: BrowserWindow | undefined) {
   return Math.round((window?.webContents.getZoomFactor() ?? 1) * 100)
 }
 
+function isIgnorableRendererConsoleMessage(message: string) {
+  return (
+    message === "ResizeObserver loop completed with undelivered notifications." ||
+    message === "ResizeObserver loop limit exceeded"
+  )
+}
+
+function applyWindowButtonPosition(window: BrowserWindow | undefined) {
+  if (platform !== "darwin" || !window || window.isDestroyed()) {
+    return
+  }
+
+  window.setWindowButtonPosition(
+    resolveMacTrafficLightPosition(window.webContents.getZoomFactor())
+  )
+}
+
 function emitWindowZoomState(window: BrowserWindow | undefined) {
   window?.webContents.send("ousia:window:zoom", {
     zoomPercent: zoomPercentForWindow(window),
@@ -108,6 +126,7 @@ function setWindowZoomLevel(
     return
   }
   window.webContents.setZoomLevel(zoomLevel)
+  applyWindowButtonPosition(window)
   emitWindowZoomState(window)
 }
 
@@ -295,11 +314,14 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
 
     mainWindow = new BrowserWindow({
       ...initialBounds,
+      acceptFirstMouse: true,
       minWidth: MAIN_WINDOW_MIN_WIDTH,
       minHeight: MAIN_WINDOW_MIN_HEIGHT,
       title: "Ousia",
       titleBarStyle: "hiddenInset",
-      trafficLightPosition: { x: 14, y: 15 },
+      ...(platform === "darwin"
+        ? { trafficLightPosition: resolveMacTrafficLightPosition() }
+        : {}),
       backgroundColor: windowBackgroundForTheme(
         resolveThemePreference(appState.settings.theme)
       ),
@@ -312,11 +334,15 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     if (appState.windowState.isMaximized) {
       mainWindow.maximize()
     }
+    applyWindowButtonPosition(mainWindow)
     onWindowChanged(mainWindow)
 
     mainWindow.webContents.on(
       "console-message",
       (_event, level, message, line, sourceId) => {
+        if (isIgnorableRendererConsoleMessage(message)) {
+          return
+        }
         const normalizedLevel =
           level === 2 ? "warn" : level === 3 ? "error" : "info"
         writeRuntimeLog("renderer.console", normalizedLevel, {
@@ -337,6 +363,12 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
         writeRuntimeLog("renderer.load", "error", { code, description, url })
       }
     )
+    mainWindow.webContents.on("zoom-changed", () => {
+      globalThis.setTimeout(() => {
+        applyWindowButtonPosition(mainWindow)
+        emitWindowZoomState(mainWindow)
+      }, 0)
+    })
 
     mainWindow.webContents.on("before-input-event", (event, input) => {
       if (!input.control && !input.meta) {
@@ -392,13 +424,15 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       Menu.buildFromTemplate(menuTemplate).popup({ window: mainWindow })
     })
 
-    mainWindow.webContents.once("did-finish-load", () =>
+    mainWindow.webContents.once("did-finish-load", () => {
+      applyWindowButtonPosition(mainWindow)
       emitWindowFullscreenState()
-    )
+    })
     mainWindow.webContents.once("did-finish-load", () =>
       emitWindowZoomState(mainWindow)
     )
     mainWindow.on("resize", () => {
+      applyWindowButtonPosition(mainWindow)
       emitInferredWindowFullscreenState()
       scheduleWindowStateSave()
     })
@@ -407,9 +441,13 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       scheduleWindowStateSave()
     })
     mainWindow.on("maximize", scheduleWindowStateSave)
-    mainWindow.on("unmaximize", scheduleWindowStateSave)
+    mainWindow.on("unmaximize", () => {
+      applyWindowButtonPosition(mainWindow)
+      scheduleWindowStateSave()
+    })
     mainWindow.on("enter-full-screen", () => emitWindowFullscreenState())
     mainWindow.on("leave-full-screen", () => {
+      applyWindowButtonPosition(mainWindow)
       emitWindowFullscreenState()
       scheduleWindowStateSave()
     })

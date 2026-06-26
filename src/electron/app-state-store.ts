@@ -287,6 +287,51 @@ function normalizeAppState(value: unknown): OusiaAppState {
   }
 }
 
+function isLikelyStaleDefaultAppState(
+  incomingState: OusiaAppState,
+  currentState: OusiaAppState | null
+) {
+  if (!currentState) {
+    return false
+  }
+  if (
+    currentState.sessions.length <= incomingState.sessions.length &&
+    currentState.projects.length <= incomingState.projects.length
+  ) {
+    return false
+  }
+  if (incomingState.projects.length || incomingState.sessions.length !== 1) {
+    return false
+  }
+  const [incomingSession] = incomingState.sessions
+  if (!incomingSession || incomingSession.projectId) {
+    return false
+  }
+  if (currentState.sessions.some((session) => session.id === incomingSession.id)) {
+    return false
+  }
+  return incomingSession.title === "新会话" || incomingSession.title === "New Chat"
+}
+
+function preserveCurrentAppStateIndex(
+  incomingState: OusiaAppState,
+  currentState: OusiaAppState | null
+) {
+  if (!isLikelyStaleDefaultAppState(incomingState, currentState)) {
+    return incomingState
+  }
+  if (!currentState) {
+    return incomingState
+  }
+  return {
+    ...incomingState,
+    expandedProjectIds: currentState.expandedProjectIds,
+    projects: currentState.projects,
+    selectedSessionId: currentState.selectedSessionId,
+    sessions: currentState.sessions,
+  }
+}
+
 async function readNormalizedAppStateFile(
   filePath: string
 ): Promise<OusiaAppState | null> {
@@ -295,7 +340,11 @@ async function readNormalizedAppStateFile(
   }
 
   try {
-    return normalizeAppState(JSON.parse(await readFile(filePath, "utf8")))
+    const fileText = await readFile(filePath, "utf8")
+    const sanitizedFileText = fileText.includes('"data:image/')
+      ? fileText.replace(/("url"\s*:\s*)"data:image\/[^"]*"/g, '$1""')
+      : fileText
+    return normalizeAppState(JSON.parse(sanitizedFileText))
   } catch (error) {
     writeRuntimeLog("app-state", "warn", "Failed to read app state", {
       error: error instanceof Error ? error.message : String(error),
@@ -338,10 +387,13 @@ export async function saveAppState(
     const filePath = appStatePath()
     mkdirSync(dirname(filePath), { recursive: true })
     const currentState = await readNormalizedAppStateFromDisk()
-    const normalizedState = normalizeAppState({
-      ...state,
-      windowState: currentState?.windowState ?? state.windowState,
-    })
+    const normalizedState = preserveCurrentAppStateIndex(
+      normalizeAppState({
+        ...state,
+        windowState: currentState?.windowState ?? state.windowState,
+      }),
+      currentState
+    )
     await writeNormalizedAppStateFile(filePath, normalizedState)
     return { ok: true }
   })
