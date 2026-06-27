@@ -49,9 +49,11 @@ const sidebarProjectActionButtonClass = "size-6 justify-self-end"
 const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
+const sidebarSessionRowBleed = 14
 const sidebarRowXClass = "pl-2 pr-0"
 const sidebarSessionRowXClass =
   "-mx-[7px] w-[calc(100%+14px)] pl-3 pr-[7px]"
+const sidebarSessionDragPreviewXClass = "pl-3 pr-[7px]"
 const sidebarProjectRowXClass = "w-full pl-2 pr-0"
 const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = "pl-[5px] pr-0"
@@ -68,7 +70,7 @@ const sidebarSelectedRowClass =
 const sidebarGhostActionClass =
   "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
 const sidebarDragPlaceholderRowClass =
-  "bg-white text-transparent shadow-[var(--ousia-sidebar-selected-shadow)] hover:bg-white focus-within:bg-white dark:bg-white dark:text-transparent dark:hover:bg-white dark:focus-within:bg-white [&>*]:opacity-0"
+  "!bg-neutral-500/12 !text-transparent !shadow-none hover:!bg-neutral-500/12 focus-within:!bg-neutral-500/12 dark:!bg-white/10 dark:!text-transparent dark:hover:!bg-white/10 dark:focus-within:!bg-white/10 [&>*]:opacity-0"
 const sidebarCompletionAccentClass = "bg-blue-500"
 const defaultSessionGroupId = "default"
 
@@ -76,6 +78,7 @@ type SidebarSortableData = {
   kind: "project" | "section" | "session"
   label: string
   groupId?: string
+  projectChild?: boolean
 }
 
 type SidebarDragPreview = SidebarSortableData & {
@@ -174,6 +177,9 @@ function getSortableData(value: unknown): SidebarSortableData | null {
     kind: data.kind,
     label: data.label,
     ...(typeof data.groupId === "string" ? { groupId: data.groupId } : {}),
+    ...(typeof data.projectChild === "boolean"
+      ? { projectChild: data.projectChild }
+      : {}),
   }
 }
 
@@ -221,12 +227,39 @@ function DragPreview({
     )
   }
 
+  if (preview.kind === "session") {
+    return (
+      <div
+        className={[
+          "grid h-8.5 items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
+          "font-radix-regular",
+          sidebarSelectedRowClass,
+          preview.projectChild
+            ? sidebarProjectSessionGridClass
+            : sidebarSingleActionGridClass,
+          sidebarSessionDragPreviewXClass,
+        ].join(" ")}
+        style={{
+          width: innerWidth + sidebarSessionRowBleed,
+        }}
+      >
+        {preview.projectChild ? <div aria-hidden="true" /> : null}
+        <div className="truncate">{preview.label}</div>
+        <div aria-hidden="true" />
+      </div>
+    )
+  }
+
   return (
     <div
       className={[
-        "grid h-9 w-[220px] items-center rounded-lg",
-        "bg-[var(--sidebar-accent)] px-3 text-sm text-sidebar-accent-foreground opacity-95",
+        "grid h-9 items-center rounded-[var(--ousia-sidebar-selected-radius)]",
+        "px-3 text-sm",
+        sidebarSelectedRowClass,
       ].join(" ")}
+      style={{
+        width: innerWidth,
+      }}
     >
       <div className="truncate">{preview.label}</div>
     </div>
@@ -264,6 +297,7 @@ function SortableSessionRow({
       kind: "session",
       label: session.title,
       groupId,
+      projectChild: Boolean(projectChild),
     } satisfies SidebarSortableData,
     disabled: editingSessionId === session.id,
   })
