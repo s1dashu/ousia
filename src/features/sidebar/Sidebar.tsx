@@ -214,18 +214,35 @@ function DragPreview({
     return (
       <div
         className={[
-          "ousia-squircle-corners grid items-start rounded-[var(--ousia-sidebar-selected-radius)]",
-          "px-3 py-2 text-sm",
+          "ousia-squircle-corners grid h-8.5 items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]",
+          "px-2 text-sm",
           sidebarSelectedRowClass,
+          "grid-cols-[minmax(0,1fr)_24px_24px]",
         ].join(" ")}
         style={{
           width: innerWidth,
-          height: "100%",
-          minHeight: 76,
         }}
       >
-        <div className="font-radix-regular truncate">
+        <div className="font-radix-regular min-w-0 truncate">
           {preview.label}
+        </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none flex size-6 items-center justify-center rounded-lg text-sidebar-accent-foreground/75"
+        >
+          <ChevronDown
+            size={sidebarSectionIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
+        </div>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none flex size-6 items-center justify-center rounded-lg text-sidebar-accent-foreground/75"
+        >
+          <Plus
+            size={sidebarSectionIconSize}
+            strokeWidth={sidebarIconStrokeWidth}
+          />
         </div>
       </div>
     )
@@ -619,7 +636,7 @@ function SortableSidebarSection({
           />
         </Button>
       </div>
-      {isCollapsed ? null : children}
+      {isCollapsed || isDragging ? null : children}
     </section>
   )
 }
