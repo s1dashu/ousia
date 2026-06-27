@@ -257,6 +257,7 @@ function SortableSessionRow({
     listeners,
     setNodeRef,
     transform,
+    transition,
   } = useSortable({
     id: session.id,
     data: {
@@ -268,6 +269,7 @@ function SortableSessionRow({
   })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
+    transition,
   }
   const isSessionWorking = sessionRunStatus === "working"
   const isSelectedSession = session.id === selectedSessionId
@@ -399,6 +401,7 @@ function SortableProjectSection({
     listeners,
     setNodeRef,
     transform,
+    transition,
   } = useSortable({
     id: project.id,
     data: {
@@ -408,6 +411,7 @@ function SortableProjectSection({
   })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
+    transition,
   }
 
   return (
@@ -504,6 +508,7 @@ function SortableSidebarSection({
     listeners,
     setNodeRef,
     transform,
+    transition,
   } = useSortable({
     id,
     data: {
@@ -513,6 +518,7 @@ function SortableSidebarSection({
   })
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
+    transition,
   }
 
   return (
