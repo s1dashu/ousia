@@ -233,7 +233,7 @@ function DragPreview({
     return (
       <div
         className={[
-          "grid h-8.5 items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
+          "ousia-squircle-corners grid h-8.5 items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
           "font-radix-regular",
           sidebarSelectedRowClass,
           preview.projectChild
