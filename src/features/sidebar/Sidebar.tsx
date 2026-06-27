@@ -70,7 +70,7 @@ const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
 const sidebarGhostActionClass =
   "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
-const sidebarDragPlaceholderRowClass =
+const sidebarDragPlaceholderClass =
   "!bg-neutral-500/12 !text-transparent !shadow-none hover:!bg-neutral-500/12 focus-within:!bg-neutral-500/12 dark:!bg-white/10 dark:!text-transparent dark:hover:!bg-white/10 dark:focus-within:!bg-white/10 [&>*]:opacity-0"
 const sidebarCompletionAccentClass = "bg-blue-500"
 const sidebarDragOverlayZIndex = 1000
@@ -214,15 +214,17 @@ function DragPreview({
     return (
       <div
         className={[
-          "grid items-start rounded-lg",
-          "bg-[var(--sidebar-accent)] px-3 py-2 text-sm text-sidebar-accent-foreground opacity-80",
+          "ousia-squircle-corners grid items-start rounded-[var(--ousia-sidebar-selected-radius)]",
+          "px-3 py-2 text-sm",
+          sidebarSelectedRowClass,
         ].join(" ")}
         style={{
           width: innerWidth,
+          height: "100%",
           minHeight: 76,
         }}
       >
-        <div className="font-radix-medium truncate text-muted-foreground">
+        <div className="font-radix-regular truncate">
           {preview.label}
         </div>
       </div>
@@ -320,7 +322,7 @@ function SortableSessionRow({
         projectChild ? "gap-x-0 gap-y-1" : "gap-1",
         projectChild ? sidebarProjectSessionGridClass : sidebarSingleActionGridClass,
         sidebarSessionRowXClass,
-        isDragging ? sidebarDragPlaceholderRowClass : "",
+        isDragging ? sidebarDragPlaceholderClass : "",
       ].join(" ")}
       onClick={() => {
         if (editingSessionId !== session.id) {
@@ -561,9 +563,12 @@ function SortableSidebarSection({
     <section
       ref={setNodeRef}
       style={style}
-      className={["mt-3 min-w-0 first:mt-0", isDragging ? "opacity-35" : ""].join(
-        " "
-      )}
+      className={[
+        "mt-3 min-w-0 first:mt-0",
+        isDragging
+          ? `ousia-squircle-corners rounded-[var(--ousia-sidebar-selected-radius)] ${sidebarDragPlaceholderClass}`
+          : "",
+      ].join(" ")}
     >
       <div
         className={[
