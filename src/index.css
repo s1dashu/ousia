@@ -1140,54 +1140,6 @@
     }
 }
 
-@layer components {
-  [data-slot="tooltip-content"].ousia-rich-tooltip {
-    --ousia-tooltip-enter-x: 0px;
-    --ousia-tooltip-enter-y: 10px;
-  }
-
-  [data-slot="tooltip-content"].ousia-rich-tooltip[data-side="bottom"] {
-    --ousia-tooltip-enter-y: -10px;
-  }
-
-  [data-slot="tooltip-content"].ousia-rich-tooltip[data-side="left"] {
-    --ousia-tooltip-enter-x: 10px;
-    --ousia-tooltip-enter-y: 0px;
-  }
-
-  [data-slot="tooltip-content"].ousia-rich-tooltip[data-side="right"] {
-    --ousia-tooltip-enter-x: -10px;
-    --ousia-tooltip-enter-y: 0px;
-  }
-
-  [data-slot="tooltip-content"].ousia-rich-tooltip[data-state="delayed-open"],
-  [data-slot="tooltip-content"].ousia-rich-tooltip[data-state="instant-open"] {
-    animation: ousia-tooltip-enter 210ms
-      linear(
-        0,
-        0.405 7.6%,
-        0.797 15.4%,
-        0.996 20.2%,
-        1.092 25.6%,
-        1.117 31.8%,
-        1.094 39.1%,
-        1.006 58.9%,
-        1
-      )
-      both;
-  }
-
-  [data-slot="tooltip-content"].ousia-rich-tooltip[data-state="closed"] {
-    animation: ousia-tooltip-exit 110ms ease-in both;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    [data-slot="tooltip-content"].ousia-rich-tooltip {
-      animation-duration: 1ms !important;
-    }
-  }
-}
-
 @layer utilities {
   @supports (corner-shape: squircle) {
     .ousia-squircle-corners {
@@ -1465,55 +1417,6 @@
   40% {
     opacity: 1;
     transform: translateY(-4px);
-  }
-}
-
-@keyframes ousia-tooltip-enter {
-  0% {
-    opacity: 0;
-    filter: blur(2px);
-    transform: translate3d(
-        var(--ousia-tooltip-enter-x),
-        var(--ousia-tooltip-enter-y),
-        0
-      )
-      scale(0.62);
-  }
-
-  64% {
-    opacity: 1;
-    filter: blur(0);
-    transform: translate3d(
-        calc(var(--ousia-tooltip-enter-x) * -0.08),
-        calc(var(--ousia-tooltip-enter-y) * -0.08),
-        0
-      )
-      scale(1.04);
-  }
-
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes ousia-tooltip-exit {
-  0% {
-    opacity: 1;
-    filter: blur(0);
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  100% {
-    opacity: 0;
-    filter: blur(1px);
-    transform: translate3d(
-        var(--ousia-tooltip-enter-x),
-        var(--ousia-tooltip-enter-y),
-        0
-      )
-      scale(0.82);
   }
 }
 
