@@ -68,6 +68,7 @@ const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
 const sidebarGhostActionClass =
   "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
+const sidebarDropTargetRowClass = "bg-white dark:bg-white dark:text-neutral-950"
 const sidebarCompletionAccentClass = "bg-blue-500"
 const defaultSessionGroupId = "default"
 
@@ -79,13 +80,6 @@ type SidebarSortableData = {
 
 type SidebarDragPreview = SidebarSortableData & {
   id: string
-}
-
-type SidebarDropIndicatorPlacement = "before" | "after"
-
-type SidebarDropIndicator = {
-  id: string
-  placement: SidebarDropIndicatorPlacement
 }
 
 type SidebarProps = {
@@ -131,7 +125,7 @@ type SortableSessionRowProps = {
   projectChild?: boolean
   selectedSessionId: string
   session: SessionRecord
-  dropIndicatorPlacement?: SidebarDropIndicatorPlacement | null
+  isDropTarget?: boolean
   sessionHasUnreadCompletion: boolean
   sessionRunStatus: "idle" | "working"
   t: I18nMessages
@@ -184,17 +178,9 @@ function getSortableData(value: unknown): SidebarSortableData | null {
   }
 }
 
-function getSortableIndex(value: unknown) {
-  if (!value || typeof value !== "object") {
-    return null
-  }
-  const sortable = (value as { sortable?: { index?: unknown } }).sortable
-  return typeof sortable?.index === "number" ? sortable.index : null
-}
-
-function getSessionDropIndicator(
+function getSessionDropTargetId(
   event: Pick<DragOverEvent, "active" | "over">
-): SidebarDropIndicator | null {
+): string | null {
   const activeData = getSortableData(event.active.data.current)
   const overData = getSortableData(event.over?.data.current)
   if (
@@ -209,16 +195,7 @@ function getSessionDropIndicator(
     return null
   }
 
-  const activeIndex = getSortableIndex(event.active.data.current)
-  const overIndex = getSortableIndex(event.over.data.current)
-  if (activeIndex === null || overIndex === null || activeIndex === overIndex) {
-    return null
-  }
-
-  return {
-    id: String(event.over.id),
-    placement: activeIndex < overIndex ? "after" : "before",
-  }
+  return String(event.over.id)
 }
 
 function isSidebarSectionId(value: string): value is OusiaSidebarSectionId {
@@ -277,26 +254,6 @@ function DragPreview({
   )
 }
 
-function DropIndicatorLine({
-  placement,
-  projectChild,
-}: {
-  placement: SidebarDropIndicatorPlacement
-  projectChild?: boolean
-}) {
-  return (
-    <span
-      aria-hidden="true"
-      className={[
-        "pointer-events-none absolute right-1 z-20 h-0.5 rounded-full opacity-95",
-        sidebarCompletionAccentClass,
-        projectChild ? "left-7" : "left-1",
-        placement === "before" ? "-top-[3px]" : "-bottom-[3px]",
-      ].join(" ")}
-    />
-  )
-}
-
 function SortableSessionRow({
   editingInputRef,
   editingSessionId,
@@ -311,7 +268,7 @@ function SortableSessionRow({
   projectChild,
   selectedSessionId,
   session,
-  dropIndicatorPlacement,
+  isDropTarget,
   sessionHasUnreadCompletion,
   sessionRunStatus,
   t,
@@ -344,6 +301,7 @@ function SortableSessionRow({
       className={[
         "group/session ousia-squircle-corners font-radix-regular relative grid h-8.5 cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing",
         isSelectedSession ? sidebarSelectedRowClass : sidebarRowStateClass,
+        isDropTarget ? sidebarDropTargetRowClass : "",
         projectChild ? "gap-x-0 gap-y-1" : "gap-1",
         projectChild ? sidebarProjectSessionGridClass : sidebarSingleActionGridClass,
         sidebarSessionRowXClass,
@@ -363,12 +321,6 @@ function SortableSessionRow({
       {...(editingSessionId === session.id ? {} : listeners)}
       data-sidebar-session-id={session.id}
     >
-      {dropIndicatorPlacement ? (
-        <DropIndicatorLine
-          placement={dropIndicatorPlacement}
-          projectChild={projectChild}
-        />
-      ) : null}
       {projectChild ? <div aria-hidden="true" /> : null}
       {editingSessionId === session.id ? (
         <input
@@ -685,8 +637,9 @@ export function Sidebar({
     OusiaSidebarSectionId[]
   >([])
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
-  const [dropIndicator, setDropIndicator] =
-    useState<SidebarDropIndicator | null>(null)
+  const [dropTargetSessionId, setDropTargetSessionId] = useState<string | null>(
+    null
+  )
   const editingInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
@@ -776,7 +729,7 @@ export function Sidebar({
 
     function clearDragPreview() {
       setDragPreview(null)
-      setDropIndicator(null)
+      setDropTargetSessionId(null)
     }
 
     function handleVisibilityChange() {
@@ -832,7 +785,7 @@ export function Sidebar({
     if (!data) {
       return
     }
-    setDropIndicator(null)
+    setDropTargetSessionId(null)
     setDragPreview({
       ...data,
       id: String(event.active.id),
@@ -840,7 +793,7 @@ export function Sidebar({
   }
 
   function handleDragOver(event: DragOverEvent) {
-    setDropIndicator(getSessionDropIndicator(event))
+    setDropTargetSessionId(getSessionDropTargetId(event))
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -848,7 +801,7 @@ export function Sidebar({
     const overData = getSortableData(event.over?.data.current)
     if (!activeData || !overData || !event.over || event.active.id === event.over.id) {
       setDragPreview(null)
-      setDropIndicator(null)
+      setDropTargetSessionId(null)
       return
     }
     if (activeData.kind === "section" && overData.kind === "section") {
@@ -867,12 +820,12 @@ export function Sidebar({
       onReorderSessions(String(event.active.id), String(event.over.id))
     }
     setDragPreview(null)
-    setDropIndicator(null)
+    setDropTargetSessionId(null)
   }
 
   function handleDragCancel() {
     setDragPreview(null)
-    setDropIndicator(null)
+    setDropTargetSessionId(null)
   }
 
   function renderSessionRow(
@@ -895,9 +848,7 @@ export function Sidebar({
         projectChild={options.projectChild}
         selectedSessionId={selectedSessionId}
         session={session}
-        dropIndicatorPlacement={
-          dropIndicator?.id === session.id ? dropIndicator.placement : null
-        }
+        isDropTarget={dropTargetSessionId === session.id}
         sessionHasUnreadCompletion={unreadCompletedSessionIds.has(session.id)}
         sessionRunStatus={sessionRunStatusById[session.id] ?? "idle"}
         t={t}
