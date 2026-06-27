@@ -15,6 +15,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
 import {
@@ -67,6 +68,7 @@ const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
 const sidebarGhostActionClass =
   "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
+const sidebarCompletionAccentClass = "bg-blue-500"
 const defaultSessionGroupId = "default"
 
 type SidebarSortableData = {
@@ -77,6 +79,13 @@ type SidebarSortableData = {
 
 type SidebarDragPreview = SidebarSortableData & {
   id: string
+}
+
+type SidebarDropIndicatorPlacement = "before" | "after"
+
+type SidebarDropIndicator = {
+  id: string
+  placement: SidebarDropIndicatorPlacement
 }
 
 type SidebarProps = {
@@ -122,6 +131,7 @@ type SortableSessionRowProps = {
   projectChild?: boolean
   selectedSessionId: string
   session: SessionRecord
+  dropIndicatorPlacement?: SidebarDropIndicatorPlacement | null
   sessionHasUnreadCompletion: boolean
   sessionRunStatus: "idle" | "working"
   t: I18nMessages
@@ -171,6 +181,43 @@ function getSortableData(value: unknown): SidebarSortableData | null {
     kind: data.kind,
     label: data.label,
     ...(typeof data.groupId === "string" ? { groupId: data.groupId } : {}),
+  }
+}
+
+function getSortableIndex(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return null
+  }
+  const sortable = (value as { sortable?: { index?: unknown } }).sortable
+  return typeof sortable?.index === "number" ? sortable.index : null
+}
+
+function getSessionDropIndicator(
+  event: Pick<DragOverEvent, "active" | "over">
+): SidebarDropIndicator | null {
+  const activeData = getSortableData(event.active.data.current)
+  const overData = getSortableData(event.over?.data.current)
+  if (
+    !activeData ||
+    !overData ||
+    !event.over ||
+    event.active.id === event.over.id ||
+    activeData.kind !== "session" ||
+    overData.kind !== "session" ||
+    activeData.groupId !== overData.groupId
+  ) {
+    return null
+  }
+
+  const activeIndex = getSortableIndex(event.active.data.current)
+  const overIndex = getSortableIndex(event.over.data.current)
+  if (activeIndex === null || overIndex === null || activeIndex === overIndex) {
+    return null
+  }
+
+  return {
+    id: String(event.over.id),
+    placement: activeIndex < overIndex ? "after" : "before",
   }
 }
 
@@ -230,6 +277,26 @@ function DragPreview({
   )
 }
 
+function DropIndicatorLine({
+  placement,
+  projectChild,
+}: {
+  placement: SidebarDropIndicatorPlacement
+  projectChild?: boolean
+}) {
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        "pointer-events-none absolute right-1 z-20 h-0.5 rounded-full opacity-95",
+        sidebarCompletionAccentClass,
+        projectChild ? "left-7" : "left-1",
+        placement === "before" ? "-top-[3px]" : "-bottom-[3px]",
+      ].join(" ")}
+    />
+  )
+}
+
 function SortableSessionRow({
   editingInputRef,
   editingSessionId,
@@ -244,6 +311,7 @@ function SortableSessionRow({
   projectChild,
   selectedSessionId,
   session,
+  dropIndicatorPlacement,
   sessionHasUnreadCompletion,
   sessionRunStatus,
   t,
@@ -295,6 +363,12 @@ function SortableSessionRow({
       {...(editingSessionId === session.id ? {} : listeners)}
       data-sidebar-session-id={session.id}
     >
+      {dropIndicatorPlacement ? (
+        <DropIndicatorLine
+          placement={dropIndicatorPlacement}
+          projectChild={projectChild}
+        />
+      ) : null}
       {projectChild ? <div aria-hidden="true" /> : null}
       {editingSessionId === session.id ? (
         <input
@@ -350,7 +424,7 @@ function SortableSessionRow({
             ].join(" ")}
             aria-hidden="true"
           >
-            <span className="size-2 rounded-full bg-blue-500" />
+            <span className={`size-2 rounded-full ${sidebarCompletionAccentClass}`} />
           </div>
         ) : null}
         <Button
@@ -611,6 +685,8 @@ export function Sidebar({
     OusiaSidebarSectionId[]
   >([])
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
+  const [dropIndicator, setDropIndicator] =
+    useState<SidebarDropIndicator | null>(null)
   const editingInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
@@ -700,6 +776,7 @@ export function Sidebar({
 
     function clearDragPreview() {
       setDragPreview(null)
+      setDropIndicator(null)
     }
 
     function handleVisibilityChange() {
@@ -755,10 +832,15 @@ export function Sidebar({
     if (!data) {
       return
     }
+    setDropIndicator(null)
     setDragPreview({
       ...data,
       id: String(event.active.id),
     })
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    setDropIndicator(getSessionDropIndicator(event))
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -766,6 +848,7 @@ export function Sidebar({
     const overData = getSortableData(event.over?.data.current)
     if (!activeData || !overData || !event.over || event.active.id === event.over.id) {
       setDragPreview(null)
+      setDropIndicator(null)
       return
     }
     if (activeData.kind === "section" && overData.kind === "section") {
@@ -784,10 +867,12 @@ export function Sidebar({
       onReorderSessions(String(event.active.id), String(event.over.id))
     }
     setDragPreview(null)
+    setDropIndicator(null)
   }
 
   function handleDragCancel() {
     setDragPreview(null)
+    setDropIndicator(null)
   }
 
   function renderSessionRow(
@@ -810,6 +895,9 @@ export function Sidebar({
         projectChild={options.projectChild}
         selectedSessionId={selectedSessionId}
         session={session}
+        dropIndicatorPlacement={
+          dropIndicator?.id === session.id ? dropIndicator.placement : null
+        }
         sessionHasUnreadCompletion={unreadCompletedSessionIds.has(session.id)}
         sessionRunStatus={sessionRunStatusById[session.id] ?? "idle"}
         t={t}
@@ -996,6 +1084,7 @@ export function Sidebar({
           collisionDetection={closestCenter}
           onDragAbort={handleDragCancel}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
