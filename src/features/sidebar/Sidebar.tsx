@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type MouseEvent,
 } from "react"
+import { createPortal } from "react-dom"
 import {
   closestCenter,
   DndContext,
@@ -72,6 +73,7 @@ const sidebarGhostActionClass =
 const sidebarDragPlaceholderRowClass =
   "!bg-neutral-500/12 !text-transparent !shadow-none hover:!bg-neutral-500/12 focus-within:!bg-neutral-500/12 dark:!bg-white/10 dark:!text-transparent dark:hover:!bg-white/10 dark:focus-within:!bg-white/10 [&>*]:opacity-0"
 const sidebarCompletionAccentClass = "bg-blue-500"
+const sidebarDragOverlayZIndex = 1000
 const defaultSessionGroupId = "default"
 
 type SidebarSortableData = {
@@ -1023,6 +1025,20 @@ export function Sidebar({
       : renderProjectsSection()
   }
 
+  const dragOverlay = (
+    <DragOverlay
+      zIndex={sidebarDragOverlayZIndex}
+      dropAnimation={{
+        duration: 0,
+        easing: "cubic-bezier(0.2, 0, 0, 1)",
+      }}
+    >
+      {dragPreview ? (
+        <DragPreview innerWidth={sidebarInnerWidth} preview={dragPreview} />
+      ) : null}
+    </DragOverlay>
+  )
+
   return (
     <aside
       className="ousia-sidebar-shell flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
@@ -1048,19 +1064,7 @@ export function Sidebar({
           >
             {visibleSidebarSectionOrder.map(renderSidebarSection)}
           </SortableContext>
-          <DragOverlay
-            dropAnimation={{
-              duration: 0,
-              easing: "cubic-bezier(0.2, 0, 0, 1)",
-            }}
-          >
-            {dragPreview ? (
-              <DragPreview
-                innerWidth={sidebarInnerWidth}
-                preview={dragPreview}
-              />
-            ) : null}
-          </DragOverlay>
+          {createPortal(dragOverlay, document.body)}
         </DndContext>
       </div>
 
