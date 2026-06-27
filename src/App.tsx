@@ -48,6 +48,7 @@ const RESIZE_HANDLE_WIDTH = 1
 const CHAT_HISTORY_PAGE_SIZE = 20
 
 type AgentRunStatus = "idle" | "working"
+type ShellResizeHandle = "sidebar"
 type QueuedChatState = {
   steering: string[]
   followUp: string[]
@@ -259,7 +260,9 @@ export function App() {
   const [sidebarSectionOrder, setSidebarSectionOrder] = useState<
     OusiaSidebarSectionId[]
   >(normalizeSidebarSectionOrder(initialState.shellLayout.sidebarSectionOrder))
-  const [isShellResizing, setIsShellResizing] = useState(false)
+  const [activeShellResizeHandle, setActiveShellResizeHandle] =
+    useState<ShellResizeHandle | null>(null)
+  const isShellResizing = activeShellResizeHandle !== null
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false)
   const [zoomIndicatorPercent, setZoomIndicatorPercent] = useState<number | null>(
     null
@@ -1413,7 +1416,7 @@ export function App() {
     event.preventDefault()
     const resizeTarget = event.currentTarget
     resizeTarget.setPointerCapture(event.pointerId)
-    setIsShellResizing(true)
+    setActiveShellResizeHandle("sidebar")
     const startX = event.clientX
     const startSidebarWidth = sidebarWidth
     const shellWidth = getShellWidth()
@@ -1457,7 +1460,7 @@ export function App() {
       window.removeEventListener("blur", handlePointerUp)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       resizeTarget.removeEventListener("lostpointercapture", handlePointerUp)
-      setIsShellResizing(false)
+      setActiveShellResizeHandle(null)
     }
 
     function handlePointerMove(moveEvent: globalThis.PointerEvent) {
@@ -1581,7 +1584,7 @@ export function App() {
             style={{ width: "var(--ousia-sidebar-live-width)" }}
           />
           <ResizeHandle
-            isActive={isShellResizing}
+            isActive={activeShellResizeHandle === "sidebar"}
             label={t.shell.resizeSidebar}
             onPointerDown={beginSidebarResize}
           />
