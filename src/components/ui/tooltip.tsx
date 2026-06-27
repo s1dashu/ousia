@@ -1,189 +1,425 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
 import {
+  AnimatePresence,
   motion,
   useMotionValue,
-  useReducedMotion,
   useSpring,
   useTransform,
   type MotionValue,
 } from "framer-motion"
-import { Tooltip as TooltipPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
-type TooltipSide = NonNullable<
-  React.ComponentProps<typeof TooltipPrimitive.Content>["side"]
->
+type TooltipSide = "top" | "bottom" | "left" | "right"
 
-type TooltipMotionContextValue = {
-  pointerX: MotionValue<number>
+type TooltipPosition = {
+  left: number
+  top: number
+  side: TooltipSide
 }
 
-const TooltipMotionContext =
-  React.createContext<TooltipMotionContextValue | null>(null)
-
-const tooltipSpring = {
-  stiffness: 260,
-  damping: 10,
-  mass: 0.7,
+type TooltipContextValue = {
+  animationFrameRef: React.MutableRefObject<number | null>
+  isHovered: boolean
+  position: TooltipPosition | undefined
+  setIsHovered: React.Dispatch<React.SetStateAction<boolean>>
+  sideOffsetRef: React.MutableRefObject<number>
+  sideRef: React.MutableRefObject<TooltipSide>
+  updatePosition: (target: HTMLElement, clientX?: number) => void
+  x: MotionValue<number>
 }
 
-const tooltipPointerSpring = {
-  stiffness: 180,
-  damping: 22,
+type TooltipProviderProps = React.PropsWithChildren<{
+  delayDuration?: number
+  disableHoverableContent?: boolean
+  skipDelayDuration?: number
+}>
+
+type TooltipProps = React.PropsWithChildren<{
+  defaultOpen?: boolean
+  delayDuration?: number
+  disableHoverableContent?: boolean
+  onOpenChange?: (open: boolean) => void
+  open?: boolean
+}>
+
+type TooltipTriggerProps = React.HTMLAttributes<HTMLElement> & {
+  asChild?: boolean
 }
 
-function getInitialOffset(side: TooltipSide) {
+type TooltipContentProps = React.HTMLAttributes<HTMLSpanElement> & {
+  align?: "start" | "center" | "end"
+  side?: TooltipSide
+  sideOffset?: number
+}
+
+const TooltipContext = React.createContext<TooltipContextValue | null>(null)
+
+function useTooltipContext(componentName: string) {
+  const context = React.useContext(TooltipContext)
+
+  if (!context) {
+    throw new Error(`${componentName} must be used within Tooltip`)
+  }
+
+  return context
+}
+
+function getHorizontalPosition(rect: DOMRect) {
+  const baseLeft = Math.min(
+    Math.max(rect.left + rect.width / 2, 88),
+    window.innerWidth - 88
+  )
+
+  return { baseLeft }
+}
+
+function getTransformOrigin(side: TooltipSide) {
   switch (side) {
     case "bottom":
-      return { x: 0, y: -20 }
+      return "top center"
     case "left":
-      return { x: 16, y: 0 }
+      return "right center"
     case "right":
-      return { x: -16, y: 0 }
+      return "left center"
     case "top":
     default:
-      return { x: 0, y: 20 }
+      return "bottom center"
   }
 }
 
-function TooltipProvider({
-  delayDuration = 0,
-  ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
-  return (
-    <TooltipPrimitive.Provider
-      data-slot="tooltip-provider"
-      delayDuration={delayDuration}
-      {...props}
-    />
-  )
+function getInitialMotion(side: TooltipSide) {
+  switch (side) {
+    case "bottom":
+      return { opacity: 0, y: -20, scale: 0.6 }
+    case "left":
+      return { opacity: 0, x: 20, scale: 0.6 }
+    case "right":
+      return { opacity: 0, x: -20, scale: 0.6 }
+    case "top":
+    default:
+      return { opacity: 0, y: 20, scale: 0.6 }
+  }
 }
 
-function Tooltip({ ...props }: React.ComponentProps<typeof TooltipPrimitive.Root>) {
-  const pointerX = useMotionValue(0)
-  const motionContextValue = React.useMemo(
-    () => ({ pointerX }),
-    [pointerX]
+function getPlacementClassName(side: TooltipSide) {
+  switch (side) {
+    case "bottom":
+      return "-translate-x-1/2"
+    case "left":
+      return "-translate-x-full -translate-y-1/2"
+    case "right":
+      return "-translate-y-1/2"
+    case "top":
+    default:
+      return "-translate-x-1/2 -translate-y-full"
+  }
+}
+
+function TooltipProvider({ children }: TooltipProviderProps) {
+  return <>{children}</>
+}
+
+function Tooltip({
+  children,
+  defaultOpen = false,
+  onOpenChange,
+  open,
+}: TooltipProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const [position, setPosition] = React.useState<TooltipPosition | undefined>()
+  const x = useMotionValue(0)
+  const animationFrameRef = React.useRef<number | null>(null)
+  const sideRef = React.useRef<TooltipSide>("top")
+  const sideOffsetRef = React.useRef(12)
+  const isControlled = open !== undefined
+  const isHovered = isControlled ? open : uncontrolledOpen
+
+  const setIsHovered = React.useCallback(
+    (nextOpen: React.SetStateAction<boolean>) => {
+      const resolvedOpen =
+        typeof nextOpen === "function" ? nextOpen(isHovered) : nextOpen
+
+      if (!isControlled) {
+        setUncontrolledOpen(resolvedOpen)
+      }
+
+      onOpenChange?.(resolvedOpen)
+    },
+    [isControlled, isHovered, onOpenChange]
+  )
+
+  const updatePosition = React.useCallback(
+    (target: HTMLElement, clientX?: number) => {
+      const rect = target.getBoundingClientRect()
+      const preferredSide = sideRef.current
+      const sideOffset = sideOffsetRef.current
+
+      if (preferredSide === "left" || preferredSide === "right") {
+        const canUseLeft = rect.left > 120
+        const canUseRight = window.innerWidth - rect.right > 120
+        const nextSide =
+          preferredSide === "left" && !canUseLeft && canUseRight
+            ? "right"
+            : preferredSide === "right" && !canUseRight && canUseLeft
+              ? "left"
+              : preferredSide
+        const nextLeft =
+          nextSide === "right" ? rect.right + sideOffset : rect.left - sideOffset
+        const nextTop = Math.min(
+          Math.max(rect.top + rect.height / 2, 48),
+          window.innerHeight - 48
+        )
+
+        setPosition({ left: nextLeft, top: nextTop, side: nextSide })
+      } else {
+        const canUseTop = rect.top > 84
+        const canUseBottom = window.innerHeight - rect.bottom > 84
+        const nextSide =
+          preferredSide === "top" && !canUseTop && canUseBottom
+            ? "bottom"
+            : preferredSide === "bottom" && !canUseBottom && canUseTop
+              ? "top"
+              : preferredSide
+        const { baseLeft } = getHorizontalPosition(rect)
+        const baseTop =
+          nextSide === "bottom"
+            ? rect.bottom + sideOffset
+            : rect.top - sideOffset
+
+        setPosition({ left: baseLeft, top: baseTop, side: nextSide })
+      }
+
+      if (clientX !== undefined) {
+        x.set(clientX - rect.left - rect.width / 2)
+      }
+    },
+    [x]
+  )
+
+  React.useEffect(() => {
+    const currentAnimationFrameRef = animationFrameRef
+
+    return () => {
+      if (currentAnimationFrameRef.current) {
+        cancelAnimationFrame(currentAnimationFrameRef.current)
+      }
+    }
+  }, [])
+
+  const contextValue = React.useMemo(
+    () => ({
+      animationFrameRef,
+      isHovered,
+      position,
+      setIsHovered,
+      sideOffsetRef,
+      sideRef,
+      updatePosition,
+      x,
+    }),
+    [isHovered, position, setIsHovered, updatePosition, x]
   )
 
   return (
-    <TooltipMotionContext.Provider value={motionContextValue}>
-      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
-    </TooltipMotionContext.Provider>
+    <TooltipContext.Provider value={contextValue}>
+      {children}
+    </TooltipContext.Provider>
   )
 }
 
 function TooltipTrigger({
+  asChild,
+  children,
+  className,
   onBlur,
-  onPointerLeave,
-  onPointerMove,
+  onFocus,
+  onMouseEnter,
+  onMouseLeave,
+  onMouseMove,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
-  const motionContext = React.useContext(TooltipMotionContext)
+}: TooltipTriggerProps) {
+  const context = useTooltipContext("TooltipTrigger")
+  const { animationFrameRef, setIsHovered, updatePosition } = context
+
+  const handleMouseEnter = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      updatePosition(event.currentTarget, event.clientX)
+      setIsHovered(true)
+    },
+    [setIsHovered, updatePosition]
+  )
+
+  const handleMouseLeave = React.useCallback(() => {
+    setIsHovered(false)
+  }, [setIsHovered])
+
+  const handleMouseMove = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+
+      animationFrameRef.current = requestAnimationFrame(() => {
+        updatePosition(event.currentTarget, event.clientX)
+      })
+    },
+    [animationFrameRef, updatePosition]
+  )
+
+  const handleFocus = React.useCallback(
+    (event: React.FocusEvent<HTMLElement>) => {
+      updatePosition(event.currentTarget)
+      setIsHovered(true)
+    },
+    [setIsHovered, updatePosition]
+  )
+
+  const handleBlur = React.useCallback(() => {
+    setIsHovered(false)
+  }, [setIsHovered])
+
+  const triggerProps = {
+    onBlur: (event: React.FocusEvent<HTMLElement>) => {
+      onBlur?.(event)
+      handleBlur()
+    },
+    onFocus: (event: React.FocusEvent<HTMLElement>) => {
+      onFocus?.(event)
+      handleFocus(event)
+    },
+    onMouseEnter: (event: React.MouseEvent<HTMLElement>) => {
+      onMouseEnter?.(event)
+      handleMouseEnter(event)
+    },
+    onMouseLeave: (event: React.MouseEvent<HTMLElement>) => {
+      onMouseLeave?.(event)
+      handleMouseLeave()
+    },
+    onMouseMove: (event: React.MouseEvent<HTMLElement>) => {
+      onMouseMove?.(event)
+      handleMouseMove(event)
+    },
+  }
+
+  if (asChild && React.isValidElement(children)) {
+    const child = React.Children.only(children) as React.ReactElement<
+      React.HTMLAttributes<HTMLElement>
+    >
+    const childProps = child.props
+
+    return React.cloneElement(child, {
+      onBlur: (event: React.FocusEvent<HTMLElement>) => {
+        childProps.onBlur?.(event)
+        triggerProps.onBlur(event)
+      },
+      onFocus: (event: React.FocusEvent<HTMLElement>) => {
+        childProps.onFocus?.(event)
+        triggerProps.onFocus(event)
+      },
+      onMouseEnter: (event: React.MouseEvent<HTMLElement>) => {
+        childProps.onMouseEnter?.(event)
+        triggerProps.onMouseEnter(event)
+      },
+      onMouseLeave: (event: React.MouseEvent<HTMLElement>) => {
+        childProps.onMouseLeave?.(event)
+        triggerProps.onMouseLeave(event)
+      },
+      onMouseMove: (event: React.MouseEvent<HTMLElement>) => {
+        childProps.onMouseMove?.(event)
+        triggerProps.onMouseMove(event)
+      },
+    })
+  }
 
   return (
-    <TooltipPrimitive.Trigger
+    <span
       data-slot="tooltip-trigger"
-      onBlur={(event) => {
-        motionContext?.pointerX.set(0)
-        onBlur?.(event)
-      }}
-      onPointerLeave={(event) => {
-        motionContext?.pointerX.set(0)
-        onPointerLeave?.(event)
-      }}
-      onPointerMove={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect()
-        motionContext?.pointerX.set(
-          event.clientX - rect.left - rect.width / 2
-        )
-        onPointerMove?.(event)
-      }}
+      className={cn("relative inline-flex", className)}
       {...props}
-    />
+      {...triggerProps}
+    >
+      {children}
+    </span>
   )
 }
 
 function TooltipContent({
-  className,
-  side = "top",
-  sideOffset = 10,
   align = "center",
   children,
+  className,
+  side = "top",
+  sideOffset = 12,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>) {
-  const motionContext = React.useContext(TooltipMotionContext)
-  const fallbackPointerX = useMotionValue(0)
-  const pointerX = motionContext?.pointerX ?? fallbackPointerX
-  const shouldReduceMotion = useReducedMotion()
+}: TooltipContentProps) {
+  const context = useTooltipContext("TooltipContent")
+  const { isHovered, position, sideOffsetRef, sideRef, x } = context
+  const springConfig = { stiffness: 180, damping: 22 }
   const rotate = useSpring(
-    useTransform(pointerX, [-120, 120], [-4, 4]),
-    tooltipPointerSpring
+    useTransform(x, [-120, 120], [-4, 4]),
+    springConfig
   )
   const translateX = useSpring(
-    useTransform(pointerX, [-120, 120], [-10, 10]),
-    tooltipPointerSpring
+    useTransform(x, [-120, 120], [-10, 10]),
+    springConfig
   )
-  const initialOffset = getInitialOffset(side)
+  const initialMotion = getInitialMotion(position?.side ?? side)
 
-  return (
-    <TooltipPrimitive.Portal>
-      <TooltipPrimitive.Content
-        data-slot="tooltip-content"
-        align={align}
-        side={side}
-        sideOffset={sideOffset}
-        className="pointer-events-none z-50 w-fit outline-none"
-        {...props}
-      >
-        <motion.div
-          animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
-          className="origin-(--radix-tooltip-content-transform-origin) transform-gpu will-change-transform"
-          initial={
-            shouldReduceMotion
-              ? false
-              : {
-                  opacity: 0,
-                  scale: 0.6,
-                  x: initialOffset.x,
-                  y: initialOffset.y,
-                }
-          }
-          transition={shouldReduceMotion ? { duration: 0 } : tooltipSpring}
+  void align
+
+  React.useEffect(() => {
+    sideRef.current = side
+    sideOffsetRef.current = sideOffset
+  }, [side, sideOffset, sideOffsetRef, sideRef])
+
+  if (typeof document === "undefined") {
+    return null
+  }
+
+  return createPortal(
+    <AnimatePresence>
+      {isHovered && position ? (
+        <motion.span
+          initial={initialMotion}
+          animate={{
+            opacity: 1,
+            y: 0,
+            x: 0,
+            scale: 1,
+            transition: {
+              type: "spring",
+              stiffness: 260,
+              damping: 10,
+            },
+          }}
+          exit={initialMotion}
+          style={{
+            left: position.left,
+            top: position.top,
+            translateX,
+            rotate,
+            whiteSpace: "nowrap",
+            transformOrigin: getTransformOrigin(position.side),
+          }}
+          className={cn(
+            "pointer-events-none fixed z-[9999] flex flex-col items-center justify-center rounded-md bg-black px-4 py-2 text-xs text-white shadow-xl",
+            getPlacementClassName(position.side),
+            className
+          )}
+          {...props}
         >
-          <motion.div
-            className={cn(
-              "ousia-rich-tooltip relative flex w-fit max-w-xs flex-col items-center justify-center overflow-hidden rounded-md border border-white/10 bg-neutral-950 px-4 py-2 text-xs text-white shadow-[0_14px_34px_-18px_rgba(0,0,0,0.82),0_4px_14px_-8px_rgba(0,0,0,0.72),inset_0_1px_0_rgba(255,255,255,0.1)] outline-none has-data-[slot=kbd]:pr-1.5 **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-4xl",
-              className
-            )}
-            style={
-              shouldReduceMotion
-                ? undefined
-                : {
-                    rotate,
-                    x: translateX,
-                  }
-            }
-          >
-            <span className="relative z-30 min-w-0 whitespace-pre-wrap text-center text-xs leading-tight font-semibold text-white tabular-nums">
-              {children}
-            </span>
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute bottom-0 left-1/2 z-20 h-px w-1/4 -translate-x-1/2 bg-gradient-to-r from-transparent via-[var(--ring)] to-transparent"
-            />
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute bottom-0 left-8 z-20 h-px w-2/5 bg-gradient-to-r from-transparent via-[var(--radix-scale-9)] to-transparent"
-            />
-            <TooltipPrimitive.Arrow className="z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px] bg-neutral-950 fill-neutral-950 data-[side=left]:translate-x-[-1.5px] data-[side=right]:translate-x-[1.5px]" />
-          </motion.div>
-        </motion.div>
-      </TooltipPrimitive.Content>
-    </TooltipPrimitive.Portal>
+          <span className="absolute inset-x-10 -bottom-px z-30 h-px w-[20%] bg-gradient-to-r from-transparent via-[var(--radix-scale-9)] to-transparent" />
+          <span className="absolute -bottom-px left-10 z-30 h-px w-[40%] bg-gradient-to-r from-transparent via-[var(--ring)] to-transparent" />
+          <span className="relative z-30 whitespace-pre text-center text-xs leading-tight font-semibold text-white tabular-nums">
+            {children}
+          </span>
+        </motion.span>
+      ) : null}
+    </AnimatePresence>,
+    document.body
   )
 }
 
