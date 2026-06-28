@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia-desktop/releases/download/v0.1.6/Ousia-0.1.6-arm64.dmg"><strong>Download macOS DMG v0.1.6</strong></a>
+  <a href="https://github.com/s1dashu/ousia-desktop/releases/download/v0.1.7/Ousia-0.1.7-arm64.dmg"><strong>Download macOS DMG v0.1.7</strong></a>
   ·
   <a href="#getting-started">Run from source</a>
   ·
@@ -19,9 +19,9 @@
 ## Download
 
 Download the newest macOS build from
-[GitHub Releases](https://github.com/s1dashu/ousia-desktop/releases/tag/v0.1.6)
+[GitHub Releases](https://github.com/s1dashu/ousia-desktop/releases/tag/v0.1.7)
 or install it directly from
-[Ousia-0.1.6-arm64.dmg](https://github.com/s1dashu/ousia-desktop/releases/download/v0.1.6/Ousia-0.1.6-arm64.dmg).
+[Ousia-0.1.7-arm64.dmg](https://github.com/s1dashu/ousia-desktop/releases/download/v0.1.7/Ousia-0.1.7-arm64.dmg).
 
 The release artifact is a `.dmg` installer. Open it, drag **Ousia** into
 **Applications**, then launch the app from Applications.
@@ -71,9 +71,10 @@ npm install
 npm run start
 ```
 
-The app stores settings, sessions, and Pi agent data in Electron's app data
-directory. Provider API keys entered in Settings are local app state, so treat
-that machine state as sensitive.
+The app stores Ousia UI state in Electron's app data directory. Pi credentials,
+model config, resources, and session history use the user's local Pi agent
+directory (`~/.pi/agent`, honoring `PI_CODING_AGENT_DIR`), so Ousia's bundled Pi
+runtime and the Pi TUI share the same Pi data.
 
 ## Development
 
@@ -136,8 +137,8 @@ Ousia Desktop is an Electron + Vite + React app:
   selection, chat streaming, history, and interrupts.
 
 The renderer talks to Electron main through the narrow `window.ousia` preload
-API. Pi sessions are isolated by project/session and stored under Electron
-`userData`.
+API. Pi sessions are isolated by project/session and stored through Pi's local
+session storage.
 
 ## Project Docs
 
