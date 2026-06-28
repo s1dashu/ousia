@@ -1,167 +1,192 @@
 <p align="center">
-  <img src="./ousia-logo.png" alt="Ousia" width="96" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./ousia-logo.png">
+    <img src="./ousia-logo.png" alt="Ousia" width="96" />
+  </picture>
 </p>
 
-<h1 align="center">Ousia Desktop</h1>
+<h1 align="center">Ousia</h1>
 
 <p align="center">
-  A quiet desktop client for running Pi coding agent sessions across local projects.
+  <strong>A minimalist desktop for the Pi Coding Agent.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia-desktop/releases/download/v0.1.7/Ousia-0.1.7-arm64.dmg"><strong>Download macOS DMG v0.1.7</strong></a>
-  ·
-  <a href="#getting-started">Run from source</a>
-  ·
-  <a href="#development">Development</a>
+  <a href="https://github.com/s1dashu/ousia-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/s1dashu/ousia-desktop?color=222222" alt="GitHub Release"></a>
+  <img src="https://img.shields.io/badge/platform-macOS-222222" alt="Platform">
+  <img src="https://img.shields.io/badge/status-pre--release-ebc248" alt="Status">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-222222" alt="License"></a>
+  <img src="https://img.shields.io/badge/built_with-Electron-47848f?logo=electron&logoColor=white" alt="Electron">
+  <img src="https://img.shields.io/badge/stack-React%2019-087ea4?logo=react" alt="React">
+  <img src="https://img.shields.io/badge/styled-Tailwind%20CSS%204-06b6d4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS">
 </p>
 
-## Download
+<p align="center">
+  <a href="https://github.com/s1dashu/ousia-desktop/releases/latest"><strong>↓ Download for macOS</strong></a>
+  &nbsp;·&nbsp;
+  <a href="#-quick-start">Run from source</a>
+  &nbsp;·&nbsp;
+  <a href="#-development">Development</a>
+</p>
 
-Download the newest macOS build from
-[GitHub Releases](https://github.com/s1dashu/ousia-desktop/releases/tag/v0.1.7)
-or install it directly from
-[Ousia-0.1.7-arm64.dmg](https://github.com/s1dashu/ousia-desktop/releases/download/v0.1.7/Ousia-0.1.7-arm64.dmg).
+---
 
-The release artifact is a `.dmg` installer. Open it, drag **Ousia** into
-**Applications**, then launch the app from Applications.
+## What is Ousia
 
-> Ousia Desktop is still pre-release software. Expect fast iteration and
-> occasional rough edges.
+**Ousia** is a minimalist desktop for the [Pi Coding Agent](https://github.com/earendil-works/pi).
+It wraps the agent in a clean macOS app with project-aware sessions, streaming
+Markdown, and persistent chat history — so you can keep the conversation going
+without leaving your codebase.
 
-## What It Is
+Think of it as the missing GUI layer for Pi. No tabs, no extensions, no hidden
+panels. Just your projects and your agent, side by side.
 
-Ousia Desktop is a simplified Electron client for working with the Pi coding
-agent. It keeps the product surface intentionally direct: pick a project, open a
-chat session, choose a model provider, and let the agent work in that project's
-directory.
+## Why Ousia
 
-## Highlights
+Coding agents are great in the terminal, but bouncing between your editor,
+terminal, and the agent's output creates constant friction. Ousia gives Pi a
+dedicated desktop surface so conversations stay in context, tool invocation is
+visible inline, and everything persists across restarts.
 
-- **Project-aware agent sessions**: each chat request includes a project path
-  and session id, so Pi tool execution runs in the selected project directory.
-- **Persistent sidebar workflow**: projects, sessions, expanded sections,
-  sidebar layout, and window state are restored between launches.
-- **Streaming chat UI**: assistant Markdown is rendered with Streamdown,
-  including code blocks, tables, tool-call output, and compact status messages.
-- **Attachments in composer**: add files and images directly to a message when
-  the selected model supports them.
-- **Model/provider settings**: configure provider API keys locally, choose the
-  active model, and tune thinking level from the composer.
-- **Appearance controls**: choose theme, color scale, app/chat fonts, and chat
-  width from Settings.
-- **Local runtime logs**: Electron main, renderer, and chat failures are written
-  to `~/.ousia/logs/ousia-desktop.log`.
+### In practice
 
-## Getting Started
+- **Project-first sessions** — Every chat session is bound to a project
+  directory. The agent reads, writes, and runs tools inside your project. Switch
+  projects and the agent context follows.
+- **Persistent everything** — Sessions, sidebar layout, window position, color
+  theme, font preferences — all restored on relaunch.
+- **Streaming Markdown** — Assistant responses render live with
+  [Streamdown](https://streamdown.ai), including fenced code blocks, tables,
+  and expandable tool-call summaries. Watch the agent think in real time.
+- **Attachments in composer** — Drag files and images directly into a message
+  when your model supports multimodal input.
+- **Model flexibility** — Configure any Pi-compatible provider (Anthropic,
+  OpenAI, Gemini, etc.) in Settings. Switch models and tune thinking levels
+  from the chat input without interrupting the conversation.
+- **Shared Pi config** — Ousia reads credentials and model config from your
+  local Pi agent directory (`~/.pi/agent`). Providers set up in the Pi CLI or
+  TUI work in Ousia automatically — and vice versa.
+- **Fully local** — Electron app, local state, no cloud account. Debug logs
+  live at `~/.ousia/logs/`.
 
-### Requirements
+## 🚀 Quick start
 
-- macOS for the primary desktop target.
-- Node.js 24 or newer.
-- npm 11 or newer.
+### Download (macOS)
 
-Electron Forge maker configuration exists for other platforms, but release
-packaging is currently validated for macOS first.
+Get the latest `.dmg` from [Releases](https://github.com/s1dashu/ousia-desktop/releases/latest),
+open it, drag **Ousia** into **Applications**, and launch.
 
-### Run From Source
+> ⚠️ Ousia is pre-release software. You'll hit rough edges. We ship fast and
+> iterate faster.
+
+### Run from source
 
 ```bash
+# Requirements: Node.js ≥ 24, npm ≥ 11
+git clone https://github.com/s1dashu/ousia-desktop.git
+cd ousia-desktop
 npm install
-npm run start
+npm start
 ```
 
-The app stores Ousia UI state in Electron's app data directory. Pi credentials,
-model config, resources, and session history use the user's local Pi agent
-directory (`~/.pi/agent`, honoring `PI_CODING_AGENT_DIR`), so Ousia's bundled Pi
-runtime and the Pi TUI share the same Pi data.
+On first launch, Ousia asks for a default workspace folder (defaults to
+`~/Documents/Ousia`). Configure your model provider API key in **Settings**,
+pick a model from the chat input, and start a session.
 
-## Development
+## 🧱 Architecture
 
-Useful checks:
+| Layer | Stack |
+|---|---|
+| Shell | Electron 42 + Electron Forge + Vite |
+| UI | React 19 + Tailwind CSS 4 + shadcn/ui + Framer Motion |
+| Markdown | Streamdown (streaming + static modes) |
+| Agent | Pi Coding Agent, hosted in Electron main process |
+| Icons | HugeIcons Core Free |
+| State | Local JSON via `Electron.app.getPath('userData')` |
+
+The renderer talks to the agent through a narrow `window.ousia` IPC bridge.
+Pi sessions are isolated by `projectPath` and `sessionId` — every chat message
+carries both, so the agent always operates in the right directory.
+
+```
+┌─────────────────────────────────────┐
+│  Renderer Process                   │
+│  ┌──────────┐  ┌──────────────────┐ │
+│  │ Sidebar  │  │     Chat         │ │
+│  │ Projects │  │  ┌────────────┐  │ │
+│  │ Sessions │  │  │ Streamdown │  │ │
+│  │ Settings │  │  │ Tool calls │  │ │
+│  └──────────┘  │  │ Composer   │  │ │
+│                 │  └────────────┘  │ │
+│                 └──────────────────┘ │
+└──────────┬──────────────────────────┘
+           │ window.ousia (IPC)
+┌──────────▼──────────────────────────┐
+│  Electron Main Process              │
+│  ┌──────────────────────────────┐   │
+│  │  Pi Coding Agent Sessions    │   │
+│  │  (isolated by projectPath +  │   │
+│  │   sessionId, cwd = project)  │   │
+│  └──────────────────────────────┘   │
+│  ┌──────────────────────────────┐   │
+│  │  App State Store (JSON)      │   │
+│  └──────────────────────────────┘   │
+└─────────────────────────────────────┘
+```
+
+## 🛠 Development
 
 ```bash
-npm run typecheck
-npm run lint
-npm run check
+npm run typecheck    # Type-check all TypeScript targets
+npm run lint         # ESLint across the project
+npm run check        # Both of the above
+
+npm run package      # Production app bundle → out/
+npm run make         # Local unsigned DMG (fast iteration)
 ```
 
-Build a local production app bundle:
+### Release build (macOS signed + notarized)
 
 ```bash
-npm run package
+# Apple Developer credentials
+export APPLE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+export APPLE_ID="you@example.com"
+export APPLE_APP_SPECIFIC_PASSWORD="app-specific-password"
+export APPLE_TEAM_ID="TEAMID"
+
+npm run make:dmg:notarized   # Signed DMG + notarization
 ```
 
-Create a local macOS DMG:
+## 📖 Docs
 
-```bash
-npm run make
-```
+| File | Covers |
+|---|---|
+| `AGENTS.md` | Entry point for coding agents contributing to this repo |
+| `docs/product-context.md` | Scope, product boundaries, glossary |
+| `docs/design-context.md` | UI rules, icon policy, shell constraints |
+| `docs/technical-architecture.md` | Stack, IPC model, state schema, logging |
+| `docs/streamdown.md` | Markdown rendering config and link handling |
+| `docs/shadcn-reference.md` | Local shadcn/ui reference workflow |
+| `docs/development-state.md` | Current implementation state and commands |
 
-Signed and notarized release builds use Apple Developer credentials:
+## 🤝 Contributing
 
-```bash
-APPLE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
-APPLE_ID="you@example.com"
-APPLE_APP_SPECIFIC_PASSWORD="app-specific-password"
-APPLE_TEAM_ID="TEAMID"
-```
+Contributions are welcome. Before opening a PR:
 
-Then run:
+1. Read `CONTRIBUTING.md` and `AGENTS.md`
+2. Run `npm run check` to verify types and linting
+3. For packaging changes, also run `npm run package`
+4. Keep changes aligned with the current product direction (no extensions,
+   no workspace panels)
 
-```bash
-npm run make:dmg:signed
-npm run notarize:dmg
-```
+## 📄 License
 
-or:
+Ousia is [MIT](./LICENSE) © 2026 Ousia Desktop contributors.
 
-```bash
-npm run make:dmg:notarized
-```
+Bundled CJK fonts are under [SIL OFL 1.1](./NOTICE).
 
-## Architecture
+---
 
-Ousia Desktop is an Electron + Vite + React app:
-
-- `src/App.tsx` assembles the shell, sidebar/chat layout, settings state, and
-  persistence.
-- `src/features/chat/ChatArea.tsx` owns chat history, input, attachments, and
-  composer controls.
-- `src/features/settings/SettingsPage.tsx` renders app, appearance, model, and
-  agent settings.
-- `src/features/sidebar/Sidebar.tsx` handles project/session navigation.
-- `src/electron/main.ts` registers IPC for app state, chat, models, logging, and
-  window helpers.
-- `src/electron/agent-conversations.ts` hosts Pi session creation, model
-  selection, chat streaming, history, and interrupts.
-
-The renderer talks to Electron main through the narrow `window.ousia` preload
-API. Pi sessions are isolated by project/session and stored through Pi's local
-session storage.
-
-## Project Docs
-
-High-signal notes for future agents live in `AGENTS.md`. More detailed context:
-
-- `docs/product-context.md`
-- `docs/design-context.md`
-- `docs/technical-architecture.md`
-- `docs/development-state.md`
-- `docs/streamdown.md`
-- `docs/shadcn-reference.md`
-
-## Third-Party Assets
-
-Bundled CJK fonts are distributed under the SIL Open Font License 1.1. Their
-license files live next to the font files under `src/assets/fonts/debug/`. See
-`NOTICE` for details.
-
-## Contributing
-
-Contributions are welcome. Please read `CONTRIBUTING.md` before opening a pull
-request, and run `npm run check` before submitting changes.
-
-## License
-
-Ousia Desktop is licensed under the MIT License. See `LICENSE`.
+<p align="center">
+  <sub>Built with Electron, React, and Pi. Styled with Tailwind CSS & shadcn/ui.</sub>
+</p>
