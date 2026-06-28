@@ -19,6 +19,7 @@ out
 coverage
 tmp
 .ousia
+ref/
 *.local
 
 # Editor directories and files

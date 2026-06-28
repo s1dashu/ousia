@@ -1,6 +1,7 @@
 node_modules/
 coverage/
 .pnpm-store/
+ref/
 pnpm-lock.yaml
 package-lock.json
 pnpm-lock.yaml

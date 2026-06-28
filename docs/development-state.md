@@ -14,7 +14,7 @@ Packaging commands:
 npm run package
 npm run make
 npm run make:dmg:signed
-npm run notarize:dmg -- out/make/Ousia-0.1.1-arm64.dmg
+npm run notarize:dmg
 npm run make:dmg:notarized
 ```
 

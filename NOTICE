@@ -9,11 +9,6 @@ Bundled fonts
 The following font files are included for optional in-app CJK typography and are
 distributed under the SIL Open Font License, Version 1.1:
 
-- Source Han Sans SC
-  - Copyright 2014-2025 Adobe
-  - Files: src/assets/fonts/debug/source-han-sans-sc/
-  - License: src/assets/fonts/debug/source-han-sans-sc/LICENSE.txt
-
 - LXGW WenKai
   - Copyright 2021-2023 LXGW
   - Copyright 2020 The Klee Project Authors

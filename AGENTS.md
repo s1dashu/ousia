@@ -9,7 +9,7 @@ match the task.
 - UI direction and interaction rules: [docs/design-context.md](docs/design-context.md)
 - Technical architecture: [docs/technical-architecture.md](docs/technical-architecture.md)
 - Streamdown Markdown rendering: [docs/streamdown.md](docs/streamdown.md)
-- shadcn/ui generated reference: [docs/shadcn-reference.md](docs/shadcn-reference.md)
+- shadcn/ui local reference workflow: [docs/shadcn-reference.md](docs/shadcn-reference.md)
 - Current development state and commands: [docs/development-state.md](docs/development-state.md)
 
 ## High-Signal Facts
@@ -21,7 +21,8 @@ match the task.
 - The real coding agent is Pi coding agent, hosted in Electron main process.
 - Chat requests include `projectPath` and `sessionId`; Pi sessions are isolated
   by project/session so tool execution uses the selected project as cwd.
-- Default chat dir is user configurable and defaults to `~/.ousia/chat`.
+- Default workspace folder is user configurable and defaults to
+  `~/Documents/Ousia`.
 - Runtime logs are persisted at `~/.ousia/logs/ousia-desktop.log`; check this
   file first for Electron main errors, renderer console messages, renderer
   uncaught errors, and chat/title-generation failures.
@@ -60,7 +61,7 @@ match the task.
   new package has a new version number.
 - Follow the project icon policy in `docs/design-context.md`: use HugeIcons for
   interface icons and route imports through `src/components/icons/huge-icons.tsx`.
-- Before changing shadcn/ui primitives, compare against the generated reference
-  under `ref/`; see `docs/shadcn-reference.md`.
+- Before changing shadcn/ui primitives, compare against a local generated
+  reference under ignored `ref/`; see `docs/shadcn-reference.md`.
 - When changing agent behavior, verify whether the change belongs in renderer
   state, Electron IPC, or Pi session setup.

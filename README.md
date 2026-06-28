@@ -112,7 +112,7 @@ Then run:
 
 ```bash
 npm run make:dmg:signed
-npm run notarize:dmg -- out/make/Ousia-0.1.1-arm64.dmg
+npm run notarize:dmg
 ```
 
 or:

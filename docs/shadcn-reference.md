@@ -1,10 +1,13 @@
 # shadcn Reference
 
-This repo keeps a generated shadcn/ui reference project under `ref/` so agents can compare local component edits against the upstream preset output before changing UI primitives.
+Generated shadcn/ui reference projects belong under local `ref/`. The directory
+is intentionally ignored so generated preset output does not ship in the public
+repository.
 
 ## Reference Project
 
-Current Radix reference generated with:
+Generate the current Radix reference when you need to compare local component
+edits against upstream preset output:
 
 ```bash
 npx shadcn@latest init --preset bbVJxYW --template vite --pointer --name shadcn-bbVJxYW-radix-vite --cwd ref/shadcn-bbVJxYW-radix-vite --yes
@@ -29,8 +32,9 @@ Important reference files:
 
 ## Usage Rules
 
-- Treat `ref/` as generated reference material, not app source.
-- Before changing a shadcn/ui primitive in `src/components/ui/`, compare it with the matching file in `ref/`.
+- Treat `ref/` as local generated reference material, not app source.
+- Do not commit `ref/`; regenerate it locally when needed.
+- Before changing a shadcn/ui primitive in `src/components/ui/`, compare it with the matching file in the local `ref/`.
 - Prefer keeping structure, state selectors, spacing, focus styles, and menu padding aligned with the reference unless the app has an explicit design reason to diverge.
 - For theme-wide changes, update tokens in `src/index.css` such as `--radius` before rewriting many component classes.
 - For local product fit, small component-level overrides are acceptable because shadcn/ui components are owned in this repo.
