@@ -34,11 +34,13 @@ const toolFailureHoverTextClass = "hover:text-[var(--ousia-tool-warning-strong)]
 
 export function ToolCallView({
   item,
+  onPreserveScrollAnchor,
   projectPath,
   sessionId,
   t,
 }: {
   item: ToolChatItem
+  onPreserveScrollAnchor: (element: HTMLElement) => void
   projectPath?: string
   sessionId?: string
   t: ReturnType<typeof getMessages>
@@ -208,7 +210,8 @@ export function ToolCallView({
           displayItem.status === "failed" &&
             `${toolFailureTextClass} ${toolFailureHoverTextClass}`
         )}
-        onClick={() => {
+        onClick={(event) => {
+          onPreserveScrollAnchor(event.currentTarget)
           hasManualOpenStateRef.current = true
           setIsOpen((current) => !current)
         }}
@@ -293,11 +296,13 @@ export function ToolCallView({
 
 export function ToolCallGroupView({
   items,
+  onPreserveScrollAnchor,
   projectPath,
   sessionId,
   t,
 }: {
   items: ToolChatItem[]
+  onPreserveScrollAnchor: (element: HTMLElement) => void
   projectPath?: string
   sessionId?: string
   t: ReturnType<typeof getMessages>
@@ -310,7 +315,10 @@ export function ToolCallGroupView({
         type="button"
         aria-expanded={isOpen}
         className="flex h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={(event) => {
+          onPreserveScrollAnchor(event.currentTarget)
+          setIsOpen((current) => !current)
+        }}
       >
         <span className="flex size-5 shrink-0 items-center justify-center">
           {renderToolGroupIcon(items)}
@@ -341,6 +349,7 @@ export function ToolCallGroupView({
             <ToolCallView
               item={item}
               key={item.id}
+              onPreserveScrollAnchor={onPreserveScrollAnchor}
               projectPath={projectPath}
               sessionId={sessionId}
               t={t}

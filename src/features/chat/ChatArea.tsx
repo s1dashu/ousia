@@ -289,12 +289,17 @@ export function ChatArea({
   const manualScrollIntentRef = useRef(false)
   const programmaticScrollResetFrameRef = useRef(0)
   const programmaticScrollResetTimerRef = useRef(0)
+  const chatLayoutAnchorResetTimerRef = useRef(0)
   const completionVisibilityFrameRef = useRef(0)
   const pendingCompletionVisibilitySessionIdRef = useRef<string | null>(null)
   const latestFinishedAssistantIdBeforeRunRef = useRef<string | null>(null)
   const wasAgentWorkingForVisibilityRef = useRef(false)
   const olderHistoryScrollAnchorRef = useRef<{
     height: number
+    top: number
+  } | null>(null)
+  const chatLayoutAnchorRef = useRef<{
+    element: HTMLElement
     top: number
   } | null>(null)
   const isFollowingLatestRef = useRef(isFollowingLatest)
@@ -461,6 +466,69 @@ export function ChatArea({
     }
   }, [])
 
+  const clearChatLayoutAnchor = useCallback(() => {
+    chatLayoutAnchorRef.current = null
+    if (chatLayoutAnchorResetTimerRef.current) {
+      window.clearTimeout(chatLayoutAnchorResetTimerRef.current)
+      chatLayoutAnchorResetTimerRef.current = 0
+    }
+  }, [])
+
+  const preserveChatLayoutAnchor = useCallback(
+    (element: HTMLElement) => {
+      const node = scrollRef.current
+      if (!node || !node.contains(element)) {
+        return
+      }
+
+      clearProgrammaticScrollReset()
+      clearManualScrollIntent()
+      isProgrammaticScrollRef.current = false
+      isFollowingLatestRef.current = false
+      setIsFollowingLatest(false)
+      chatLayoutAnchorRef.current = {
+        element,
+        top: element.getBoundingClientRect().top,
+      }
+
+      if (chatLayoutAnchorResetTimerRef.current) {
+        window.clearTimeout(chatLayoutAnchorResetTimerRef.current)
+      }
+      chatLayoutAnchorResetTimerRef.current = window.setTimeout(() => {
+        clearChatLayoutAnchor()
+        const currentNode = scrollRef.current
+        if (currentNode) {
+          setShowScrollToLatest(!isScrolledToLatest(currentNode))
+        }
+      }, 2400)
+    },
+    [
+      clearChatLayoutAnchor,
+      clearManualScrollIntent,
+      clearProgrammaticScrollReset,
+    ]
+  )
+
+  const applyChatLayoutAnchor = useCallback(() => {
+    const anchor = chatLayoutAnchorRef.current
+    const node = scrollRef.current
+    if (!anchor || !node) {
+      return false
+    }
+    if (!node.contains(anchor.element)) {
+      clearChatLayoutAnchor()
+      return false
+    }
+
+    const nextTop = anchor.element.getBoundingClientRect().top
+    const delta = nextTop - anchor.top
+    if (Math.abs(delta) > 0.5) {
+      node.scrollTop += delta
+    }
+    setShowScrollToLatest(!isScrolledToLatest(node))
+    return true
+  }, [clearChatLayoutAnchor])
+
   const markManualScrollIntent = useCallback((awayFromLatest = false) => {
     clearManualScrollIntent()
     manualScrollIntentRef.current = true
@@ -560,11 +628,16 @@ export function ChatArea({
     return () => {
       clearProgrammaticScrollReset()
       clearManualScrollIntent()
+      clearChatLayoutAnchor()
       if (completionVisibilityFrameRef.current) {
         window.cancelAnimationFrame(completionVisibilityFrameRef.current)
       }
     }
-  }, [clearManualScrollIntent, clearProgrammaticScrollReset])
+  }, [
+    clearChatLayoutAnchor,
+    clearManualScrollIntent,
+    clearProgrammaticScrollReset,
+  ])
 
   useLayoutEffect(() => {
     if (isAgentWorking) {
@@ -680,6 +753,9 @@ export function ChatArea({
       if (!node) {
         return
       }
+      if (applyChatLayoutAnchor()) {
+        return
+      }
       if (!isFollowingLatestRef.current) {
         setShowScrollToLatest(!isScrolledToLatest(node))
         return
@@ -697,7 +773,7 @@ export function ChatArea({
       window.cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
     }
-  }, [performLatestScroll])
+  }, [applyChatLayoutAnchor, performLatestScroll])
 
   useEffect(() => {
     const sessionId = currentSession?.id
@@ -844,6 +920,7 @@ export function ChatArea({
   }
 
   function handleManualScrollIntent(awayFromLatest = false) {
+    clearChatLayoutAnchor()
     markManualScrollIntent(awayFromLatest)
     if (awayFromLatest) {
       isFollowingLatestRef.current = false
@@ -1701,6 +1778,7 @@ export function ChatArea({
             items={visibleChatItems}
             isAgentWorking={isAgentWorking}
             onBranchFromMessage={onBranchFromMessage}
+            onPreserveScrollAnchor={preserveChatLayoutAnchor}
             projectPath={currentProject?.path}
             sessionId={currentSession?.id}
             showTurnWaitIndicator={showTurnWaitIndicator}

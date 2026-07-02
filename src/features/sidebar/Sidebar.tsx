@@ -602,8 +602,10 @@ function SortableSidebarSection({
           <ChevronDown
             aria-hidden="true"
             className={[
-              "shrink-0 text-muted-foreground opacity-0 transition-[opacity,transform] duration-150 group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100",
-              isCollapsed ? "-rotate-90" : "rotate-0",
+              "shrink-0 text-muted-foreground transition-[opacity,transform] duration-150",
+              isCollapsed
+                ? "-rotate-90 opacity-100"
+                : "rotate-0 opacity-0 group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100",
             ].join(" ")}
             size={sidebarSectionIconSize}
             strokeWidth={sidebarIconStrokeWidth}

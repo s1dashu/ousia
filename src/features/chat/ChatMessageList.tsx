@@ -22,6 +22,7 @@ type ChatMessageListProps = {
   items: ChatItem[]
   isAgentWorking: boolean
   onBranchFromMessage: (itemId: string) => void
+  onPreserveScrollAnchor: (element: HTMLElement) => void
   projectPath?: string
   sessionId?: string
   showTurnWaitIndicator: boolean
@@ -32,6 +33,7 @@ export const ChatMessageList = memo(function ChatMessageList({
   items,
   isAgentWorking,
   onBranchFromMessage,
+  onPreserveScrollAnchor,
   projectPath,
   sessionId,
   showTurnWaitIndicator,
@@ -60,6 +62,7 @@ export const ChatMessageList = memo(function ChatMessageList({
                   item.kind === "single" && footerItemIds.has(item.item.id)
                 }
                 onBranchFromMessage={onBranchFromMessage}
+                onPreserveScrollAnchor={onPreserveScrollAnchor}
                 projectPath={projectPath}
                 sessionId={sessionId}
                 t={t}
@@ -221,6 +224,7 @@ const ChatItemView = memo(function ChatItemView({
   item,
   showAssistantFooter,
   onBranchFromMessage,
+  onPreserveScrollAnchor,
   projectPath,
   sessionId,
   t,
@@ -228,6 +232,7 @@ const ChatItemView = memo(function ChatItemView({
   item: ChatRenderItem
   showAssistantFooter: boolean
   onBranchFromMessage: (itemId: string) => void
+  onPreserveScrollAnchor: (element: HTMLElement) => void
   projectPath?: string
   sessionId?: string
   t: ReturnType<typeof getMessages>
@@ -236,6 +241,7 @@ const ChatItemView = memo(function ChatItemView({
     return (
       <ToolCallGroupView
         items={item.items}
+        onPreserveScrollAnchor={onPreserveScrollAnchor}
         projectPath={projectPath}
         sessionId={sessionId}
         t={t}
@@ -260,6 +266,7 @@ const ChatItemView = memo(function ChatItemView({
     return (
       <ToolCallView
         item={chatItem}
+        onPreserveScrollAnchor={onPreserveScrollAnchor}
         projectPath={projectPath}
         sessionId={sessionId}
         t={t}
