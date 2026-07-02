@@ -52,6 +52,11 @@ type QueuedChatState = {
   steering: string[]
   followUp: string[]
 }
+type MoveSessionTarget = {
+  sessionId: string
+  targetProjectId?: string
+  targetSessionId?: string
+}
 type ChatContextUsageState = {
   tokens: number | null
   contextWindow: number
@@ -79,6 +84,23 @@ function clamp(value: number, min: number, max: number) {
 
 function chatKey(projectPath: string, sessionId: string) {
   return `${projectPath}::${sessionId}`
+}
+
+function moveRecordKey<T>(
+  record: Record<string, T>,
+  sourceKey: string,
+  targetKey: string
+) {
+  if (
+    sourceKey === targetKey ||
+    !Object.prototype.hasOwnProperty.call(record, sourceKey)
+  ) {
+    return record
+  }
+  const next = { ...record }
+  next[targetKey] = record[sourceKey]
+  delete next[sourceKey]
+  return next
 }
 
 function historyPageStateFromResult(
@@ -171,6 +193,62 @@ function reorderSessionsById(
     return sessions
   }
   return reorderById(sessions, sourceSessionId, targetSessionId)
+}
+
+function withSessionProjectId(
+  session: SessionRecord,
+  projectId: string | undefined
+) {
+  if (!projectId) {
+    const { projectId: _projectId, ...defaultSession } = session
+    void _projectId
+    return defaultSession
+  }
+  return { ...session, projectId }
+}
+
+function moveSessionToProjectGroup(
+  sessions: SessionRecord[],
+  sessionId: string,
+  targetProjectId: string | undefined,
+  targetSessionId?: string
+) {
+  const sourceSession = sessions.find((session) => session.id === sessionId)
+  if (!sourceSession) {
+    return sessions
+  }
+
+  const normalizedTargetProjectId = targetProjectId || undefined
+  const targetSession = targetSessionId
+    ? sessions.find((session) => session.id === targetSessionId)
+    : undefined
+  const canInsertAtTarget =
+    Boolean(targetSession) &&
+    targetSession?.id !== sessionId &&
+    (targetSession?.projectId || undefined) === normalizedTargetProjectId
+  if (
+    (sourceSession.projectId || undefined) === normalizedTargetProjectId &&
+    !canInsertAtTarget
+  ) {
+    return sessions
+  }
+
+  const movedSession = withSessionProjectId(
+    sourceSession,
+    normalizedTargetProjectId
+  )
+  const remainingSessions = sessions.filter((session) => session.id !== sessionId)
+  const targetIndex = canInsertAtTarget
+    ? remainingSessions.findIndex((session) => session.id === targetSessionId)
+    : -1
+  const groupStartIndex = remainingSessions.findIndex(
+    (session) => (session.projectId || undefined) === normalizedTargetProjectId
+  )
+  const insertIndex =
+    targetIndex >= 0 ? targetIndex : groupStartIndex >= 0 ? groupStartIndex : 0
+  const next = [...remainingSessions]
+  next.splice(insertIndex, 0, movedSession)
+  return next
 }
 
 function moveSessionToGroupFront(
@@ -1243,6 +1321,91 @@ export function App() {
     )
   }
 
+  function moveSessionStateKeys(sourceKey: string, targetKey: string) {
+    if (sourceKey === targetKey) {
+      return
+    }
+
+    setItemsBySession((current) => moveRecordKey(current, sourceKey, targetKey))
+    setHistoryPageStateBySession((current) =>
+      moveRecordKey(current, sourceKey, targetKey)
+    )
+    setQueuedChatStateBySession((current) =>
+      moveRecordKey(current, sourceKey, targetKey)
+    )
+    setContextUsageBySession((current) =>
+      moveRecordKey(current, sourceKey, targetKey)
+    )
+    setRunStatusBySession((current) => {
+      const next = moveRecordKey(current, sourceKey, targetKey)
+      runStatusBySessionRef.current = next
+      return next
+    })
+
+    if (draftSessionKeysRef.current.delete(sourceKey)) {
+      draftSessionKeysRef.current.add(targetKey)
+    }
+    historyInFlightKeysRef.current.delete(sourceKey)
+    historyInFlightKeysRef.current.delete(targetKey)
+  }
+
+  async function handleMoveSession({
+    sessionId,
+    targetProjectId,
+    targetSessionId,
+  }: MoveSessionTarget) {
+    const sourceSession = sessionsRef.current.find(
+      (session) => session.id === sessionId
+    )
+    if (!sourceSession) {
+      return
+    }
+
+    const targetProject = targetProjectId
+      ? projects.find((project) => project.id === targetProjectId)
+      : undefined
+    if (targetProjectId && !targetProject) {
+      return
+    }
+
+    const sourceProjectPath = projectPathForSession(sourceSession)
+    const targetProjectPath = targetProject?.path ?? settings.defaultWorkDir
+    const sourceKey = chatKey(sourceProjectPath, sessionId)
+    const targetKey = chatKey(targetProjectPath, sessionId)
+
+    if (runStatusBySessionRef.current[sourceKey] === "working") {
+      return
+    }
+
+    if (window.ousia) {
+      const result = await window.ousia.moveChatSession({
+        sessionId,
+        sourceProjectPath,
+        targetProjectPath,
+      })
+      if (!result.ok) {
+        console.warn(result.error)
+        return
+      }
+    }
+
+    moveSessionStateKeys(sourceKey, targetKey)
+    setSessions((current) =>
+      moveSessionToProjectGroup(
+        current,
+        sessionId,
+        targetProjectId,
+        targetSessionId
+      )
+    )
+    if (targetProjectId) {
+      setExpandedProjectIds((current) =>
+        current.includes(targetProjectId) ? current : [...current, targetProjectId]
+      )
+    }
+    setSidebarScrollTargetSessionId(sessionId)
+  }
+
   function handleReorderProjects(sourceProjectId: string, targetProjectId: string) {
     setProjects((current) =>
       reorderById(current, sourceProjectId, targetProjectId)
@@ -1572,6 +1735,7 @@ export function App() {
             onCreateSession={handleCreateSession}
             onDeleteProject={handleDeleteProject}
             onDeleteSession={handleDeleteSession}
+            onMoveSession={handleMoveSession}
             onOpenProject={handleOpenProject}
             onOpenSettings={handleOpenSettings}
             onRenameSession={handleRenameSession}

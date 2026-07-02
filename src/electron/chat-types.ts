@@ -488,6 +488,33 @@ export type OusiaTextChatItem = {
   status?: "streaming" | "finished"
 }
 
+export type OusiaChatToolFilePreview =
+  | {
+      kind: "diff"
+      path: string
+      oldContent: string
+      newContent: string
+      source: "input" | "result"
+    }
+  | {
+      kind: "file"
+      path: string
+      content: string
+      source: "input" | "result"
+    }
+  | {
+      kind: "patch"
+      patch: string
+      path?: string
+      source: "result"
+    }
+  | {
+      kind: "error"
+      message: string
+      path?: string
+      source: "input" | "result"
+    }
+
 export type OusiaChatHistoryItem =
   | OusiaTextChatItem
   | {
@@ -498,6 +525,7 @@ export type OusiaChatHistoryItem =
       input?: string
       output?: string
       errorText?: string
+      filePreview?: OusiaChatToolFilePreview
       payloadOmitted?: boolean
       status: "running" | "finished" | "failed"
     }
@@ -551,12 +579,14 @@ export type OusiaChatEvent = {
       id: string
       name: string
       args?: unknown
+      filePreview?: OusiaChatToolFilePreview
       timestamp: string
     }
   | {
       type: "tool_update"
       id: string
       name?: string
+      filePreview?: OusiaChatToolFilePreview
       value?: unknown
       phase?: "input" | "output"
       timestamp: string
@@ -565,6 +595,7 @@ export type OusiaChatEvent = {
       type: "tool_end"
       id: string
       name?: string
+      filePreview?: OusiaChatToolFilePreview
       result?: unknown
       isError?: boolean
       timestamp: string
@@ -701,6 +732,22 @@ export type OusiaChatBranchResult =
   | {
       ok: true
       items: OusiaChatHistoryItem[]
+    }
+  | {
+      ok: false
+      error: string
+    }
+
+export type OusiaChatMovePayload = {
+  sessionId: string
+  sourceProjectPath: string
+  targetProjectPath: string
+}
+
+export type OusiaChatMoveResult =
+  | {
+      ok: true
+      moved: boolean
     }
   | {
       ok: false

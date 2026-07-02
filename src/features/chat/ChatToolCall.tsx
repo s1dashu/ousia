@@ -23,6 +23,8 @@ import {
   formatToolName,
   shouldAutoExpandTool,
 } from "@/features/chat/chat-tool-format"
+import { toolFilePreviewFromItem } from "@/features/chat/chat-tool-file-preview"
+import { ToolFilePreviewView } from "@/features/chat/ChatToolFilePreview"
 import { cn } from "@/lib/utils"
 
 export type ToolChatItem = Extract<ChatItem, { role: "tool" }>
@@ -56,7 +58,12 @@ export function ToolCallView({
   const inFlightPayloadKeyRef = useRef<string | null>(null)
   const payloadRequestKey = `${projectPath ?? ""}\u0000${sessionId ?? ""}\u0000${item.id}`
   const displayItem =
-    loadedPayload?.key === payloadRequestKey ? loadedPayload.item : item
+    loadedPayload?.key === payloadRequestKey
+      ? {
+          ...loadedPayload.item,
+          filePreview: loadedPayload.item.filePreview ?? item.filePreview,
+        }
+      : item
   const input =
     displayItem.input ?? (displayItem.status === "running" ? displayItem.text : "")
   const output =
@@ -69,6 +76,8 @@ export function ToolCallView({
     (displayItem.status === "failed" && !displayItem.payloadOmitted
       ? displayItem.text
       : "")
+  const filePreview = toolFilePreviewFromItem(displayItem)
+  const hasFilePreview = Boolean(filePreview)
   const summary = formatSingleToolSummary(displayItem)
 
   useEffect(() => {
@@ -84,7 +93,7 @@ export function ToolCallView({
     let timer: number | undefined
     if (item.status !== "running") {
       hasManualOpenStateRef.current = false
-      if (shouldAutoExpandTool(item.name)) {
+      if (shouldAutoExpandTool(item.name) && !hasFilePreview) {
         timer = window.setTimeout(() => setIsOpen(false), 0)
       }
       return () => {
@@ -101,7 +110,7 @@ export function ToolCallView({
         window.clearTimeout(timer)
       }
     }
-  }, [item.name, item.status, shouldAutoExpand])
+  }, [hasFilePreview, item.name, item.status, shouldAutoExpand])
 
   useEffect(() => {
     if (
@@ -238,7 +247,11 @@ export function ToolCallView({
         />
       </button>
 
-      {isOpen ? (
+      {isOpen && filePreview ? (
+        <ToolFilePreviewView preview={filePreview} t={t} />
+      ) : null}
+
+      {isOpen && !filePreview ? (
         <div className="mt-1.5 rounded-md bg-muted/35 px-3 py-2.5">
           <ToolPayloadSection
             title={t.chat.toolArgs}
@@ -262,6 +275,16 @@ export function ToolCallView({
           ) : output ? (
             <ToolPayloadSection title={t.chat.toolResult} value={output} />
           ) : null}
+        </div>
+      ) : null}
+
+      {isOpen && filePreview && errorText ? (
+        <div className="mt-1.5 rounded-md bg-muted/35 px-3 py-2.5">
+          <ToolPayloadSection
+            title={t.chat.toolError}
+            value={errorText}
+            tone="warning"
+          />
         </div>
       ) : null}
     </div>
@@ -397,7 +420,8 @@ function formatSingleToolSummary(item: ToolChatItem) {
     return formatToolTargetSummary(item, "ls")
   }
   if (name === "edit" || name === "write") {
-    return formatToolTargetSummary(item, name === "edit" ? "edit" : "write")
+    const verb = name === "edit" ? "edit" : "write"
+    return formatToolTargetSummary(item, verb, filePreviewPath(item, verb))
   }
   return formatToolName(item.name)
 }
@@ -438,9 +462,20 @@ function formatToolGroupSummary(
   return parts.join(" · ") || t.chat.toolGroupUsedTools(items.length)
 }
 
-function formatToolTargetSummary(item: ToolChatItem, verb: string) {
-  const target = toolTargetFromInput(item.input || item.text)
+function formatToolTargetSummary(
+  item: ToolChatItem,
+  verb: string,
+  preferredTarget = ""
+) {
+  const target = preferredTarget || toolTargetFromInput(item.input || item.text)
   return target ? `${verb} ${target}` : verb
+}
+
+function filePreviewPath(item: ToolChatItem, verb: string) {
+  const preview = item.filePreview ?? toolFilePreviewFromItem(item)
+  const path = preview && "path" in preview ? preview.path : ""
+  const trimmed = path.trim()
+  return trimmed && trimmed !== verb ? trimmed : ""
 }
 
 function formatBashSummary(item: ToolChatItem) {

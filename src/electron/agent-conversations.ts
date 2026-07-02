@@ -3,7 +3,7 @@ import {
   mkdirSync,
   writeFileSync,
 } from "node:fs"
-import { stat } from "node:fs/promises"
+import { stat, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import { ensurePiPackageDir } from "./pi-package-dir.js"
@@ -34,6 +34,8 @@ import type {
   OusiaChatHistoryResult,
   OusiaChatInterruptPayload,
   OusiaChatInterruptResult,
+  OusiaChatMovePayload,
+  OusiaChatMoveResult,
   OusiaChatAttachment,
   OusiaAgentToolName,
   OusiaChatContextUsageResult,
@@ -41,6 +43,7 @@ import type {
   OusiaChatExportResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaChatToolFilePreview,
   OusiaChatToolPayloadPayload,
   OusiaChatToolPayloadResult,
   OusiaAgentMode,
@@ -52,6 +55,11 @@ import {
   createWritablePiAuthStorage,
   resolvePiAgentDir,
 } from "./pi-environment.js"
+import {
+  createHistoricalToolInputFilePreview,
+  createToolFilePreview,
+  createToolResultFilePreview,
+} from "./tool-file-preview.js"
 import { isVercelAiGatewayModelAvailable } from "./vercel-ai-gateway-models.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
@@ -75,10 +83,33 @@ type AgentStreamState = {
   showThinking: boolean
   currentAssistantMessageId: string
   lastErrorText: string
+  toolArgumentJsonByContentIndex: Map<number, string>
   toolDisplayIdsByContentIndex: Map<number, string>
   toolDisplayIdsByProviderId: Map<string, string>
+  toolFilePreviewsById: Map<string, OusiaChatToolFilePreview>
   startedToolIds: Set<string>
   activeToolIds: Set<string>
+}
+
+type StreamAssistantMessage = {
+  role?: string
+  id?: string
+  content?: unknown
+}
+
+type StreamAssistantMessageEvent = {
+  type?: string
+  contentIndex?: number
+  delta?: string
+  content?: string
+  error?: unknown
+  partial?: StreamAssistantMessage
+  toolCall?: {
+    id?: string
+    name?: string
+    type?: string
+    arguments?: unknown
+  }
 }
 
 type HistoryBuildOptions = {
@@ -112,8 +143,10 @@ function createStreamState(thinkingLevel: string | undefined = "off"): AgentStre
     showThinking: shouldShowThinkingForLevel(thinkingLevel),
     currentAssistantMessageId: "",
     lastErrorText: "",
+    toolArgumentJsonByContentIndex: new Map(),
     toolDisplayIdsByContentIndex: new Map(),
     toolDisplayIdsByProviderId: new Map(),
+    toolFilePreviewsById: new Map(),
     startedToolIds: new Set(),
     activeToolIds: new Set(),
   }
@@ -127,6 +160,32 @@ function displayToolCallId(
     return undefined
   }
   return state.toolDisplayIdsByProviderId.get(providerToolCallId) ?? providerToolCallId
+}
+
+function createStreamToolFilePreview({
+  args,
+  context,
+  state,
+  toolCallId,
+  toolName,
+}: {
+  args: unknown
+  context: OusiaChatContext
+  state: AgentStreamState
+  toolCallId: string
+  toolName?: string
+}) {
+  const filePreview = createToolFilePreview({
+    args,
+    previousPreview: state.toolFilePreviewsById.get(toolCallId),
+    projectPath: context.projectPath,
+    toolName,
+  })
+  if (filePreview) {
+    state.toolFilePreviewsById.set(toolCallId, filePreview)
+    return filePreview
+  }
+  return state.toolFilePreviewsById.get(toolCallId)
 }
 
 function finishActiveTools(
@@ -575,15 +634,21 @@ function messageEntryToHistoryItems(
       } else if (block.type === "toolCall") {
         const input = stringifyUnknown(block.arguments) ?? ""
         const inputPreview = previewToolInput(input)
+        const toolName = typeof block.name === "string" ? block.name : "tool"
+        const filePreview = createHistoricalToolInputFilePreview({
+          args: block.arguments,
+          toolName,
+        })
         items.push({
           id:
             typeof block.id === "string"
               ? block.id
               : `${entry.id}-tool-${index}`,
           role: "tool",
-          name: typeof block.name === "string" ? block.name : "tool",
+          name: toolName,
           text: options.includeToolPayloads ? input : inputPreview,
           input: options.includeToolPayloads ? input : inputPreview,
+          filePreview,
           payloadOmitted: options.includeToolPayloads ? undefined : true,
           status: orphanedToolStatus,
         })
@@ -599,24 +664,31 @@ function messageEntryToHistoryItems(
     )
     const existing = index >= 0 ? items[index] : undefined
     const resultText = textFromContent(message.content)
+    const toolName =
+      typeof message.toolName === "string"
+        ? message.toolName
+        : existing?.role === "tool"
+        ? existing.name
+        : "tool"
+    const filePreview =
+      createToolResultFilePreview({
+        result: message,
+        toolName,
+      }) ?? (existing?.role === "tool" ? existing.filePreview : undefined)
     const text = message.isError
       ? resultText
       : resultText || (existing?.role === "tool" ? existing.text : "")
     const item: OusiaChatHistoryItem = {
       id: toolCallId,
       role: "tool",
-      name:
-        typeof message.toolName === "string"
-          ? message.toolName
-          : existing?.role === "tool"
-          ? existing.name
-          : "tool",
+      name: toolName,
       text: options.includeToolPayloads ? text : previewText(text),
       input: existing?.role === "tool" ? existing.input : undefined,
       output:
         options.includeToolPayloads && !message.isError ? resultText : undefined,
       errorText:
         options.includeToolPayloads && message.isError ? resultText : undefined,
+      filePreview,
       payloadOmitted: options.includeToolPayloads ? undefined : true,
       status: message.isError ? "failed" : "finished",
     }
@@ -777,6 +849,46 @@ function createBranchedSessionFile({
   return targetFile
 }
 
+function createMovedSessionFile({
+  sourceSessionManager,
+  targetConversationDir,
+  targetCwd,
+  targetSessionId,
+}: {
+  sourceSessionManager: SessionManager
+  targetConversationDir: string
+  targetCwd: string
+  targetSessionId: string
+}) {
+  const sourceHeader = sourceSessionManager.getHeader()
+  if (!sourceHeader) {
+    throw new Error("Cannot move session: source session has no header.")
+  }
+
+  mkdirSync(targetConversationDir, { recursive: true })
+  const timestamp =
+    typeof sourceHeader.timestamp === "string" ? sourceHeader.timestamp : now()
+  const fileTimestamp = timestamp.replace(/[:.]/g, "-")
+  const targetFile = join(
+    targetConversationDir,
+    `${fileTimestamp}_${targetSessionId}.jsonl`
+  )
+  const targetHeader = {
+    ...sourceHeader,
+    version: CURRENT_SESSION_VERSION,
+    id: targetSessionId,
+    cwd: targetCwd,
+  }
+  writeFileSync(
+    targetFile,
+    [targetHeader, ...sourceSessionManager.getEntries()]
+      .map((entry) => JSON.stringify(entry))
+      .join("\n") + "\n",
+    { encoding: "utf8", flag: "wx" }
+  )
+  return targetFile
+}
+
 async function findPiSessionFileForHistory(context: OusiaChatContext) {
   const cwd = expandHomePath(context.projectPath)
   const session = await findPiSessionByExactId(cwd, context.sessionId)
@@ -791,6 +903,13 @@ export function createAgentConversationModule({
   const historyCache = new Map<string, HistoryCacheEntry>()
   const streamState = new Map<string, AgentStreamState>()
   const interruptGenerations = new Map<string, number>()
+
+  function clearSessionRuntimeState(key: string) {
+    sessionPromises.delete(key)
+    historyCache.delete(key)
+    streamState.delete(key)
+    interruptGenerations.delete(key)
+  }
 
   function setStreamThinkingLevel(key: string, thinkingLevel: string | undefined) {
     const state = streamState.get(key) ?? createStreamState(thinkingLevel)
@@ -860,6 +979,111 @@ export function createAgentConversationModule({
       )
     } catch {
       // Context usage is informative only; chat errors are emitted elsewhere.
+    }
+  }
+
+  async function moveChatSession(
+    payload: OusiaChatMovePayload
+  ): Promise<OusiaChatMoveResult> {
+    const sourceCwd = expandHomePath(payload.sourceProjectPath)
+    const targetCwd = expandHomePath(payload.targetProjectPath)
+    const sourceContext = {
+      projectPath: payload.sourceProjectPath,
+      sessionId: payload.sessionId,
+    }
+    const targetContext = {
+      projectPath: payload.targetProjectPath,
+      sessionId: payload.sessionId,
+    }
+    const sourceKey = sessionKey(sourceContext)
+    const targetKey = sessionKey(targetContext)
+
+    if (sourceCwd === targetCwd) {
+      return { ok: true, moved: false }
+    }
+
+    try {
+      const activeBundle = await sessionPromises
+        .get(sourceKey)
+        ?.catch(() => undefined)
+      if (
+        activeBundle &&
+        (activeBundle.session.isStreaming ||
+          activeBundle.session.pendingMessageCount > 0 ||
+          activeBundle.session.isBashRunning)
+      ) {
+        return {
+          ok: false,
+          error: "会话正在运行，完成或停止后再移动。",
+        }
+      }
+
+      const sourceSession = await findPiSessionByExactId(
+        sourceCwd,
+        payload.sessionId
+      )
+      if (!sourceSession) {
+        clearSessionRuntimeState(sourceKey)
+        clearSessionRuntimeState(targetKey)
+        return { ok: true, moved: false }
+      }
+
+      const existingTargetSession = await findPiSessionByExactId(
+        targetCwd,
+        payload.sessionId
+      )
+      if (existingTargetSession) {
+        return {
+          ok: false,
+          error: "目标项目里已存在同 id 的 Pi 会话，无法覆盖。",
+        }
+      }
+
+      const sourceSessionManager = SessionManager.open(sourceSession.path)
+      const targetConversationDir = getDefaultPiSessionDir(targetCwd)
+      let targetFile = ""
+      try {
+        targetFile = createMovedSessionFile({
+          sourceSessionManager,
+          targetConversationDir,
+          targetCwd,
+          targetSessionId: payload.sessionId,
+        })
+        await unlink(sourceSession.path).catch((error: unknown) => {
+          if (
+            !error ||
+            typeof error !== "object" ||
+            (error as NodeJS.ErrnoException).code !== "ENOENT"
+          ) {
+            throw error
+          }
+        })
+      } catch (error) {
+        if (targetFile) {
+          await unlink(targetFile).catch(() => undefined)
+        }
+        throw error
+      }
+
+      clearSessionRuntimeState(sourceKey)
+      clearSessionRuntimeState(targetKey)
+      writeRuntimeLog("chat.move", "info", {
+        sessionId: payload.sessionId,
+        sourceProjectPath: payload.sourceProjectPath,
+        targetProjectPath: payload.targetProjectPath,
+        sourceSessionFile: sourceSession.path,
+        targetSessionFile: targetFile,
+      })
+      return { ok: true, moved: true }
+    } catch (error) {
+      writeRuntimeLog("chat.move", "error", {
+        payload,
+        error,
+      })
+      return {
+        ok: false,
+        error: errorTextFromUnknown(error, "移动会话失败。"),
+      }
     }
   }
 
@@ -997,8 +1221,10 @@ export function createAgentConversationModule({
       state.textId = ""
       state.thinkingId = ""
       state.currentAssistantMessageId = ""
+      state.toolArgumentJsonByContentIndex.clear()
       state.toolDisplayIdsByContentIndex.clear()
       state.toolDisplayIdsByProviderId.clear()
+      state.toolFilePreviewsById.clear()
       state.startedToolIds.clear()
       state.activeToolIds.clear()
       return
@@ -1012,8 +1238,10 @@ export function createAgentConversationModule({
           typeof source.message.id === "string"
             ? source.message.id
             : randomId("assistant-message")
+        state.toolArgumentJsonByContentIndex.clear()
         state.toolDisplayIdsByContentIndex.clear()
         state.toolDisplayIdsByProviderId.clear()
+        state.toolFilePreviewsById.clear()
         state.startedToolIds.clear()
       }
       return
@@ -1045,12 +1273,20 @@ export function createAgentConversationModule({
       }
       const displayId =
         displayToolCallId(state, source.toolCallId) ?? randomId("tool")
+      const filePreview = createStreamToolFilePreview({
+        args: source.args,
+        context,
+        state,
+        toolCallId: displayId,
+        toolName: source.toolName,
+      })
       emitChatEvent(
         {
           type: "tool_start",
           id: displayId,
           name: source.toolName ?? "tool",
           args: source.args,
+          filePreview,
           timestamp,
         },
         context
@@ -1126,27 +1362,13 @@ export function createAgentConversationModule({
 
     const messageEvent = (
       event as unknown as {
-        message?: {
-          role?: string
-          id?: string
-          content?: unknown
-        }
-        assistantMessageEvent?: {
-          type?: string
-          contentIndex?: number
-          delta?: string
-          content?: string
-          error?: unknown
-        }
+        message?: StreamAssistantMessage
+        assistantMessageEvent?: StreamAssistantMessageEvent
       }
     ).assistantMessageEvent
     const message = (
       event as unknown as {
-        message?: {
-          role?: string
-          id?: string
-          content?: unknown
-        }
+        message?: StreamAssistantMessage
       }
     ).message
 
@@ -1154,54 +1376,114 @@ export function createAgentConversationModule({
       return
     }
 
-    if (message?.role === "assistant" && Array.isArray(message.content)) {
-      message.content.forEach((part, index) => {
-        if (!part || typeof part !== "object") {
-          return
-        }
-        const block = part as Record<string, unknown>
-        if (block.type !== "toolCall") {
-          return
-        }
-        const providerToolCallId =
-          typeof block.id === "string" && block.id ? block.id : undefined
-        const existingDisplayId = state.toolDisplayIdsByContentIndex.get(index)
-        const toolCallId =
-          existingDisplayId ??
-          providerToolCallId ??
-          `${state.currentAssistantMessageId || message.id || "tool"}-${index}`
-        state.toolDisplayIdsByContentIndex.set(index, toolCallId)
-        if (providerToolCallId) {
-          state.toolDisplayIdsByProviderId.set(providerToolCallId, toolCallId)
-        }
-        const toolName = typeof block.name === "string" ? block.name : "tool"
-        if (!state.startedToolIds.has(toolCallId)) {
-          state.startedToolIds.add(toolCallId)
-          state.activeToolIds.add(toolCallId)
-          emitChatEvent(
-            {
-              type: "tool_start",
-              id: toolCallId,
-              name: toolName,
-              args: block.arguments,
-              timestamp,
-            },
-            context
-          )
-          return
-        }
+    if (
+      messageEvent.type === "toolcall_start" &&
+      typeof messageEvent.contentIndex === "number"
+    ) {
+      state.toolArgumentJsonByContentIndex.set(messageEvent.contentIndex, "")
+    }
+    if (
+      messageEvent.type === "toolcall_delta" &&
+      typeof messageEvent.contentIndex === "number" &&
+      typeof messageEvent.delta === "string"
+    ) {
+      const current =
+        state.toolArgumentJsonByContentIndex.get(messageEvent.contentIndex) ?? ""
+      state.toolArgumentJsonByContentIndex.set(
+        messageEvent.contentIndex,
+        current + messageEvent.delta
+      )
+    }
+
+    const toolMessage =
+      messageEvent.partial?.role === "assistant" &&
+      Array.isArray(messageEvent.partial.content)
+        ? messageEvent.partial
+        : message?.role === "assistant" && Array.isArray(message.content)
+        ? message
+        : undefined
+
+    const emitToolCallInputUpdate = (
+      part: Record<string, unknown>,
+      index: number,
+      messageId: string | undefined
+    ) => {
+      if (part.type !== "toolCall") {
+        return
+      }
+      const providerToolCallId =
+        typeof part.id === "string" && part.id ? part.id : undefined
+      const existingDisplayId = state.toolDisplayIdsByContentIndex.get(index)
+      const toolCallId =
+        existingDisplayId ??
+        providerToolCallId ??
+        `${state.currentAssistantMessageId || messageId || "tool"}-${index}`
+      state.toolDisplayIdsByContentIndex.set(index, toolCallId)
+      if (providerToolCallId) {
+        state.toolDisplayIdsByProviderId.set(providerToolCallId, toolCallId)
+      }
+      const toolName = typeof part.name === "string" ? part.name : "tool"
+      const rawArguments = state.toolArgumentJsonByContentIndex.get(index)
+      const argsForPreview =
+        rawArguments && rawArguments.trim() ? rawArguments : part.arguments
+      const filePreview = createStreamToolFilePreview({
+        args: argsForPreview,
+        context,
+        state,
+        toolCallId,
+        toolName,
+      })
+      if (!state.startedToolIds.has(toolCallId)) {
+        state.startedToolIds.add(toolCallId)
+        state.activeToolIds.add(toolCallId)
         emitChatEvent(
           {
-            type: "tool_update",
+            type: "tool_start",
             id: toolCallId,
             name: toolName,
-            value: block.arguments,
-            phase: "input",
+            args: argsForPreview,
+            filePreview,
             timestamp,
           },
           context
         )
+        return
+      }
+      emitChatEvent(
+        {
+          type: "tool_update",
+          id: toolCallId,
+          name: toolName,
+          filePreview,
+          value: argsForPreview,
+          phase: "input",
+          timestamp,
+        },
+        context
+      )
+    }
+
+    if (toolMessage && Array.isArray(toolMessage.content)) {
+      toolMessage.content.forEach((part, index) => {
+        if (!part || typeof part !== "object") {
+          return
+        }
+        emitToolCallInputUpdate(
+          part as Record<string, unknown>,
+          index,
+          toolMessage.id || message?.id
+        )
       })
+    } else if (
+      messageEvent.type === "toolcall_end" &&
+      typeof messageEvent.contentIndex === "number" &&
+      messageEvent.toolCall
+    ) {
+      emitToolCallInputUpdate(
+        { ...messageEvent.toolCall, type: "toolCall" },
+        messageEvent.contentIndex,
+        message?.id
+      )
     }
 
     if (messageEvent.type === "text_start") {
@@ -1791,6 +2073,7 @@ export function createAgentConversationModule({
     getChatHistory,
     getChatToolPayload,
     interruptChat,
+    moveChatSession,
     sendChatMessage,
   }
 }

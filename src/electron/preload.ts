@@ -17,6 +17,8 @@ import type {
   OusiaChatHistoryResult,
   OusiaChatInterruptPayload,
   OusiaChatInterruptResult,
+  OusiaChatMovePayload,
+  OusiaChatMoveResult,
   OusiaChatToolPayloadPayload,
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
@@ -100,6 +102,9 @@ const api = {
   },
   branchChat(payload: OusiaChatBranchPayload): Promise<OusiaChatBranchResult> {
     return ipcRenderer.invoke("ousia:chat:branch", payload)
+  },
+  moveChatSession(payload: OusiaChatMovePayload): Promise<OusiaChatMoveResult> {
+    return ipcRenderer.invoke("ousia:chat:move", payload)
   },
   getChatContextUsage(
     payload: OusiaChatContext

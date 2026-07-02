@@ -23,6 +23,7 @@ import type {
   OusiaChatGenerateTitlePayload,
   OusiaChatHistoryPayload,
   OusiaChatInterruptPayload,
+  OusiaChatMovePayload,
   OusiaChatSendPayload,
   OusiaChatToolPayloadPayload,
   OusiaDirectoryPickerOptions,
@@ -102,6 +103,10 @@ ipcMain.handle(
 
 ipcMain.handle("ousia:chat:branch", (_event, payload: OusiaChatBranchPayload) =>
   agentConversations.branchChat(payload)
+)
+
+ipcMain.handle("ousia:chat:move", (_event, payload: OusiaChatMovePayload) =>
+  agentConversations.moveChatSession(payload)
 )
 
 ipcMain.handle(

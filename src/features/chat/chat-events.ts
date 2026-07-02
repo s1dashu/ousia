@@ -85,6 +85,7 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
         name: event.name,
         text: input || next[index].text,
         input: input || next[index].input,
+        filePreview: event.filePreview ?? next[index].filePreview,
         status: "running",
       }
     } else {
@@ -94,6 +95,7 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
         name: event.name,
         text: input,
         input,
+        filePreview: event.filePreview,
         status: "running",
       })
     }
@@ -107,6 +109,7 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
           name: event.name ?? next[index].name,
           text: value || next[index].text,
           input: value || next[index].input,
+          filePreview: event.filePreview ?? next[index].filePreview,
         }
         return next
       }
@@ -115,6 +118,7 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
         name: event.name ?? next[index].name,
         text: value || next[index].text,
         output: value || next[index].output,
+        filePreview: event.filePreview ?? next[index].filePreview,
       }
     }
   } else if (event.type === "tool_end") {
@@ -127,6 +131,7 @@ export function applyChatEvent(items: ChatItem[], event: OusiaChatEvent): ChatIt
         text: result || next[index].text,
         output: event.isError ? next[index].output : result || next[index].output,
         errorText: event.isError ? result || next[index].errorText : undefined,
+        filePreview: event.filePreview ?? next[index].filePreview,
         status: event.isError ? "failed" : "finished",
       }
     }

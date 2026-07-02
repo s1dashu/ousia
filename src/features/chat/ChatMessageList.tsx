@@ -100,7 +100,7 @@ function chatItemSpacingClass(item: ChatItem, previousItem?: ChatItem) {
   }
 
   if (item.role === "user" && previousItem.role === "assistant") {
-    return "mt-4"
+    return "mt-2"
   }
 
   return "mt-6"

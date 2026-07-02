@@ -17,6 +17,8 @@ import type {
   OusiaChatHistoryResult,
   OusiaChatInterruptPayload,
   OusiaChatInterruptResult,
+  OusiaChatMovePayload,
+  OusiaChatMoveResult,
   OusiaChatToolPayloadPayload,
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
@@ -56,6 +58,9 @@ declare global {
         payload: OusiaChatToolPayloadPayload
       ): Promise<OusiaChatToolPayloadResult>
       branchChat(payload: OusiaChatBranchPayload): Promise<OusiaChatBranchResult>
+      moveChatSession(
+        payload: OusiaChatMovePayload
+      ): Promise<OusiaChatMoveResult>
       getChatContextUsage(
         payload: OusiaChatContext
       ): Promise<OusiaChatContextUsageResult>

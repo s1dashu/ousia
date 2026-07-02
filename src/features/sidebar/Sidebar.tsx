@@ -50,14 +50,15 @@ const sidebarProjectActionButtonClass = "size-6 justify-self-end"
 const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
-const sidebarSessionRowBleed = 14
-const sidebarRowXClass = "pl-2 pr-0"
-const sidebarSessionRowXClass =
-  "-mx-[7px] w-[calc(100%+14px)] pl-3 pr-[7px]"
-const sidebarSessionDragPreviewXClass = "pl-3 pr-[7px]"
-const sidebarProjectRowXClass = "w-full pl-2 pr-0"
+const sidebarScrollPaddingXClass = "px-0"
+const sidebarFooterPaddingXClass = "px-[7px]"
+const sidebarRowFrameXClass = "-ml-1 w-full"
+const sidebarRowXClass = `${sidebarRowFrameXClass} px-3`
+const sidebarSessionRowXClass = `${sidebarRowFrameXClass} px-3`
+const sidebarSessionDragPreviewXClass = "px-3"
+const sidebarProjectRowXClass = `${sidebarRowFrameXClass} px-3`
 const sidebarListGapClass = "flex flex-col gap-0.5"
-const sidebarSectionHeaderXClass = "pl-[5px] pr-0"
+const sidebarSectionHeaderXClass = `${sidebarRowFrameXClass} px-3`
 const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
@@ -65,7 +66,7 @@ const sidebarScrollRevealPadding = 12
 const sidebarRowStateClass =
   "text-sidebar-accent-foreground hover:bg-[var(--sidebar-accent)]"
 const sidebarProjectRowStateClass =
-  "relative text-sidebar-accent-foreground before:pointer-events-none before:absolute before:inset-y-0 before:-left-[5px] before:-right-[5px] before:rounded-md before:bg-transparent hover:before:bg-[var(--sidebar-accent)] focus-within:before:bg-[var(--sidebar-accent)] [&>*]:relative [&>*]:z-[1]"
+  "relative text-sidebar-accent-foreground before:pointer-events-none before:absolute before:inset-0 before:rounded-md before:bg-transparent hover:before:bg-[var(--sidebar-accent)] focus-within:before:bg-[var(--sidebar-accent)] [&>*]:relative [&>*]:z-[1]"
 const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
 const sidebarGhostActionClass =
@@ -87,12 +88,19 @@ type SidebarDragPreview = SidebarSortableData & {
   id: string
 }
 
+type SidebarMoveSessionTarget = {
+  sessionId: string
+  targetProjectId?: string
+  targetSessionId?: string
+}
+
 type SidebarProps = {
   onCreateProjectSession: (projectId: string) => void
   onCreateSession: () => void
   onDeleteProject: (projectId: string) => void
   onDeleteSession: (sessionId: string) => void
   onExpandedProjectIdsChange: (projectIds: string[]) => void
+  onMoveSession: (target: SidebarMoveSessionTarget) => void | Promise<void>
   onOpenProject: () => void
   onOpenSettings: () => void
   onRenameSession: (sessionId: string, title: string) => void
@@ -203,25 +211,20 @@ function escapeAttributeSelectorValue(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 }
 
-function DragPreview({
-  innerWidth,
-  preview,
-}: {
-  innerWidth: number
-  preview: SidebarDragPreview
-}) {
+function projectIdFromSessionGroup(groupId: string | undefined) {
+  return groupId && groupId !== defaultSessionGroupId ? groupId : undefined
+}
+
+function DragPreview({ preview }: { preview: SidebarDragPreview }) {
   if (preview.kind === "section") {
     return (
       <div
         className={[
-          "ousia-squircle-corners grid h-8.5 items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]",
+          "ousia-squircle-corners grid h-8.5 w-full items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]",
           "px-2 text-sm",
           sidebarSelectedRowClass,
           "grid-cols-[minmax(0,1fr)_24px_24px]",
         ].join(" ")}
-        style={{
-          width: innerWidth,
-        }}
       >
         <div className="font-radix-regular min-w-0 truncate">
           {preview.label}
@@ -252,7 +255,7 @@ function DragPreview({
     return (
       <div
         className={[
-          "ousia-squircle-corners grid h-8.5 items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
+          "ousia-squircle-corners grid h-8.5 w-full items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
           "font-radix-regular",
           sidebarSelectedRowClass,
           preview.projectChild
@@ -260,9 +263,6 @@ function DragPreview({
             : sidebarSingleActionGridClass,
           sidebarSessionDragPreviewXClass,
         ].join(" ")}
-        style={{
-          width: innerWidth + sidebarSessionRowBleed,
-        }}
       >
         {preview.projectChild ? <div aria-hidden="true" /> : null}
         <div className="truncate">{preview.label}</div>
@@ -274,13 +274,10 @@ function DragPreview({
   return (
     <div
       className={[
-        "grid h-9 items-center rounded-[var(--ousia-sidebar-selected-radius)]",
+        "grid h-9 w-full items-center rounded-[var(--ousia-sidebar-selected-radius)]",
         "px-3 text-sm",
         sidebarSelectedRowClass,
       ].join(" ")}
-      style={{
-        width: innerWidth,
-      }}
     >
       <div className="truncate">{preview.label}</div>
     </div>
@@ -647,6 +644,7 @@ export function Sidebar({
   onDeleteProject,
   onDeleteSession,
   onExpandedProjectIdsChange,
+  onMoveSession,
   onOpenProject,
   onOpenSettings,
   onRenameSession,
@@ -687,8 +685,6 @@ export function Sidebar({
     canCompactDefaultSessions && isDefaultSessionListCompact
       ? defaultSessions.slice(0, sidebarDefaultSessionPreviewCount)
       : defaultSessions
-  const sidebarInnerWidth =
-    typeof style.width === "number" ? Math.max(176, style.width - 24) : 220
   const visibleSidebarSectionOrder =
     normalizeSidebarSectionOrder(sidebarSectionOrder)
   const sensors = useSensors(
@@ -831,10 +827,49 @@ export function Sidebar({
   function handleDragEnd(event: DragEndEvent) {
     const activeData = getSortableData(event.active.data.current)
     const overData = getSortableData(event.over?.data.current)
-    if (!activeData || !overData || !event.over || event.active.id === event.over.id) {
+    if (!activeData || !overData || !event.over) {
       setDragPreview(null)
       return
     }
+
+    if (activeData.kind === "session") {
+      const sourceSessionId = String(event.active.id)
+      if (overData.kind === "session") {
+        if (
+          event.active.id !== event.over.id &&
+          activeData.groupId === overData.groupId
+        ) {
+          onReorderSessions(sourceSessionId, String(event.over.id))
+        } else if (activeData.groupId !== overData.groupId && overData.groupId) {
+          void onMoveSession({
+            sessionId: sourceSessionId,
+            targetProjectId: projectIdFromSessionGroup(overData.groupId),
+            targetSessionId: String(event.over.id),
+          })
+        }
+      } else if (overData.kind === "project") {
+        void onMoveSession({
+          sessionId: sourceSessionId,
+          targetProjectId: String(event.over.id),
+        })
+      } else if (
+        overData.kind === "section" &&
+        String(event.over.id) === "sessions"
+      ) {
+        void onMoveSession({
+          sessionId: sourceSessionId,
+          targetProjectId: undefined,
+        })
+      }
+      setDragPreview(null)
+      return
+    }
+
+    if (event.active.id === event.over.id) {
+      setDragPreview(null)
+      return
+    }
+
     if (activeData.kind === "section" && overData.kind === "section") {
       const activeSectionId = String(event.active.id)
       const overSectionId = String(event.over.id)
@@ -843,12 +878,6 @@ export function Sidebar({
       }
     } else if (activeData.kind === "project" && overData.kind === "project") {
       onReorderProjects(String(event.active.id), String(event.over.id))
-    } else if (
-      activeData.kind === "session" &&
-      overData.kind === "session" &&
-      activeData.groupId === overData.groupId
-    ) {
-      onReorderSessions(String(event.active.id), String(event.over.id))
     }
     setDragPreview(null)
   }
@@ -1056,7 +1085,7 @@ export function Sidebar({
       }}
     >
       {dragPreview ? (
-        <DragPreview innerWidth={sidebarInnerWidth} preview={dragPreview} />
+        <DragPreview preview={dragPreview} />
       ) : null}
     </DragOverlay>
   )
@@ -1070,7 +1099,7 @@ export function Sidebar({
 
       <div
         ref={scrollContainerRef}
-        className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-3 pb-2"
+        className={`ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
       >
         <DndContext
           sensors={sensors}
@@ -1090,7 +1119,7 @@ export function Sidebar({
         </DndContext>
       </div>
 
-      <div className="p-2">
+      <div className={`${sidebarFooterPaddingXClass} py-2`}>
         <Button
           type="button"
           variant="ghost"
