@@ -52,13 +52,13 @@ const sidebarProjectLeadGridClass =
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarScrollPaddingXClass = "px-0"
 const sidebarFooterPaddingXClass = "px-[7px]"
-const sidebarRowFrameXClass = "mx-1.5 w-auto"
-const sidebarRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1.5`
-const sidebarSessionRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1.5`
+const sidebarRowFrameXClass = "-ml-1 w-full"
+const sidebarRowXClass = `${sidebarRowFrameXClass} px-3`
+const sidebarSessionRowXClass = `${sidebarRowFrameXClass} px-3`
 const sidebarSessionDragPreviewXClass = "px-3"
-const sidebarProjectRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1.5`
+const sidebarProjectRowXClass = `${sidebarRowFrameXClass} px-3`
 const sidebarListGapClass = "flex flex-col gap-0.5"
-const sidebarSectionHeaderXClass = `${sidebarRowFrameXClass} pl-3 pr-1.5`
+const sidebarSectionHeaderXClass = `${sidebarRowFrameXClass} px-3`
 const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
@@ -470,7 +470,7 @@ function SortableProjectSection({
     <section ref={setNodeRef} style={style} className="min-w-0">
       <div
         className={[
-          "project-row grid h-9 min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing",
+          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing",
           sidebarProjectRowStateClass,
           sidebarProjectLeadGridClass,
           sidebarProjectRowXClass,
