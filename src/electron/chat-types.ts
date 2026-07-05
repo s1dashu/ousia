@@ -828,6 +828,20 @@ export type OusiaOpenDirectoryResult =
       error: string
     }
 
+export type OusiaShowFileInFinderPayload = {
+  path: string
+  projectPath?: string
+}
+
+export type OusiaShowFileInFinderResult =
+  | {
+      ok: true
+    }
+  | {
+      ok: false
+      error: string
+    }
+
 export type OusiaWindowFullscreenEvent = {
   isFullscreen: boolean
 }

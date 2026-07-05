@@ -1,8 +1,11 @@
 import {
+  memo,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react"
 import {
   ChevronDown,
@@ -13,6 +16,7 @@ import {
   FolderOpen,
   LoaderCircle,
   Search,
+  Pencil,
   Sparkles,
   Terminal,
 } from "@/components/icons/huge-icons"
@@ -31,8 +35,95 @@ export type ToolChatItem = Extract<ChatItem, { role: "tool" }>
 
 const toolFailureTextClass = "text-[var(--ousia-tool-warning)]"
 const toolFailureHoverTextClass = "hover:text-[var(--ousia-tool-warning-strong)]"
+const toolDisclosureStorageKey = "ousia.chat.toolDisclosure.v1"
+const maxStoredToolDisclosureEntries = 1000
+const runningToolSpinnerStyle = {
+  transformBox: "fill-box",
+  transformOrigin: "center",
+  willChange: "transform",
+} satisfies CSSProperties
 
-export function ToolCallView({
+type StoredToolDisclosureEntry = {
+  open: boolean
+  updatedAt: number
+}
+
+type StoredToolDisclosureState = Record<string, StoredToolDisclosureEntry>
+
+function toolDisclosureKey({
+  itemId,
+  projectPath,
+  sessionId,
+}: {
+  itemId: string
+  projectPath?: string
+  sessionId?: string
+}) {
+  if (!projectPath || !sessionId) {
+    return undefined
+  }
+  return `${projectPath}\u0000${sessionId}\u0000${itemId}`
+}
+
+function readStoredToolDisclosureState() {
+  try {
+    const value = window.localStorage.getItem(toolDisclosureStorageKey)
+    if (!value) {
+      return {}
+    }
+    const parsed = JSON.parse(value) as unknown
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {}
+    }
+    return parsed as StoredToolDisclosureState
+  } catch {
+    return {}
+  }
+}
+
+function readToolDisclosureOpen(key: string | undefined) {
+  if (!key) {
+    return undefined
+  }
+  const entry = readStoredToolDisclosureState()[key]
+  return typeof entry?.open === "boolean" ? entry.open : undefined
+}
+
+function writeToolDisclosureOpen(key: string | undefined, open: boolean) {
+  if (!key) {
+    return
+  }
+  try {
+    const state = readStoredToolDisclosureState()
+    state[key] = { open, updatedAt: Date.now() }
+    const entries = Object.entries(state)
+    if (entries.length > maxStoredToolDisclosureEntries) {
+      entries
+        .sort(([, left], [, right]) => left.updatedAt - right.updatedAt)
+        .slice(0, entries.length - maxStoredToolDisclosureEntries)
+        .forEach(([entryKey]) => {
+          delete state[entryKey]
+        })
+    }
+    window.localStorage.setItem(toolDisclosureStorageKey, JSON.stringify(state))
+  } catch {
+    // Local storage is best-effort UI memory.
+  }
+}
+
+const RunningToolSpinner = memo(function RunningToolSpinner() {
+  return (
+    <LoaderCircle
+      aria-hidden="true"
+      size={14}
+      strokeWidth={1.5}
+      className="shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+      style={runningToolSpinnerStyle}
+    />
+  )
+})
+
+export const ToolCallView = memo(function ToolCallView({
   item,
   onPreserveScrollAnchor,
   projectPath,
@@ -45,8 +136,22 @@ export function ToolCallView({
   sessionId?: string
   t: ReturnType<typeof getMessages>
 }) {
-  const shouldAutoExpand = item.status === "running" && shouldAutoExpandTool(item.name)
-  const [isOpen, setIsOpen] = useState(shouldAutoExpand)
+  const shouldAutoToggleTool = shouldAutoExpandTool(item.name)
+  const shouldAutoExpand = item.status === "running" && shouldAutoToggleTool
+  const disclosureKey = toolDisclosureKey({
+    itemId: item.id,
+    projectPath,
+    sessionId,
+  })
+  const [initialDisclosure] = useState(() => {
+    const storedOpen = readToolDisclosureOpen(disclosureKey)
+    return {
+      open: storedOpen ?? shouldAutoExpand,
+      storedOpen,
+    }
+  })
+  const currentStoredOpenRef = useRef(initialDisclosure.storedOpen)
+  const [isOpen, setIsOpen] = useState(initialDisclosure.open)
   const [loadedPayload, setLoadedPayload] = useState<{
     key: string
     item: ToolChatItem
@@ -56,16 +161,27 @@ export function ToolCallView({
     message: string
   } | null>(null)
   const [isLoadingPayload, setIsLoadingPayload] = useState(false)
-  const hasManualOpenStateRef = useRef(false)
+  const [hasMountedFilePreview, setHasMountedFilePreview] = useState(false)
+  const hasManualOpenStateRef = useRef(initialDisclosure.storedOpen !== undefined)
   const inFlightPayloadKeyRef = useRef<string | null>(null)
+  const hasInitializedDisclosurePersistenceRef = useRef(false)
+  const isResettingDisclosureRef = useRef(false)
   const payloadRequestKey = `${projectPath ?? ""}\u0000${sessionId ?? ""}\u0000${item.id}`
-  const displayItem =
-    loadedPayload?.key === payloadRequestKey
-      ? {
-          ...loadedPayload.item,
-          filePreview: loadedPayload.item.filePreview ?? item.filePreview,
-        }
-      : item
+  const previousPayloadRequestKeyRef = useRef(payloadRequestKey)
+  const previousStatusRef = useRef({
+    key: payloadRequestKey,
+    status: item.status,
+  })
+  const displayItem = useMemo(
+    () =>
+      loadedPayload?.key === payloadRequestKey
+        ? {
+            ...loadedPayload.item,
+            filePreview: loadedPayload.item.filePreview ?? item.filePreview,
+          }
+        : item,
+    [item, loadedPayload, payloadRequestKey]
+  )
   const input =
     displayItem.input ?? (displayItem.status === "running" ? displayItem.text : "")
   const output =
@@ -78,25 +194,70 @@ export function ToolCallView({
     (displayItem.status === "failed" && !displayItem.payloadOmitted
       ? displayItem.text
       : "")
-  const filePreview = toolFilePreviewFromItem(displayItem)
+  const filePreview = useMemo(
+    () => toolFilePreviewFromItem(displayItem),
+    [displayItem]
+  )
   const hasFilePreview = Boolean(filePreview)
-  const summary = formatSingleToolSummary(displayItem)
+  const summary = useMemo(
+    () => formatSingleToolSummary(displayItem),
+    [displayItem]
+  )
 
   useEffect(() => {
+    if (previousPayloadRequestKeyRef.current === payloadRequestKey) {
+      return
+    }
+    previousPayloadRequestKeyRef.current = payloadRequestKey
+    isResettingDisclosureRef.current = true
     queueMicrotask(() => {
       inFlightPayloadKeyRef.current = null
       setLoadedPayload(null)
       setPayloadError(null)
       setIsLoadingPayload(false)
+      setHasMountedFilePreview(false)
+      const storedOpen = readToolDisclosureOpen(disclosureKey)
+      currentStoredOpenRef.current = storedOpen
+      hasManualOpenStateRef.current = storedOpen !== undefined
+      hasInitializedDisclosurePersistenceRef.current = false
+      setIsOpen(storedOpen ?? shouldAutoExpand)
+      isResettingDisclosureRef.current = false
     })
-  }, [payloadRequestKey])
+  }, [disclosureKey, payloadRequestKey, shouldAutoExpand])
+
+  useEffect(() => {
+    if (isResettingDisclosureRef.current) {
+      return
+    }
+    if (!disclosureKey) {
+      return
+    }
+    if (!hasInitializedDisclosurePersistenceRef.current) {
+      hasInitializedDisclosurePersistenceRef.current = true
+      if (!isOpen && currentStoredOpenRef.current === undefined) {
+        return
+      }
+    }
+    writeToolDisclosureOpen(disclosureKey, isOpen)
+  }, [disclosureKey, isOpen])
 
   useLayoutEffect(() => {
     let timer: number | undefined
+    const previousStatus =
+      previousStatusRef.current.key === payloadRequestKey
+        ? previousStatusRef.current.status
+        : item.status
+    previousStatusRef.current = {
+      key: payloadRequestKey,
+      status: item.status,
+    }
+
     if (item.status !== "running") {
-      hasManualOpenStateRef.current = false
-      if (shouldAutoExpandTool(item.name) && !hasFilePreview) {
-        timer = window.setTimeout(() => setIsOpen(false), 0)
+      if (shouldAutoToggleTool && previousStatus === "running") {
+        timer = window.setTimeout(() => {
+          hasManualOpenStateRef.current = false
+          setIsOpen(false)
+        }, 0)
       }
       return () => {
         if (timer !== undefined) {
@@ -112,7 +273,7 @@ export function ToolCallView({
         window.clearTimeout(timer)
       }
     }
-  }, [hasFilePreview, item.name, item.status, shouldAutoExpand])
+  }, [item.status, payloadRequestKey, shouldAutoExpand, shouldAutoToggleTool])
 
   useEffect(() => {
     if (
@@ -213,6 +374,9 @@ export function ToolCallView({
         onClick={(event) => {
           onPreserveScrollAnchor(event.currentTarget)
           hasManualOpenStateRef.current = true
+          if (hasFilePreview) {
+            setHasMountedFilePreview(true)
+          }
           setIsOpen((current) => !current)
         }}
       >
@@ -234,11 +398,7 @@ export function ToolCallView({
           {summary}
         </span>
         {displayItem.status === "running" ? (
-          <LoaderCircle
-            size={14}
-            strokeWidth={1.5}
-            className="shrink-0 animate-spin text-muted-foreground"
-          />
+          <RunningToolSpinner />
         ) : null}
         <ChevronDown
           size={15}
@@ -250,8 +410,14 @@ export function ToolCallView({
         />
       </button>
 
-      {isOpen && filePreview ? (
-        <ToolFilePreviewView preview={filePreview} t={t} />
+      {(isOpen || hasMountedFilePreview) && filePreview ? (
+        <div hidden={!isOpen}>
+          <ToolFilePreviewView
+            preview={filePreview}
+            projectPath={projectPath}
+            t={t}
+          />
+        </div>
       ) : null}
 
       {isOpen && !filePreview ? (
@@ -292,9 +458,9 @@ export function ToolCallView({
       ) : null}
     </div>
   )
-}
+})
 
-export function ToolCallGroupView({
+export const ToolCallGroupView = memo(function ToolCallGroupView({
   items,
   onPreserveScrollAnchor,
   projectPath,
@@ -307,7 +473,48 @@ export function ToolCallGroupView({
   sessionId?: string
   t: ReturnType<typeof getMessages>
 }) {
-  const [isOpen, setIsOpen] = useState(false)
+  const hasRunningItem = useMemo(
+    () => items.some((item) => item.status === "running"),
+    [items]
+  )
+  const groupItemId = `group:${items[0]?.id ?? "empty"}:${items.at(-1)?.id ?? "empty"}`
+  const disclosureKey = toolDisclosureKey({
+    itemId: groupItemId,
+    projectPath,
+    sessionId,
+  })
+  const [initialDisclosure] = useState(() => {
+    const storedOpen = readToolDisclosureOpen(disclosureKey)
+    return {
+      open: storedOpen ?? false,
+      storedOpen,
+    }
+  })
+  const currentStoredOpenRef = useRef(initialDisclosure.storedOpen)
+  const [isOpen, setIsOpen] = useState(initialDisclosure.open)
+  const isResettingDisclosureRef = useRef(false)
+
+  useEffect(() => {
+    isResettingDisclosureRef.current = true
+    queueMicrotask(() => {
+      const storedOpen = readToolDisclosureOpen(disclosureKey)
+      currentStoredOpenRef.current = storedOpen
+      setIsOpen(storedOpen ?? false)
+      isResettingDisclosureRef.current = false
+    })
+  }, [disclosureKey])
+
+  useEffect(() => {
+    if (isResettingDisclosureRef.current) {
+      return
+    }
+    if (!isOpen && currentStoredOpenRef.current === undefined) {
+      return
+    }
+    if (disclosureKey) {
+      writeToolDisclosureOpen(disclosureKey, isOpen)
+    }
+  }, [disclosureKey, isOpen])
 
   return (
     <div className="text-xs text-muted-foreground">
@@ -326,12 +533,8 @@ export function ToolCallGroupView({
         <span className="min-w-0 truncate text-sm font-normal text-muted-foreground/85">
           {formatToolGroupSummary(items, t)}
         </span>
-        {items.some((item) => item.status === "running") ? (
-          <LoaderCircle
-            size={14}
-            strokeWidth={1.5}
-            className="shrink-0 animate-spin text-muted-foreground"
-          />
+        {hasRunningItem ? (
+          <RunningToolSpinner />
         ) : null}
         <ChevronDown
           size={15}
@@ -359,7 +562,7 @@ export function ToolCallGroupView({
       ) : null}
     </div>
   )
-}
+})
 
 function ToolPayloadSection({
   title,
@@ -570,6 +773,13 @@ function renderToolGroupIcon(items: ToolChatItem[]) {
   if (items.some((item) => item.name.toLowerCase() === "ls")) {
     return <FolderOpen size={15} strokeWidth={1.5} />
   }
+  if (
+    items.some((item) =>
+      ["edit", "write"].includes(item.name.toLowerCase())
+    )
+  ) {
+    return <Pencil size={15} strokeWidth={1.5} />
+  }
   return <File size={15} strokeWidth={1.5} />
 }
 
@@ -578,10 +788,11 @@ function renderToolIcon(name: string) {
   if (normalizedName.includes("bash") || normalizedName.includes("shell")) {
     return <Terminal size={15} strokeWidth={1.5} />
   }
+  if (normalizedName.includes("edit") || normalizedName.includes("write")) {
+    return <Pencil size={15} strokeWidth={1.5} />
+  }
   if (
-    normalizedName.includes("code") ||
-    normalizedName.includes("edit") ||
-    normalizedName.includes("write")
+    normalizedName.includes("code")
   ) {
     return <Code size={15} strokeWidth={1.5} />
   }

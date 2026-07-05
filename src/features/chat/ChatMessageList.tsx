@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useMemo } from "react"
 import {
   Copy,
   FileImage,
@@ -39,9 +39,18 @@ export const ChatMessageList = memo(function ChatMessageList({
   showTurnWaitIndicator,
   t,
 }: ChatMessageListProps) {
-  const visibleItems = items.filter(shouldRenderChatItem)
-  const renderItems = groupVisibleItems(visibleItems)
-  const footerItemIds = footerItemIdsForVisibleItems(visibleItems, isAgentWorking)
+  const visibleItems = useMemo(
+    () => items.filter(shouldRenderChatItem),
+    [items]
+  )
+  const renderItems = useMemo(
+    () => groupVisibleItems(visibleItems),
+    [visibleItems]
+  )
+  const footerItemIds = useMemo(
+    () => footerItemIdsForVisibleItems(visibleItems, isAgentWorking),
+    [isAgentWorking, visibleItems]
+  )
 
   return (
     <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
@@ -220,6 +229,16 @@ function footerItemIdsForVisibleItems(items: ChatItem[], isAgentWorking: boolean
   return footerItemIds
 }
 
+type ChatItemViewProps = {
+  item: ChatRenderItem
+  showAssistantFooter: boolean
+  onBranchFromMessage: (itemId: string) => void
+  onPreserveScrollAnchor: (element: HTMLElement) => void
+  projectPath?: string
+  sessionId?: string
+  t: ReturnType<typeof getMessages>
+}
+
 const ChatItemView = memo(function ChatItemView({
   item,
   showAssistantFooter,
@@ -228,15 +247,7 @@ const ChatItemView = memo(function ChatItemView({
   projectPath,
   sessionId,
   t,
-}: {
-  item: ChatRenderItem
-  showAssistantFooter: boolean
-  onBranchFromMessage: (itemId: string) => void
-  onPreserveScrollAnchor: (element: HTMLElement) => void
-  projectPath?: string
-  sessionId?: string
-  t: ReturnType<typeof getMessages>
-}) {
+}: ChatItemViewProps) {
   if (item.kind === "toolGroup") {
     return (
       <ToolCallGroupView
@@ -331,7 +342,52 @@ const ChatItemView = memo(function ChatItemView({
       ) : null}
     </article>
   )
-})
+}, areChatItemViewPropsEqual)
+
+function areChatItemViewPropsEqual(
+  previous: ChatItemViewProps,
+  next: ChatItemViewProps
+) {
+  if (
+    previous.item.kind !== next.item.kind ||
+    previous.showAssistantFooter !== next.showAssistantFooter ||
+    previous.onPreserveScrollAnchor !== next.onPreserveScrollAnchor ||
+    previous.projectPath !== next.projectPath ||
+    previous.sessionId !== next.sessionId ||
+    previous.t !== next.t
+  ) {
+    return false
+  }
+
+  const rendersAssistantFooter =
+    next.showAssistantFooter &&
+    next.item.kind === "single" &&
+    next.item.item.role === "assistant"
+  if (
+    rendersAssistantFooter &&
+    previous.onBranchFromMessage !== next.onBranchFromMessage
+  ) {
+    return false
+  }
+
+  return areChatRenderItemsEqual(previous.item, next.item)
+}
+
+function areChatRenderItemsEqual(left: ChatRenderItem, right: ChatRenderItem) {
+  if (left.kind !== right.kind) {
+    return false
+  }
+  if (left.kind === "single") {
+    return right.kind === "single" && left.item === right.item
+  }
+  if (right.kind !== "toolGroup" || left.id !== right.id) {
+    return false
+  }
+  return (
+    left.items.length === right.items.length &&
+    left.items.every((item, index) => item === right.items[index])
+  )
+}
 
 function AssistantMessageFooter({
   item,

@@ -35,6 +35,8 @@ import type {
   OusiaPiRetrySettingsPayload,
   OusiaPiRetrySettingsResult,
   OusiaSelectDirectoryResult,
+  OusiaShowFileInFinderPayload,
+  OusiaShowFileInFinderResult,
   OusiaWindowFullscreenEvent,
   OusiaWindowFullscreenResult,
   OusiaWindowThemePayload,
@@ -162,6 +164,11 @@ const api = {
     payload: OusiaOpenDirectoryPayload
   ): Promise<OusiaOpenDirectoryResult> {
     return ipcRenderer.invoke("ousia:directory:open-in-finder", payload)
+  },
+  showFileInFinder(
+    payload: OusiaShowFileInFinderPayload
+  ): Promise<OusiaShowFileInFinderResult> {
+    return ipcRenderer.invoke("ousia:file:show-in-finder", payload)
   },
   getWindowFullscreenState(): Promise<OusiaWindowFullscreenResult> {
     return ipcRenderer.invoke("ousia:window:fullscreen-state")

@@ -1297,17 +1297,26 @@ export function createAgentConversationModule({
     }
     if (event.type === "tool_execution_update") {
       const source = event as unknown as {
+        args?: unknown
         toolCallId?: string
         partialResult?: unknown
         toolName?: string
       }
       const displayId =
         displayToolCallId(state, source.toolCallId) ?? randomId("tool")
+      const filePreview = createStreamToolFilePreview({
+        args: source.args,
+        context,
+        state,
+        toolCallId: displayId,
+        toolName: source.toolName,
+      })
       emitChatEvent(
         {
           type: "tool_update",
           id: displayId,
           name: source.toolName,
+          filePreview,
           value: source.partialResult,
           timestamp,
         },

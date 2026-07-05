@@ -35,6 +35,8 @@ import type {
   OusiaPiRetrySettingsPayload,
   OusiaPiRetrySettingsResult,
   OusiaSelectDirectoryResult,
+  OusiaShowFileInFinderPayload,
+  OusiaShowFileInFinderResult,
   OusiaWindowFullscreenEvent,
   OusiaWindowThemePayload,
   OusiaWindowZoomEvent,
@@ -94,6 +96,9 @@ declare global {
       openDirectoryInFinder(
         payload: OusiaOpenDirectoryPayload
       ): Promise<OusiaOpenDirectoryResult>
+      showFileInFinder(
+        payload: OusiaShowFileInFinderPayload
+      ): Promise<OusiaShowFileInFinderResult>
       getWindowFullscreenState(): Promise<OusiaWindowFullscreenEvent>
       getWindowZoomState(): Promise<OusiaWindowZoomEvent>
       setWindowTheme(payload: OusiaWindowThemePayload): void

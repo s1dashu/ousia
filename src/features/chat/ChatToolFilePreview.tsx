@@ -6,13 +6,21 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
   type WheelEvent,
 } from "react"
 
 import type { getMessages } from "@/app/i18n"
-import { SendArrowDown } from "@/components/icons/huge-icons"
+import { FolderOpen, SendArrowDown } from "@/components/icons/huge-icons"
 import { useTheme, type ResolvedTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { OusiaChatToolFilePreview } from "@/electron/chat-types"
 
 const SCROLL_TO_LATEST_THRESHOLD = 24
@@ -20,7 +28,7 @@ const SCROLL_TO_LATEST_THRESHOLD = 24
 const wrapFillUnsafeCSS = `
   [data-overflow="wrap"] {
     --diffs-code-grid: var(--diffs-grid-number-column-width) minmax(0, 1fr);
-    padding-block-end: 6px;
+    padding-block-end: 0;
   }
 
   [data-overflow="wrap"] [data-code],
@@ -34,7 +42,34 @@ const wrapFillUnsafeCSS = `
 
   [data-overflow="wrap"] [data-code] {
     overflow: clip;
+    padding-block-end: 0;
     scrollbar-gutter: auto;
+  }
+
+  [data-diffs-header][data-sticky] {
+    z-index: 6;
+  }
+
+  [data-background] [data-line-type="change-addition"]:where([data-gutter-buffer], [data-column-number]) {
+    --diffs-bg-addition-number-override: color-mix(in oklch, var(--diffs-addition-base) 32%, var(--diffs-bg));
+    --diffs-fg-number-addition-override: color-mix(in oklch, var(--diffs-addition-base) 70%, var(--diffs-bg));
+  }
+
+  [data-background] [data-line-type="change-deletion"]:where([data-gutter-buffer], [data-column-number]) {
+    --diffs-bg-deletion-number-override: color-mix(in oklch, var(--diffs-deletion-base) 30%, var(--diffs-bg));
+    --diffs-fg-number-deletion-override: color-mix(in oklch, var(--diffs-deletion-base) 68%, var(--diffs-bg));
+  }
+
+  [data-indicators="bars"] [data-line-type="change-addition"][data-column-number]::before {
+    background-color: color-mix(in oklch, var(--diffs-addition-base) 48%, var(--diffs-bg));
+  }
+
+  [data-indicators="bars"] [data-line-type="change-deletion"][data-column-number]::before {
+    background-image: linear-gradient(
+      0deg,
+      color-mix(in oklch, var(--diffs-bg-deletion) 70%, var(--diffs-bg)) 50%,
+      color-mix(in oklch, var(--diffs-deletion-base) 48%, var(--diffs-bg)) 50%
+    );
   }
 
   [data-no-newline] {
@@ -45,11 +80,13 @@ const wrapFillUnsafeCSS = `
 const baseDiffOptions = {
   diffStyle: "unified",
   overflow: "wrap",
+  stickyHeader: true,
   unsafeCSS: wrapFillUnsafeCSS,
 } as const
 
 const baseFileOptions = {
   overflow: "wrap",
+  stickyHeader: true,
   unsafeCSS: wrapFillUnsafeCSS,
 } as const
 
@@ -75,8 +112,11 @@ const fileOptionsByTheme = {
   },
 } as const
 
+const previewBackground =
+  "color-mix(in oklch, var(--card) 28%, var(--background))"
+
 const previewFrameStyle = {
-  border: "1px solid color-mix(in oklch, var(--foreground) 10%, transparent)",
+  backgroundColor: previewBackground,
   borderRadius: "8px",
   display: "block",
   maxHeight: "48dvh",
@@ -85,9 +125,95 @@ const previewFrameStyle = {
   scrollbarGutter: "auto",
 } satisfies CSSProperties
 
-const pierreSurfaceStyle = {
-  display: "block",
+const previewHeaderScrollbarMaskStyle = {
+  backgroundColor: previewBackground,
+  borderTopRightRadius: "8px",
+  height: "calc(20px + (8px * 3))",
+  pointerEvents: "none",
+  position: "absolute",
+  right: 0,
+  top: 0,
+  width: "12px",
+  zIndex: 20,
 } satisfies CSSProperties
+
+type PierreSurfaceStyle = CSSProperties & Record<`--${string}`, string>
+type HeaderMetadataRenderer = () => ReactNode
+
+const pierreSurfaceStyle = {
+  "--diffs-dark-bg": previewBackground,
+  "--diffs-light-bg": previewBackground,
+  display: "block",
+} satisfies PierreSurfaceStyle
+
+function revealablePreviewPath(preview: OusiaChatToolFilePreview) {
+  if (preview.kind !== "diff" && preview.kind !== "patch") {
+    return undefined
+  }
+  const path = preview.path?.trim()
+  if (!path || path === "write" || path === "edit") {
+    return undefined
+  }
+  return path
+}
+
+function RevealFileInFinderButton({
+  path,
+  projectPath,
+  t,
+}: {
+  path: string
+  projectPath?: string
+  t: ReturnType<typeof getMessages>
+}) {
+  const [isOpening, setIsOpening] = useState(false)
+  const canReveal = Boolean(window.ousia)
+
+  function handleClick(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!window.ousia || isOpening) {
+      return
+    }
+
+    setIsOpening(true)
+    void window.ousia
+      .showFileInFinder({ path, projectPath })
+      .then((result) => {
+        if (!result.ok) {
+          console.warn(t.chat.showFileInFinderFailed, result.error)
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn(t.chat.showFileInFinderFailed, error)
+      })
+      .finally(() => {
+        setIsOpening(false)
+      })
+  }
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="window-no-drag -my-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/75 transition-colors hover:bg-muted/55 hover:text-foreground focus-visible:bg-muted/55 focus-visible:text-foreground focus-visible:outline-none disabled:cursor-default disabled:opacity-45"
+            aria-label={t.chat.showFileInFinder}
+            disabled={!canReveal || isOpening}
+            onClick={handleClick}
+            title={t.chat.showFileInFinder}
+          >
+            <FolderOpen size={15} strokeWidth={1.6} />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent align="end" side="bottom">
+          {t.chat.showFileInFinder}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
 
 function isScrolledToLatest(node: HTMLDivElement) {
   return (
@@ -130,9 +256,11 @@ const LazyPierreDiffPreview = lazy(async () => {
 
   function GeneratedDiffPreview({
     preview,
+    renderHeaderMetadata,
     themeType,
   }: {
     preview: Extract<OusiaChatToolFilePreview, { kind: "diff" }>
+    renderHeaderMetadata?: HeaderMetadataRenderer
     themeType: ResolvedTheme
   }) {
     const fileDiff = useMemo(() => {
@@ -162,6 +290,7 @@ const LazyPierreDiffPreview = lazy(async () => {
         disableWorkerPool
         fileDiff={fileDiff}
         options={diffOptionsByTheme[themeType]}
+        renderHeaderMetadata={renderHeaderMetadata}
         style={pierreSurfaceStyle}
       />
     )
@@ -169,9 +298,11 @@ const LazyPierreDiffPreview = lazy(async () => {
 
   function PatchDiffPreview({
     preview,
+    renderHeaderMetadata,
     themeType,
   }: {
     preview: Extract<OusiaChatToolFilePreview, { kind: "patch" }>
+    renderHeaderMetadata?: HeaderMetadataRenderer
     themeType: ResolvedTheme
   }) {
     const patch = useMemo(
@@ -184,6 +315,7 @@ const LazyPierreDiffPreview = lazy(async () => {
         disableWorkerPool
         options={diffOptionsByTheme[themeType]}
         patch={patch}
+        renderHeaderMetadata={renderHeaderMetadata}
         style={pierreSurfaceStyle}
       />
     )
@@ -192,17 +324,31 @@ const LazyPierreDiffPreview = lazy(async () => {
   return {
     default: function PierreDiffPreview({
       preview,
+      renderHeaderMetadata,
       themeType,
     }: {
       preview: OusiaChatToolFilePreview
+      renderHeaderMetadata?: HeaderMetadataRenderer
       themeType: ResolvedTheme
     }) {
       if (preview.kind === "diff") {
-        return <GeneratedDiffPreview preview={preview} themeType={themeType} />
+        return (
+          <GeneratedDiffPreview
+            preview={preview}
+            renderHeaderMetadata={renderHeaderMetadata}
+            themeType={themeType}
+          />
+        )
       }
 
       if (preview.kind === "patch") {
-        return <PatchDiffPreview preview={preview} themeType={themeType} />
+        return (
+          <PatchDiffPreview
+            preview={preview}
+            renderHeaderMetadata={renderHeaderMetadata}
+            themeType={themeType}
+          />
+        )
       }
 
       if (preview.kind === "file") {
@@ -231,15 +377,31 @@ const LazyPierreDiffPreview = lazy(async () => {
 
 export function ToolFilePreviewView({
   preview,
+  projectPath,
   t,
 }: {
   preview: OusiaChatToolFilePreview
+  projectPath?: string
   t: ReturnType<typeof getMessages>
 }) {
   const { resolvedTheme } = useTheme()
   const frameRef = useRef<HTMLDivElement>(null)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
+  const revealPath = revealablePreviewPath(preview)
+  const renderHeaderMetadata = useMemo<HeaderMetadataRenderer | undefined>(
+    () =>
+      revealPath
+        ? () => (
+            <RevealFileInFinderButton
+              path={revealPath}
+              projectPath={projectPath}
+              t={t}
+            />
+          )
+        : undefined,
+    [projectPath, revealPath, t]
+  )
 
   useLayoutEffect(() => {
     const node = frameRef.current
@@ -309,9 +471,15 @@ export function ToolFilePreviewView({
             </div>
           }
         >
-          <LazyPierreDiffPreview preview={preview} themeType={resolvedTheme} />
+          <LazyPierreDiffPreview
+            preview={preview}
+            renderHeaderMetadata={renderHeaderMetadata}
+            themeType={resolvedTheme}
+          />
         </Suspense>
       </div>
+
+      <div aria-hidden="true" style={previewHeaderScrollbarMaskStyle} />
 
       {showScrollToLatest ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">

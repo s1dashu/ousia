@@ -7,7 +7,7 @@ import {
   type OpenDialogOptions,
 } from "electron"
 import { mkdirSync, statSync } from "node:fs"
-import { basename, resolve } from "node:path"
+import { basename, isAbsolute, resolve } from "node:path"
 
 import { createAgentConversationModule } from "./agent-conversations.js"
 import { configureOusiaAppPaths } from "./app-paths.js"
@@ -33,9 +33,11 @@ import type {
   OusiaPiProviderCredentialRemovalPayload,
   OusiaPiRetrySettingsPayload,
   OusiaSelectDirectoryResult,
+  OusiaShowFileInFinderPayload,
+  OusiaShowFileInFinderResult,
   OusiaWindowThemePayload,
 } from "./chat-types.js"
-import { expandHomePath } from "./host-paths.js"
+import { expandHomePath, resolveProjectFilePath } from "./host-paths.js"
 import { listPiModels } from "./model-registry.js"
 import {
   checkPiEnvironment,
@@ -244,6 +246,63 @@ ipcMain.handle(
       return { ok: false, error }
     }
     return { ok: true }
+  }
+)
+
+function resolveFilePathForFinder(
+  filePath: string,
+  projectPath: string | undefined
+) {
+  const expandedPath = expandHomePath(filePath)
+  if (isAbsolute(expandedPath)) {
+    return resolve(expandedPath)
+  }
+  if (!projectPath?.trim()) {
+    throw new Error("缺少项目目录，无法解析相对文件路径。")
+  }
+  return resolveProjectFilePath(projectPath, expandedPath).absoluteFilePath
+}
+
+ipcMain.handle(
+  "ousia:file:show-in-finder",
+  async (
+    _event,
+    payload: OusiaShowFileInFinderPayload
+  ): Promise<OusiaShowFileInFinderResult> => {
+    const requestedPath = payload.path.trim()
+    if (!requestedPath) {
+      return { ok: false, error: "文件路径为空。" }
+    }
+
+    let filePath: string
+    try {
+      filePath = resolveFilePathForFinder(requestedPath, payload.projectPath)
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+
+    try {
+      const stats = statSync(filePath)
+      if (!stats.isFile()) {
+        return { ok: false, error: `不是文件：${filePath}` }
+      }
+    } catch {
+      return { ok: false, error: `文件不存在：${filePath}` }
+    }
+
+    try {
+      shell.showItemInFolder(filePath)
+      return { ok: true }
+    } catch (error) {
+      writeRuntimeLog("file.show-in-finder", "error", { error, filePath })
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
   }
 )
 

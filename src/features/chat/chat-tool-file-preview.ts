@@ -19,6 +19,15 @@ function normalizedStoredFilePreview(
   if (!item.filePreview) {
     return undefined
   }
+  if (item.filePreview.kind === "patch" && !item.filePreview.path) {
+    const fields = writeFieldsFromInput(item.input) ?? writeFieldsFromInput(item.text)
+    return fields?.path
+      ? {
+          ...item.filePreview,
+          path: fields.path,
+        }
+      : item.filePreview
+  }
   if (normalizedToolName(item.name) !== "write") {
     return item.filePreview
   }

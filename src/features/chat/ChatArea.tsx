@@ -287,6 +287,7 @@ export function ChatArea({
   const manualScrollIntentTimerRef = useRef(0)
   const manualScrollAwayFromLatestRef = useRef(false)
   const manualScrollIntentRef = useRef(false)
+  const lastChatScrollTopRef = useRef(0)
   const programmaticScrollResetFrameRef = useRef(0)
   const programmaticScrollResetTimerRef = useRef(0)
   const chatLayoutAnchorResetTimerRef = useRef(0)
@@ -410,6 +411,10 @@ export function ChatArea({
     return node.scrollHeight - node.scrollTop - node.clientHeight < 24
   }
 
+  function maxChatScrollTop(node: HTMLDivElement) {
+    return Math.max(0, node.scrollHeight - node.clientHeight)
+  }
+
   function isLatestAssistantMessageFullyVisible() {
     const node = scrollRef.current
     if (!node) {
@@ -524,6 +529,7 @@ export function ChatArea({
     const delta = nextTop - anchor.top
     if (Math.abs(delta) > 0.5) {
       node.scrollTop += delta
+      lastChatScrollTopRef.current = node.scrollTop
     }
     setShowScrollToLatest(!isScrolledToLatest(node))
     return true
@@ -576,8 +582,9 @@ export function ChatArea({
       }
       clearManualScrollIntent()
       isProgrammaticScrollRef.current = true
+      lastChatScrollTopRef.current = maxChatScrollTop(node)
       node.scrollTo({
-        top: node.scrollHeight,
+        top: maxChatScrollTop(node),
         behavior,
       })
       setShowScrollToLatest(false)
@@ -732,7 +739,9 @@ export function ChatArea({
       return
     }
     olderHistoryScrollAnchorRef.current = null
-    node.scrollTop = anchor.top + (node.scrollHeight - anchor.height)
+    const nextScrollTop = anchor.top + (node.scrollHeight - anchor.height)
+    node.scrollTop = nextScrollTop
+    lastChatScrollTopRef.current = nextScrollTop
   }, [items])
 
   useEffect(() => {
@@ -885,9 +894,13 @@ export function ChatArea({
   ])
 
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
-    const isAtLatest = isScrolledToLatest(event.currentTarget)
-    setIsChatScrolled(event.currentTarget.scrollTop > 2)
-    if (event.currentTarget.scrollTop < 160) {
+    const node = event.currentTarget
+    const scrollTop = node.scrollTop
+    const isScrollingTowardHistory = scrollTop < lastChatScrollTopRef.current - 1
+    lastChatScrollTopRef.current = scrollTop
+    const isAtLatest = isScrolledToLatest(node)
+    setIsChatScrolled(scrollTop > 2)
+    if (scrollTop < 160) {
       loadOlderHistory()
     }
     if (isProgrammaticScrollRef.current) {
@@ -908,6 +921,11 @@ export function ChatArea({
       isFollowingLatestRef.current &&
       !isAtLatest
     ) {
+      if (isScrollingTowardHistory) {
+        markCurrentSessionViewed()
+        handleManualScrollIntent(true)
+        return
+      }
       performLatestScroll("auto")
       return
     }

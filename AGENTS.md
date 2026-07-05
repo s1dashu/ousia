@@ -65,3 +65,17 @@ match the task.
   reference under ignored `ref/`; see `docs/shadcn-reference.md`.
 - When changing agent behavior, verify whether the change belongs in renderer
   state, Electron IPC, or Pi session setup.
+- Tool call disclosure state is renderer-local UI memory in `localStorage`
+  under `ousia.chat.toolDisclosure.v1`; do not persist it into chat history.
+- Streaming chat performance depends on preserving memo boundaries: compare
+  render wrapper objects by their underlying `ChatItem` references. Do not
+  defer actively streaming write/edit diff previews; live code output is a core
+  chat experience.
+- Pi `tool_execution_update` events carry both `args` and `partialResult`;
+  use `args` to refresh write/edit file previews, while preserving
+  `partialResult` for tool output streams.
+- Chromium native scrollbar thumb drags can emit chat `scroll` events without
+  preceding pointer, wheel, or touch events. Infer user history-scroll intent
+  from an upward `scrollTop` delta before auto-following the latest message.
+- Keep sidebar row surfaces inset with explicit margins; avoid negative row
+  margins that make selected/session rows eat the left padding.
