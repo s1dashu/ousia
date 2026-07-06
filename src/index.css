@@ -138,6 +138,7 @@
     --ousia-tool-warning: #8a6f3f;
     --ousia-tool-warning-strong: #75591e;
     --ousia-tool-warning-bg: color-mix(in srgb, #c9912b 11%, transparent);
+    --ousia-diff-card-bg: color-mix(in srgb, #f4f4ef 42%, #fffefb);
     --border: color-mix(in srgb, #b7aaa2 34%, transparent);
     --input: #ded6d0;
     --ring: #9b8f87;
@@ -208,6 +209,7 @@
     --border: color-mix(in srgb, #a8a89a 30%, transparent);
     --input: #e3e3dd;
     --ring: #8c8c80;
+    --ousia-diff-card-bg: color-mix(in srgb, var(--card) 42%, var(--background));
     --chart-1: #ecece6;
     --chart-2: #8c8c80;
     --chart-3: #68685f;
@@ -461,6 +463,7 @@
     --border: color-mix(in srgb, #b7aaa2 28%, transparent);
     --input: color-mix(in srgb, var(--radix-scale-8) 22%, transparent);
     --ring: color-mix(in srgb, var(--radix-scale-9) 72%, transparent);
+    --ousia-diff-card-bg: color-mix(in srgb, var(--radix-scale-3) 18%, var(--background));
     --chart-1: var(--radix-scale-5);
     --chart-2: var(--radix-scale-9);
     --chart-3: var(--radix-scale-11);
@@ -840,6 +843,7 @@
     --border: color-mix(in srgb, #eeeee6 12%, transparent);
     --input: color-mix(in srgb, #eeeee6 16%, transparent);
     --ring: #8c8c82;
+    --ousia-diff-card-bg: color-mix(in srgb, var(--card) 72%, var(--background));
     --chart-1: #eeeeea;
     --chart-2: #a0a096;
     --chart-3: #73736b;
@@ -1063,6 +1067,7 @@
     --border: color-mix(in srgb, #f0e8e0 12%, transparent);
     --input: color-mix(in oklch, var(--radix-scale-8) 12%, transparent);
     --ring: color-mix(in oklch, var(--radix-scale-9) 48%, #bdb7b0);
+    --ousia-diff-card-bg: color-mix(in srgb, var(--radix-scale-12) 22%, var(--background));
     --chart-1: color-mix(in oklch, var(--radix-scale-9) 74%, #ffffff);
     --chart-2: color-mix(in oklch, var(--radix-scale-8) 62%, #bdb7b0);
     --chart-3: color-mix(in oklch, var(--radix-scale-11) 52%, #e6e0da);
@@ -1212,6 +1217,17 @@
 
 .ousia-stable-scrollbar-gutter {
   scrollbar-gutter: stable both-edges;
+}
+
+.ousia-diff-preview-frame {
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ousia-diff-preview-frame::-webkit-scrollbar {
+  display: none;
+  height: 0;
+  width: 0;
 }
 
 .ousia-hover-scrollbar:hover,

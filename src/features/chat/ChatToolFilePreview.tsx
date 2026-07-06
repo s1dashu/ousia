@@ -46,7 +46,12 @@ const wrapFillUnsafeCSS = `
     scrollbar-gutter: auto;
   }
 
+  [data-diffs-header] {
+    background-color: var(--ousia-diff-card-bg);
+  }
+
   [data-diffs-header][data-sticky] {
+    background-color: var(--ousia-diff-card-bg);
     z-index: 6;
   }
 
@@ -112,37 +117,20 @@ const fileOptionsByTheme = {
   },
 } as const
 
-const previewBackground =
-  "color-mix(in oklch, var(--card) 28%, var(--background))"
+const previewCardBackground = "var(--ousia-diff-card-bg)"
 
 const previewFrameStyle = {
-  backgroundColor: previewBackground,
+  backgroundColor: previewCardBackground,
   borderRadius: "8px",
   display: "block",
   maxHeight: "48dvh",
   overflowX: "hidden",
-  overflowY: "auto",
-  scrollbarGutter: "auto",
-} satisfies CSSProperties
-
-const previewHeaderScrollbarMaskStyle = {
-  backgroundColor: previewBackground,
-  borderTopRightRadius: "8px",
-  height: "calc(20px + (8px * 3))",
-  pointerEvents: "none",
-  position: "absolute",
-  right: 0,
-  top: 0,
-  width: "12px",
-  zIndex: 20,
 } satisfies CSSProperties
 
 type PierreSurfaceStyle = CSSProperties & Record<`--${string}`, string>
 type HeaderMetadataRenderer = () => ReactNode
 
 const pierreSurfaceStyle = {
-  "--diffs-dark-bg": previewBackground,
-  "--diffs-light-bg": previewBackground,
   display: "block",
 } satisfies PierreSurfaceStyle
 
@@ -224,6 +212,43 @@ function isScrolledToLatest(node: HTMLDivElement) {
 
 function hasScrollableContent(node: HTMLDivElement) {
   return node.scrollHeight > node.clientHeight + 2
+}
+
+function previewHeaderHeight(node: HTMLDivElement) {
+  const host = node.firstElementChild
+  if (!(host instanceof HTMLElement)) {
+    return 0
+  }
+  const header = host.shadowRoot?.querySelector<HTMLElement>(
+    "[data-diffs-header]"
+  )
+  return header?.offsetHeight ?? 0
+}
+
+function scrollThumbStyleForNode(node: HTMLDivElement): CSSProperties | null {
+  if (!hasScrollableContent(node)) {
+    return null
+  }
+
+  const headerHeight = previewHeaderHeight(node)
+  const topInset = headerHeight
+  const bottomInset = 8
+  const minThumbHeight = 28
+  const trackHeight = Math.max(0, node.clientHeight - topInset - bottomInset)
+  const thumbHeight = Math.max(
+    minThumbHeight,
+    Math.round((node.clientHeight / node.scrollHeight) * trackHeight)
+  )
+  const maxScrollTop = node.scrollHeight - node.clientHeight
+  const maxThumbTop = Math.max(0, trackHeight - thumbHeight)
+  const thumbTop =
+    topInset +
+    (maxScrollTop > 0 ? (node.scrollTop / maxScrollTop) * maxThumbTop : 0)
+
+  return {
+    height: thumbHeight,
+    transform: `translateY(${Math.round(thumbTop)}px)`,
+  }
 }
 
 const LazyPierreDiffPreview = lazy(async () => {
@@ -388,6 +413,8 @@ export function ToolFilePreviewView({
   const frameRef = useRef<HTMLDivElement>(null)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
+  const [scrollThumbStyle, setScrollThumbStyle] =
+    useState<CSSProperties | null>(null)
   const revealPath = revealablePreviewPath(preview)
   const renderHeaderMetadata = useMemo<HeaderMetadataRenderer | undefined>(
     () =>
@@ -410,16 +437,39 @@ export function ToolFilePreviewView({
     }
     if (!isFollowingLatest) {
       setShowScrollToLatest(hasScrollableContent(node))
+      setScrollThumbStyle(scrollThumbStyleForNode(node))
       return
     }
     node.scrollTop = node.scrollHeight
+    setScrollThumbStyle(scrollThumbStyleForNode(node))
     setShowScrollToLatest(false)
   }, [isFollowingLatest, preview])
+
+  useLayoutEffect(() => {
+    const node = frameRef.current
+    if (!node || typeof ResizeObserver === "undefined") {
+      return
+    }
+
+    const observer = new ResizeObserver(() => {
+      setScrollThumbStyle(scrollThumbStyleForNode(node))
+    })
+    observer.observe(node)
+    const contentNode = node.firstElementChild
+    if (contentNode) {
+      observer.observe(contentNode)
+    }
+
+    return () => {
+      observer.disconnect()
+    }
+  }, [])
 
   function syncFollowState(node: HTMLDivElement) {
     const isAtLatest = isScrolledToLatest(node)
     setIsFollowingLatest(isAtLatest)
     setShowScrollToLatest(!isAtLatest && hasScrollableContent(node))
+    setScrollThumbStyle(scrollThumbStyleForNode(node))
   }
 
   function handleWheelCapture(event: WheelEvent<HTMLDivElement>) {
@@ -441,6 +491,7 @@ export function ToolFilePreviewView({
       behavior,
       top: node.scrollHeight,
     })
+    setScrollThumbStyle(scrollThumbStyleForNode(node))
   }
 
   if (preview.kind === "error") {
@@ -457,7 +508,7 @@ export function ToolFilePreviewView({
     <div className="relative mt-1.5">
       <div
         ref={frameRef}
-        className="ousia-hover-scrollbar"
+        className="ousia-diff-preview-frame"
         onScroll={(event) => {
           syncFollowState(event.currentTarget)
         }}
@@ -479,7 +530,13 @@ export function ToolFilePreviewView({
         </Suspense>
       </div>
 
-      <div aria-hidden="true" style={previewHeaderScrollbarMaskStyle} />
+      {scrollThumbStyle ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 right-0 z-20 w-1 rounded-full bg-muted-foreground/20"
+          style={scrollThumbStyle}
+        />
+      ) : null}
 
       {showScrollToLatest ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">

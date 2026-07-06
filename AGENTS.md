@@ -52,6 +52,11 @@ match the task.
   it.
 - Keep primary floating panels, menus, popovers, dialogs, and dropdown surfaces
   pure white. Paper is an auxiliary/background color, not the main panel color.
+- Neutral appearance scales such as paper, sand, gray, slate, mauve, sage, and
+  olive do not define `--radix-scale-*`; theme-dependent component surfaces
+  should use app-level CSS variables defined in `src/index.css`.
+- The dark chat panel uses `card` as its background, so user message bubbles
+  need a different dark surface such as `muted` to remain visible.
 - Match those floating surfaces to the composer default surface treatment:
   `0.5px` foreground/10 border and the shared
   `--ousia-floating-panel-shadow`, which is slightly stronger than the composer
