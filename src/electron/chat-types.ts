@@ -202,6 +202,77 @@ export type OusiaAppStateSaveResult = {
   ok: boolean
 }
 
+export type OusiaAppStateTransactionResult =
+  | {
+      ok: true
+      state: OusiaAppState
+      session?: OusiaSessionRecord
+      project?: OusiaProjectRecord
+      removedSessions?: OusiaSessionRecord[]
+    }
+  | {
+      ok: false
+      error: string
+      state?: OusiaAppState
+    }
+
+export type OusiaAppStateSettingsPayload = {
+  settings: OusiaAppSettings
+}
+
+export type OusiaAppStateShellLayoutPayload = {
+  shellLayout: OusiaShellLayoutState
+}
+
+export type OusiaAppStateSelectionPayload = Partial<OusiaAppSelectionState>
+
+export type OusiaAppStateCreateSessionPayload = {
+  projectId?: string
+  select?: boolean
+  title?: string
+}
+
+export type OusiaAppStateDeleteSessionPayload = {
+  sessionId: string
+}
+
+export type OusiaAppStateRenameSessionPayload = {
+  sessionId: string
+  title: string
+}
+
+export type OusiaAppStateMoveSessionPayload = {
+  sessionId: string
+  targetProjectId?: string
+  targetSessionId?: string
+}
+
+export type OusiaAppStateReorderSessionsPayload = {
+  sourceSessionId: string
+  targetSessionId: string
+}
+
+export type OusiaAppStateTouchSessionPayload = {
+  sessionId: string
+  time: string
+}
+
+export type OusiaAppStateCreateProjectPayload = {
+  name?: string
+  path: string
+  selectOrCreateSession?: boolean
+  sessionTitle?: string
+}
+
+export type OusiaAppStateDeleteProjectPayload = {
+  projectId: string
+}
+
+export type OusiaAppStateReorderProjectsPayload = {
+  sourceProjectId: string
+  targetProjectId: string
+}
+
 export const OUSIA_APP_STATE_SCHEMA_VERSION = 2
 export const OUSIA_DEFAULT_WORK_DIR = "~/Documents/Ousia"
 export const OUSIA_LEGACY_DEFAULT_WORK_DIR = "~/.ousia/chat"

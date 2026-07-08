@@ -5,8 +5,13 @@
 ```bash
 npm run typecheck
 npm run lint
+npm test
+npm run test:coverage
 npm start
 ```
+
+Testing strategy and coverage scope are tracked in
+[docs/testing-plan.md](testing-plan.md).
 
 Packaging commands:
 
@@ -61,6 +66,8 @@ desktop agent client:
 
 - App state persists settings, sessions, projects, shell layout, window state,
   expanded project ids, and current selection.
+- Session/project index writes go through Electron main app-state transaction
+  APIs; renderer no longer sends full app-state snapshots for those writes.
 - Persistence accepts the current schema only; invalid or older development
   files fall back to default state.
 

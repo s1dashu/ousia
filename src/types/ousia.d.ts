@@ -1,6 +1,18 @@
 import type {
   OusiaAppState,
-  OusiaAppStateSaveResult,
+  OusiaAppStateCreateProjectPayload,
+  OusiaAppStateCreateSessionPayload,
+  OusiaAppStateDeleteProjectPayload,
+  OusiaAppStateDeleteSessionPayload,
+  OusiaAppStateMoveSessionPayload,
+  OusiaAppStateRenameSessionPayload,
+  OusiaAppStateReorderProjectsPayload,
+  OusiaAppStateReorderSessionsPayload,
+  OusiaAppStateSelectionPayload,
+  OusiaAppStateSettingsPayload,
+  OusiaAppStateShellLayoutPayload,
+  OusiaAppStateTouchSessionPayload,
+  OusiaAppStateTransactionResult,
   OusiaChatBranchPayload,
   OusiaChatBranchResult,
   OusiaChatClearQueueResult,
@@ -46,7 +58,42 @@ declare global {
   interface Window {
     ousia?: {
       loadAppState(): Promise<OusiaAppState>
-      saveAppState(payload: OusiaAppState): Promise<OusiaAppStateSaveResult>
+      saveAppSettings(
+        payload: OusiaAppStateSettingsPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      saveShellLayout(
+        payload: OusiaAppStateShellLayoutPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      saveAppSelection(
+        payload: OusiaAppStateSelectionPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      createSession(
+        payload: OusiaAppStateCreateSessionPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      deleteSession(
+        payload: OusiaAppStateDeleteSessionPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      renameSession(
+        payload: OusiaAppStateRenameSessionPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      moveSession(
+        payload: OusiaAppStateMoveSessionPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      reorderSessions(
+        payload: OusiaAppStateReorderSessionsPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      touchSession(
+        payload: OusiaAppStateTouchSessionPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      createProject(
+        payload: OusiaAppStateCreateProjectPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      deleteProject(
+        payload: OusiaAppStateDeleteProjectPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      reorderProjects(
+        payload: OusiaAppStateReorderProjectsPayload
+      ): Promise<OusiaAppStateTransactionResult>
       sendChatMessage(
         payload: OusiaChatSendPayload
       ): Promise<OusiaChatSendResult>

@@ -11,10 +11,35 @@ import { basename, isAbsolute, resolve } from "node:path"
 
 import { createAgentConversationModule } from "./agent-conversations.js"
 import { configureOusiaAppPaths } from "./app-paths.js"
-import { loadAppState, saveAppState } from "./app-state-store.js"
+import {
+  createAppStateProject,
+  createAppStateSession,
+  deleteAppStateProject,
+  deleteAppStateSession,
+  loadAppState,
+  moveAppStateSession,
+  renameAppStateSession,
+  reorderAppStateProjects,
+  reorderAppStateSessions,
+  saveAppStateSelection,
+  saveAppStateSettings,
+  saveAppStateShellLayout,
+  touchAppStateSession,
+} from "./app-state-store.js"
 import { generateChatTitleWithUtilityModel } from "./chat-title-generator.js"
 import type {
-  OusiaAppState,
+  OusiaAppStateCreateProjectPayload,
+  OusiaAppStateCreateSessionPayload,
+  OusiaAppStateDeleteProjectPayload,
+  OusiaAppStateDeleteSessionPayload,
+  OusiaAppStateMoveSessionPayload,
+  OusiaAppStateRenameSessionPayload,
+  OusiaAppStateReorderProjectsPayload,
+  OusiaAppStateReorderSessionsPayload,
+  OusiaAppStateSelectionPayload,
+  OusiaAppStateSettingsPayload,
+  OusiaAppStateShellLayoutPayload,
+  OusiaAppStateTouchSessionPayload,
   OusiaChatBranchPayload,
   OusiaChatCompactPayload,
   OusiaChatContext,
@@ -334,8 +359,76 @@ ipcMain.on("ousia:window:theme", (_event, payload: OusiaWindowThemePayload) => {
 
 ipcMain.handle("ousia:app-state:load", () => loadAppState())
 
-ipcMain.handle("ousia:app-state:save", (_event, payload: OusiaAppState) =>
-  saveAppState(payload)
+ipcMain.handle(
+  "ousia:app-state:settings:save",
+  (_event, payload: OusiaAppStateSettingsPayload) =>
+    saveAppStateSettings(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:shell-layout:save",
+  (_event, payload: OusiaAppStateShellLayoutPayload) =>
+    saveAppStateShellLayout(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:selection:save",
+  (_event, payload: OusiaAppStateSelectionPayload) =>
+    saveAppStateSelection(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:session:create",
+  (_event, payload: OusiaAppStateCreateSessionPayload) =>
+    createAppStateSession(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:session:delete",
+  (_event, payload: OusiaAppStateDeleteSessionPayload) =>
+    deleteAppStateSession(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:session:rename",
+  (_event, payload: OusiaAppStateRenameSessionPayload) =>
+    renameAppStateSession(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:session:move",
+  (_event, payload: OusiaAppStateMoveSessionPayload) =>
+    moveAppStateSession(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:sessions:reorder",
+  (_event, payload: OusiaAppStateReorderSessionsPayload) =>
+    reorderAppStateSessions(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:session:touch",
+  (_event, payload: OusiaAppStateTouchSessionPayload) =>
+    touchAppStateSession(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:project:create",
+  (_event, payload: OusiaAppStateCreateProjectPayload) =>
+    createAppStateProject(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:project:delete",
+  (_event, payload: OusiaAppStateDeleteProjectPayload) =>
+    deleteAppStateProject(payload)
+)
+
+ipcMain.handle(
+  "ousia:app-state:projects:reorder",
+  (_event, payload: OusiaAppStateReorderProjectsPayload) =>
+    reorderAppStateProjects(payload)
 )
 
 ipcMain.on("ousia:log:renderer-error", (_event, payload: unknown) => {

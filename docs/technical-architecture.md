@@ -57,7 +57,12 @@ Main process entrypoints:
 
 `window.ousia` exposes only the narrow app APIs needed by the simplified shell:
 
-- `loadAppState()` / `saveAppState(payload)`
+- `loadAppState()`
+- App-state transactions such as `saveAppSettings(payload)`,
+  `saveShellLayout(payload)`, `saveAppSelection(payload)`, `createSession(payload)`,
+  `deleteSession(payload)`, `renameSession(payload)`, `moveSession(payload)`,
+  `reorderSessions(payload)`, `touchSession(payload)`, `createProject(payload)`,
+  `deleteProject(payload)`, and `reorderProjects(payload)`
 - `sendChatMessage(payload)`
 - `generateChatTitle(payload)`
 - `getChatHistory(payload)`
@@ -108,6 +113,12 @@ App state schema version 2 stores settings, flat project/session indexes,
 expanded project ids, shell layout, selected session, and window state. Settings
 include appearance mode, Radix color scale, default workspace folder,
 send-during-run mode, thinking level, selected model, and per-provider API keys.
+
+Electron main owns the persisted project/session index. The renderer may keep
+local UI state for responsiveness, but it persists project/session changes by
+sending transaction intents to main and then syncing from the returned canonical
+state. Renderer code must not save full app-state snapshots because stale
+snapshots can overwrite newer session/project index changes.
 
 `src/electron/app-state-store.ts` accepts the current schema only. Invalid or
 older development-state files fall back to default state because this pre-release

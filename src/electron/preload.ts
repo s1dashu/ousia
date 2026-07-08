@@ -1,6 +1,18 @@
 import type {
   OusiaAppState,
-  OusiaAppStateSaveResult,
+  OusiaAppStateCreateProjectPayload,
+  OusiaAppStateCreateSessionPayload,
+  OusiaAppStateDeleteProjectPayload,
+  OusiaAppStateDeleteSessionPayload,
+  OusiaAppStateMoveSessionPayload,
+  OusiaAppStateRenameSessionPayload,
+  OusiaAppStateReorderProjectsPayload,
+  OusiaAppStateReorderSessionsPayload,
+  OusiaAppStateSelectionPayload,
+  OusiaAppStateSettingsPayload,
+  OusiaAppStateShellLayoutPayload,
+  OusiaAppStateTouchSessionPayload,
+  OusiaAppStateTransactionResult,
   OusiaChatBranchPayload,
   OusiaChatBranchResult,
   OusiaChatClearQueueResult,
@@ -81,8 +93,65 @@ const api = {
   loadAppState(): Promise<OusiaAppState> {
     return ipcRenderer.invoke("ousia:app-state:load")
   },
-  saveAppState(payload: OusiaAppState): Promise<OusiaAppStateSaveResult> {
-    return ipcRenderer.invoke("ousia:app-state:save", payload)
+  saveAppSettings(
+    payload: OusiaAppStateSettingsPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:settings:save", payload)
+  },
+  saveShellLayout(
+    payload: OusiaAppStateShellLayoutPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:shell-layout:save", payload)
+  },
+  saveAppSelection(
+    payload: OusiaAppStateSelectionPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:selection:save", payload)
+  },
+  createSession(
+    payload: OusiaAppStateCreateSessionPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:session:create", payload)
+  },
+  deleteSession(
+    payload: OusiaAppStateDeleteSessionPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:session:delete", payload)
+  },
+  renameSession(
+    payload: OusiaAppStateRenameSessionPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:session:rename", payload)
+  },
+  moveSession(
+    payload: OusiaAppStateMoveSessionPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:session:move", payload)
+  },
+  reorderSessions(
+    payload: OusiaAppStateReorderSessionsPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:sessions:reorder", payload)
+  },
+  touchSession(
+    payload: OusiaAppStateTouchSessionPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:session:touch", payload)
+  },
+  createProject(
+    payload: OusiaAppStateCreateProjectPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:project:create", payload)
+  },
+  deleteProject(
+    payload: OusiaAppStateDeleteProjectPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:project:delete", payload)
+  },
+  reorderProjects(
+    payload: OusiaAppStateReorderProjectsPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:projects:reorder", payload)
   },
   sendChatMessage(payload: OusiaChatSendPayload): Promise<OusiaChatSendResult> {
     return ipcRenderer.invoke("ousia:chat:send", payload)

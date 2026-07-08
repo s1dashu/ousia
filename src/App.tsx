@@ -11,13 +11,11 @@ import {
 
 import { useTheme } from "@/components/theme-provider"
 import {
-  APP_STATE_SCHEMA_VERSION,
   createDefaultAppState,
   createProject,
   createSession,
   loadInitialAppState,
   projectNameFromPath,
-  saveAppState,
   type AppSettings,
   type InitialAppState,
   type ProjectRecord,
@@ -27,6 +25,7 @@ import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
   resolveOusiaFontFamilyValue,
+  type OusiaAppStateTransactionResult,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
   type OusiaSidebarSectionId,
@@ -84,6 +83,19 @@ function clamp(value: number, min: number, max: number) {
 
 function chatKey(projectPath: string, sessionId: string) {
   return `${projectPath}::${sessionId}`
+}
+
+function projectPathForAppStateSession(
+  state: InitialAppState,
+  session: SessionRecord
+) {
+  if (!session.projectId) {
+    return state.settings.defaultWorkDir
+  }
+  return (
+    state.projects.find((project) => project.id === session.projectId)?.path ??
+    state.settings.defaultWorkDir
+  )
 }
 
 function moveRecordKey<T>(
@@ -393,6 +405,58 @@ export function App() {
   const draftSessionKeysRef = useRef<Set<string>>(new Set())
   const isApplyingStoredThemeRef = useRef(false)
 
+  const applyPersistentAppState = useCallback(
+    (
+      state: InitialAppState,
+      options: {
+        syncSettings?: boolean
+        syncShellLayout?: boolean
+        syncTheme?: boolean
+      } = {}
+    ) => {
+      if (options.syncTheme) {
+        isApplyingStoredThemeRef.current = true
+        setTheme(state.settings.theme)
+      }
+      if (options.syncSettings !== false) {
+        setSettings(state.settings)
+      }
+      if (options.syncShellLayout !== false) {
+        setSidebarWidth(state.shellLayout.sidebarWidth)
+        setIsSidebarCollapsed(state.shellLayout.isSidebarCollapsed)
+        setSidebarSectionOrder(
+          normalizeSidebarSectionOrder(state.shellLayout.sidebarSectionOrder)
+        )
+      }
+      setProjects(state.projects)
+      setExpandedProjectIds(state.expandedProjectIds)
+      setSessions(state.sessions)
+      setSelectedSessionId(state.selectedSessionId)
+    },
+    [setTheme]
+  )
+
+  const applyAppStateTransaction = useCallback(
+    (result: OusiaAppStateTransactionResult) => {
+      if (!result.ok) {
+        console.warn(result.error)
+        if (result.state) {
+          applyPersistentAppState(result.state, {
+            syncSettings: false,
+            syncShellLayout: false,
+          })
+        }
+        return false
+      }
+      applyPersistentAppState(result.state, {
+        syncSettings: false,
+        syncShellLayout: false,
+      })
+      return true
+    },
+    [applyPersistentAppState]
+  )
+
   const projectPathForSession = useCallback(
     (session: SessionRecord) => {
       if (!session.projectId) {
@@ -494,35 +558,6 @@ export function App() {
     },
     []
   )
-  const createAppStateSnapshot = useCallback(
-    (nextSettings: AppSettings = settings): InitialAppState => ({
-      schemaVersion: APP_STATE_SCHEMA_VERSION,
-      settings: nextSettings,
-      sessions,
-      projects,
-      shellLayout: {
-        sidebarWidth,
-        isSidebarCollapsed,
-        sidebarSectionOrder,
-      },
-      windowState: initialState.windowState,
-      expandedProjectIds: expandedProjectIds.filter((projectId) =>
-        projects.some((project) => project.id === projectId)
-      ),
-      selectedSessionId: selectedSession?.id ?? "",
-    }),
-    [
-      expandedProjectIds,
-      initialState.windowState,
-      isSidebarCollapsed,
-      projects,
-      selectedSession?.id,
-      sessions,
-      settings,
-      sidebarSectionOrder,
-      sidebarWidth,
-    ]
-  )
   const handleSettingsChange = useCallback(
     (nextSettings: AppSettings) => {
       const normalizedSettings = normalizeOusiaAppSettings(nextSettings)
@@ -542,10 +577,16 @@ export function App() {
       }
       setSettings(normalizedSettings)
       if (isAppStateLoaded) {
-        void saveAppState(createAppStateSnapshot(normalizedSettings))
+        void window.ousia
+          ?.saveAppSettings({ settings: normalizedSettings })
+          .then((result) => {
+            if (!result.ok) {
+              console.warn(result.error)
+            }
+          })
       }
     },
-    [createAppStateSnapshot, isAppStateLoaded, settings.autoRetryOnFailure]
+    [isAppStateLoaded, settings.autoRetryOnFailure]
   )
 
   const refreshModelRegistry = useCallback(async () => {
@@ -616,24 +657,13 @@ export function App() {
       if (isCancelled) {
         return
       }
-      isApplyingStoredThemeRef.current = true
-      setSettings(state.settings)
-      setTheme(state.settings.theme)
-      setSidebarWidth(state.shellLayout.sidebarWidth)
-      setIsSidebarCollapsed(state.shellLayout.isSidebarCollapsed)
-      setSidebarSectionOrder(
-        normalizeSidebarSectionOrder(state.shellLayout.sidebarSectionOrder)
-      )
-      setProjects(state.projects)
-      setExpandedProjectIds(state.expandedProjectIds)
-      setSessions(state.sessions)
-      setSelectedSessionId(state.selectedSessionId)
+      applyPersistentAppState(state, { syncTheme: true })
       setIsAppStateLoaded(true)
     })
     return () => {
       isCancelled = true
     }
-  }, [setTheme])
+  }, [applyPersistentAppState])
 
   useEffect(() => {
     if (!isAppStateLoaded) {
@@ -674,12 +704,12 @@ export function App() {
       return
     }
     queueMicrotask(() => {
-      setSettings((current) => ({
-        ...current,
+      handleSettingsChange({
+        ...settings,
         theme,
-      }))
+      })
     })
-  }, [isAppStateLoaded, settings.theme, theme])
+  }, [handleSettingsChange, isAppStateLoaded, settings, theme])
 
   useEffect(() => {
     document.documentElement.dataset.radixColorScale =
@@ -714,8 +744,49 @@ export function App() {
     if (isShellResizing) {
       return
     }
-    void saveAppState(createAppStateSnapshot())
-  }, [createAppStateSnapshot, isAppStateLoaded, isShellResizing])
+    void window.ousia
+      ?.saveShellLayout({
+        shellLayout: {
+          isSidebarCollapsed,
+          sidebarSectionOrder,
+          sidebarWidth,
+        },
+      })
+      .then((result) => {
+        if (!result.ok) {
+          console.warn(result.error)
+        }
+      })
+  }, [
+    isAppStateLoaded,
+    isShellResizing,
+    isSidebarCollapsed,
+    sidebarSectionOrder,
+    sidebarWidth,
+  ])
+
+  useEffect(() => {
+    if (!isAppStateLoaded) {
+      return
+    }
+    void window.ousia
+      ?.saveAppSelection({
+        expandedProjectIds: expandedProjectIds.filter((projectId) =>
+          projects.some((project) => project.id === projectId)
+        ),
+        selectedSessionId: selectedSession?.id ?? "",
+      })
+      .then((result) => {
+        if (!result.ok) {
+          console.warn(result.error)
+        }
+      })
+  }, [
+    expandedProjectIds,
+    isAppStateLoaded,
+    projects,
+    selectedSession?.id,
+  ])
 
   useEffect(() => {
     sessionsRef.current = sessions
@@ -959,6 +1030,16 @@ export function App() {
         setSessions((current) =>
           moveSessionToGroupFront(current, targetSession.id, event.timestamp)
         )
+        void window.ousia
+          ?.touchSession({
+            sessionId: targetSession.id,
+            time: event.timestamp,
+          })
+          .then((result) => {
+            if (!result.ok) {
+              console.warn(result.error)
+            }
+          })
       }
       queueChatItemEvent(targetKey, event)
     })
@@ -1154,7 +1235,7 @@ export function App() {
       if (!rawPath) {
         return
       }
-      addProject(rawPath, projectNameFromPath(rawPath))
+      await addProject(rawPath, projectNameFromPath(rawPath))
       return
     }
     const result = await window.ousia.openProjectDirectory({
@@ -1163,24 +1244,95 @@ export function App() {
     if (result.canceled) {
       return
     }
-    addProject(result.path, result.name)
+    await addProject(result.path, result.name)
   }
 
-  function addProject(path: string, name: string) {
+  async function addProject(path: string, name: string) {
+    if (window.ousia) {
+      const knownSessionIds = new Set(
+        sessionsRef.current.map((session) => session.id)
+      )
+      const result = await window.ousia.createProject({
+        name,
+        path,
+        selectOrCreateSession: true,
+        sessionTitle: t.app.newSession,
+      })
+      if (!result.ok) {
+        applyAppStateTransaction(result)
+        return
+      }
+      applyAppStateTransaction(result)
+      if (result.session && !knownSessionIds.has(result.session.id)) {
+        const targetKey = chatKey(
+          projectPathForAppStateSession(result.state, result.session),
+          result.session.id
+        )
+        draftSessionKeysRef.current.add(targetKey)
+        setItemsBySession((current) => {
+          const next = { ...current }
+          delete next[targetKey]
+          return next
+        })
+        setHistoryPageStateBySession((current) => {
+          const next = { ...current }
+          delete next[targetKey]
+          return next
+        })
+      }
+      if (result.session) {
+        setSidebarScrollTargetSessionId(result.session.id)
+      }
+      setIsSettingsOpen(false)
+      return
+    }
+
     const existing = projects.find((project) => project.path === path)
     if (existing) {
-      selectOrCreateProjectSession(existing)
+      await selectOrCreateProjectSession(existing)
       setIsSettingsOpen(false)
       return
     }
     const project = createProject(path, name)
     setProjects((current) => [...current, project])
     setExpandedProjectIds((current) => [...current, project.id])
-    createProjectSession(project.id, project.path)
+    await createProjectSession(project.id, project.path)
     setIsSettingsOpen(false)
   }
 
-  function handleCreateSession() {
+  async function handleCreateSession() {
+    if (window.ousia) {
+      const result = await window.ousia.createSession({
+        title: t.app.newSession,
+      })
+      if (!result.ok) {
+        applyAppStateTransaction(result)
+        return
+      }
+      applyAppStateTransaction(result)
+      if (!result.session) {
+        return
+      }
+      const targetKey = chatKey(
+        projectPathForAppStateSession(result.state, result.session),
+        result.session.id
+      )
+      draftSessionKeysRef.current.add(targetKey)
+      setItemsBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setHistoryPageStateBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setSidebarScrollTargetSessionId(result.session.id)
+      setIsSettingsOpen(false)
+      return
+    }
+
     const session = createSession(t.app.newSession)
     const targetKey = chatKey(settings.defaultWorkDir, session.id)
     draftSessionKeysRef.current.add(targetKey)
@@ -1200,7 +1352,42 @@ export function App() {
     setIsSettingsOpen(false)
   }
 
-  function createProjectSession(projectId: string, explicitProjectPath?: string) {
+  async function createProjectSession(
+    projectId: string,
+    explicitProjectPath?: string
+  ) {
+    if (window.ousia) {
+      const result = await window.ousia.createSession({
+        projectId,
+        title: t.app.newSession,
+      })
+      if (!result.ok) {
+        applyAppStateTransaction(result)
+        return
+      }
+      applyAppStateTransaction(result)
+      if (!result.session) {
+        return
+      }
+      const targetKey = chatKey(
+        projectPathForAppStateSession(result.state, result.session),
+        result.session.id
+      )
+      draftSessionKeysRef.current.add(targetKey)
+      setItemsBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setHistoryPageStateBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setSidebarScrollTargetSessionId(result.session.id)
+      return
+    }
+
     const session = { ...createSession(t.app.newSession), projectId }
     const projectPath =
       explicitProjectPath ??
@@ -1226,7 +1413,7 @@ export function App() {
     setSidebarScrollTargetSessionId(session.id)
   }
 
-  function selectOrCreateProjectSession(project: ProjectRecord) {
+  async function selectOrCreateProjectSession(project: ProjectRecord) {
     const existingSession = sessions.find(
       (session) => session.projectId === project.id
     )
@@ -1237,12 +1424,60 @@ export function App() {
       setSelectedSessionId(existingSession.id)
       return
     }
-    createProjectSession(project.id)
+    await createProjectSession(project.id)
   }
 
-  function handleDeleteProject(projectId: string) {
+  async function handleDeleteProject(projectId: string) {
     const project = projects.find((item) => item.id === projectId)
     if (!project) {
+      return
+    }
+
+    if (window.ousia) {
+      const result = await window.ousia.deleteProject({ projectId })
+      if (!result.ok) {
+        applyAppStateTransaction(result)
+        return
+      }
+      const removedSessions = result.removedSessions ?? []
+      applyAppStateTransaction(result)
+      setItemsBySession((current) => {
+        const next = { ...current }
+        for (const session of removedSessions) {
+          delete next[chatKey(project.path, session.id)]
+        }
+        return next
+      })
+      setHistoryPageStateBySession((current) => {
+        const next = { ...current }
+        for (const session of removedSessions) {
+          delete next[chatKey(project.path, session.id)]
+        }
+        return next
+      })
+      setRunStatusBySession((current) => {
+        const next = { ...current }
+        for (const session of removedSessions) {
+          delete next[chatKey(project.path, session.id)]
+        }
+        return next
+      })
+      for (const session of removedSessions) {
+        draftSessionKeysRef.current.delete(chatKey(project.path, session.id))
+      }
+      setUnreadCompletedSessionIds((current) => {
+        if (!removedSessions.some((session) => current.has(session.id))) {
+          return current
+        }
+        const next = new Set(current)
+        for (const session of removedSessions) {
+          next.delete(session.id)
+        }
+        return next
+      })
+      if (selectedSession?.projectId === projectId) {
+        setIsSettingsOpen(false)
+      }
       return
     }
 
@@ -1309,9 +1544,17 @@ export function App() {
     setIsSettingsOpen(true)
   }
 
-  function handleRenameSession(sessionId: string, title: string) {
+  async function handleRenameSession(sessionId: string, title: string) {
     const nextTitle = title.trim()
     if (!nextTitle) {
+      return
+    }
+    if (window.ousia) {
+      const result = await window.ousia.renameSession({
+        sessionId,
+        title: nextTitle,
+      })
+      applyAppStateTransaction(result)
       return
     }
     setSessions((current) =>
@@ -1387,6 +1630,20 @@ export function App() {
         console.warn(result.error)
         return
       }
+
+      const stateResult = await window.ousia.moveSession({
+        sessionId,
+        targetProjectId,
+        targetSessionId,
+      })
+      if (!stateResult.ok) {
+        applyAppStateTransaction(stateResult)
+        return
+      }
+      moveSessionStateKeys(sourceKey, targetKey)
+      applyAppStateTransaction(stateResult)
+      setSidebarScrollTargetSessionId(sessionId)
+      return
     }
 
     moveSessionStateKeys(sourceKey, targetKey)
@@ -1410,12 +1667,24 @@ export function App() {
     setProjects((current) =>
       reorderById(current, sourceProjectId, targetProjectId)
     )
+    void window.ousia
+      ?.reorderProjects({
+        sourceProjectId,
+        targetProjectId,
+      })
+      .then(applyAppStateTransaction)
   }
 
   function handleReorderSessions(sourceSessionId: string, targetSessionId: string) {
     setSessions((current) =>
       reorderSessionsById(current, sourceSessionId, targetSessionId)
     )
+    void window.ousia
+      ?.reorderSessions({
+        sourceSessionId,
+        targetSessionId,
+      })
+      .then(applyAppStateTransaction)
   }
 
   function handleReorderSidebarSections(
@@ -1449,6 +1718,21 @@ export function App() {
           console.warn(result.error)
           return
         }
+        if (window.ousia) {
+          const currentSession = sessionsRef.current.find(
+            (candidate) => candidate.id === sessionId
+          )
+          if (!currentSession || !isDefaultSessionTitle(currentSession.title)) {
+            return
+          }
+          void window.ousia
+            .renameSession({
+              sessionId,
+              title: result.title,
+            })
+            .then(applyAppStateTransaction)
+          return
+        }
         setSessions((current) =>
           current.map((candidate) =>
             candidate.id === sessionId &&
@@ -1474,8 +1758,9 @@ export function App() {
 
     const now = new Date().toISOString()
     const titleSuffix = settings.language === "zh" ? "分支" : "Fork"
-    const branchSession = {
-      ...createSession(`${selectedSession.title} · ${titleSuffix}`),
+    const branchTitle = `${selectedSession.title} · ${titleSuffix}`
+    let branchSession = {
+      ...createSession(branchTitle),
       projectId: selectedSession.projectId,
       time: now,
     }
@@ -1490,11 +1775,26 @@ export function App() {
         }))
         return attachments ? { ...item, attachments } : { ...item }
       })
-    const branchKey = chatKey(selectedProjectPath, branchSession.id)
+    let branchKey = chatKey(selectedProjectPath, branchSession.id)
     const branchSourceItem = selectedItems[branchIndex]
 
     let resolvedBranchItems = branchItems
     if (window.ousia) {
+      const createResult = await window.ousia.createSession({
+        projectId: selectedSession.projectId,
+        select: false,
+        title: branchTitle,
+      })
+      if (!createResult.ok) {
+        applyAppStateTransaction(createResult)
+        return
+      }
+      if (!createResult.session) {
+        return
+      }
+      branchSession = createResult.session
+      branchKey = chatKey(selectedProjectPath, branchSession.id)
+
       const result = await window.ousia
         .branchChat({
           projectPath: selectedProjectPath,
@@ -1511,6 +1811,10 @@ export function App() {
           error: error instanceof Error ? error.message : String(error),
         }))
       if (!result.ok) {
+        const rollbackResult = await window.ousia.deleteSession({
+          sessionId: branchSession.id,
+        })
+        applyAppStateTransaction(rollbackResult)
         appendLocalEvent({
           type: "error",
           id: `branch-${Date.now()}`,
@@ -1520,6 +1824,19 @@ export function App() {
         return
       }
       resolvedBranchItems = result.items
+
+      const selectResult = await window.ousia.saveAppSelection({
+        selectedSessionId: branchSession.id,
+      })
+      applyAppStateTransaction(selectResult)
+      setItemsBySession((current) => ({
+        ...current,
+        [branchKey]: resolvedBranchItems,
+      }))
+      setSelectedSessionId(branchSession.id)
+      setSidebarScrollTargetSessionId(branchSession.id)
+      setIsSettingsOpen(false)
+      return
     }
 
     setSessions((current) => [branchSession, ...current])
@@ -1539,12 +1856,47 @@ export function App() {
     setIsSettingsOpen(false)
   }
 
-  function handleDeleteSession(sessionId: string) {
+  async function handleDeleteSession(sessionId: string) {
     const session = sessions.find((item) => item.id === sessionId)
     if (!session) {
       return
     }
     const targetKey = chatKey(projectPathForSession(session), sessionId)
+
+    if (window.ousia) {
+      const result = await window.ousia.deleteSession({ sessionId })
+      if (!result.ok) {
+        applyAppStateTransaction(result)
+        return
+      }
+      applyAppStateTransaction(result)
+      setItemsBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setHistoryPageStateBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      draftSessionKeysRef.current.delete(targetKey)
+      setRunStatusBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setUnreadCompletedSessionIds((current) => {
+        if (!current.has(sessionId)) {
+          return current
+        }
+        const next = new Set(current)
+        next.delete(sessionId)
+        return next
+      })
+      return
+    }
+
     const remaining = sessions.filter((item) => item.id !== sessionId)
     setSessions(remaining)
     setItemsBySession((current) => {

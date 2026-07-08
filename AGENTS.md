@@ -70,6 +70,11 @@ match the task.
   reference under ignored `ref/`; see `docs/shadcn-reference.md`.
 - When changing agent behavior, verify whether the change belongs in renderer
   state, Electron IPC, or Pi session setup.
+- Session/project indexes are owned by Electron main. Renderer must not persist
+  full app-state snapshots for session or project changes; use the app-state
+  transaction IPCs (`createSession`, `deleteSession`, `renameSession`,
+  `moveSession`, `createProject`, etc.) and sync from the returned canonical
+  state.
 - Tool call disclosure state is renderer-local UI memory in `localStorage`
   under `ousia.chat.toolDisclosure.v1`; do not persist it into chat history.
 - Streaming chat performance depends on preserving memo boundaries: compare
