@@ -1,6 +1,6 @@
 {
   "name": "ousia-desktop",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "A simplified Electron desktop client for Pi coding agent sessions.",
   "license": "MIT",
   "homepage": "https://github.com/s1dashu/ousia-desktop#readme",
