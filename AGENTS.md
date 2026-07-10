@@ -28,6 +28,9 @@ match the task.
 - Public framework contracts live in versioned `@ousia/*` packages. The first
   extraction branch is `codex/extract-public-host-packages`; do not restore the
   removed user-local runtime extension loader to provide product extensibility.
+- Do not try to keep downstream repositories source-identical to Ousia. The
+  long-term goal is one source of truth for framework mechanisms, consumed
+  through versioned packages, while each product keeps its own policy and UI.
 - The app shell is assembled from React surfaces: sidebar, chat, and settings.
 - There is no Ousia extension/runtime-extension/plugin surface in this branch.
 - The desktop runtime is Electron + Vite + React.
@@ -69,6 +72,36 @@ match the task.
 - Renderer IPC types: [src/electron/chat-types.ts](src/electron/chat-types.ts)
 - Electron Forge config: [forge.config.cjs](forge.config.cjs)
 - Forge Vite configs: [vite.main.config.ts](vite.main.config.ts), [vite.preload.config.ts](vite.preload.config.ts), [vite.renderer.config.ts](vite.renderer.config.ts)
+
+## Framework Evolution And Downstream Upgrades
+
+- Put a change in Ousia when another Agent product could reasonably reuse it:
+  Electron/window lifecycle, Agent runtime and provider adapters, conversation
+  history/event flow, dynamic tool registration, WorkspaceHost contracts, IPC,
+  logging/observability, persistence orchestration, themes, shortcuts, and the
+  generic sidebar/chat/settings shell.
+- Keep product prompts, product tools, private Workspace Apps and their codecs,
+  domain models, branding, data isolation, file-placement policy, and
+  product-specific interaction design downstream.
+- A downstream workaround for a missing framework capability is not a permanent
+  extension mechanism. Define a strict typed contribution point in Ousia, make
+  Ousia Desktop use the same public boundary, then remove the downstream hack.
+- Prefer a small set of explicit, typed, fail-fast contracts over accumulating
+  optional flags. Required providers, tools, Workspace Apps, codecs, path
+  policies, and IPC procedures must fail composition when absent or invalid.
+- Classify repository differences by ownership, not textual similarity:
+  reusable bug fixes and performance work move upstream; product behavior stays
+  downstream; genuinely variable behavior becomes an explicit strategy
+  contract; harmless structural differences do not justify a rewrite.
+- Publish framework changes as exact, versioned `@ousia/*` packages with release
+  notes and contract tests. Downstream products upgrade those exact versions on
+  a dedicated integration branch, run both Ousia and product gates, adapt their
+  composition code, and delete any framework implementation now supplied by the
+  package. Do not make downstream products depend on a floating Ousia `main`.
+- Until a framework area has been extracted into a package, keep its commits
+  separable and traceable so a downstream integration branch can port them
+  without merging the Ousia product wholesale. This is transitional, not the
+  intended steady-state maintenance model.
 
 ## Working Rules For Future Agents
 
