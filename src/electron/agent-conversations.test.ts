@@ -19,9 +19,28 @@ vi.mock("./pi-package-dir.js", () => ({
   ensurePiPackageDir: () => "/tmp/pi-coding-agent",
 }))
 
-import { createAgentConversationModule } from "./agent-conversations.js"
+import {
+  createAgentConversationModule,
+  disposePiSessionBundle,
+} from "./agent-conversations.js"
 
 describe("Pi agent conversation boundaries", () => {
+  it("unsubscribes and disposes a released Pi session even if unsubscribe fails", () => {
+    const dispose = vi.fn()
+    const unsubscribe = vi.fn(() => {
+      throw new Error("unsubscribe failed")
+    })
+
+    expect(() =>
+      disposePiSessionBundle({
+        session: { dispose } as never,
+        unsubscribe,
+      })
+    ).toThrow("unsubscribe failed")
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
   it("contains an invalid Codex reasoning effort at the Pi provider boundary", async () => {
     const emitChatEvent = vi.fn()
     const conversations = createAgentConversationModule({

@@ -123,6 +123,10 @@ function sessionKey(context: OusiaChatContext) {
   return `${context.projectPath}::${context.sessionId}`
 }
 
+function sessionKeyBelongsToSession(key: string, sessionId: string) {
+  return key.slice(key.lastIndexOf("::") + 2) === sessionId
+}
+
 function absoluteProjectPath(projectPath: string) {
   return resolve(expandHomePath(projectPath))
 }
@@ -661,6 +665,9 @@ export function createCodexAgentProvider({
   const unhandledItemTypes = new Set<string>()
   const modelById = new Map<string, OusiaAvailableModel>()
   let defaultModelId: string | undefined
+  let modelCatalogRefreshPromise:
+    | Promise<ReturnType<typeof mapCodexModels>>
+    | undefined
 
   function log(
     level: "debug" | "info" | "warn" | "error",
@@ -678,14 +685,27 @@ export function createCodexAgentProvider({
     defaultModelId = catalog.defaultModelId
   }
 
-  async function refreshModelCatalog() {
-    const response = await client.request("model/list", {
-      includeHidden: false,
-      limit: 100,
-    })
-    const catalog = mapCodexModels(response)
-    rememberModelCatalog(catalog)
-    return catalog
+  function refreshModelCatalog() {
+    if (modelCatalogRefreshPromise) {
+      return modelCatalogRefreshPromise
+    }
+    const refresh = client
+      .request("model/list", {
+        includeHidden: false,
+        limit: 100,
+      })
+      .then((response) => {
+        const catalog = mapCodexModels(response)
+        rememberModelCatalog(catalog)
+        return catalog
+      })
+      .finally(() => {
+        if (modelCatalogRefreshPromise === refresh) {
+          modelCatalogRefreshPromise = undefined
+        }
+      })
+    modelCatalogRefreshPromise = refresh
+    return refresh
   }
 
   async function resolveCatalogModel(modelId: string) {
@@ -1460,6 +1480,57 @@ export function createCodexAgentProvider({
       }
     },
 
+    async releaseChatSession(context: OusiaChatContext) {
+      const hasActiveTurn = [...activeBySessionKey.values()].some(
+        (active) => active.context.sessionId === context.sessionId
+      )
+      const hasPendingStart = [...pendingStartContextByThreadId.values()].some(
+        (pending) => pending.sessionId === context.sessionId
+      )
+      if (hasActiveTurn || hasPendingStart) {
+        throw new Error(
+          `Cannot release active Codex session: ${context.sessionId}`
+        )
+      }
+
+      const releasedThreadIds: string[] = []
+      for (const [threadId, threadContext] of contextByThreadId) {
+        if (threadContext.sessionId === context.sessionId) {
+          contextByThreadId.delete(threadId)
+          activeByThreadId.delete(threadId)
+          releasedThreadIds.push(threadId)
+        }
+      }
+      for (const key of queuedBySessionKey.keys()) {
+        if (sessionKeyBelongsToSession(key, context.sessionId)) {
+          queuedBySessionKey.delete(key)
+        }
+      }
+      for (const key of continueQueueAfterInterrupt.keys()) {
+        if (sessionKeyBelongsToSession(key, context.sessionId)) {
+          continueQueueAfterInterrupt.delete(key)
+        }
+      }
+      for (const key of usageBySessionKey.keys()) {
+        if (sessionKeyBelongsToSession(key, context.sessionId)) {
+          usageBySessionKey.delete(key)
+        }
+      }
+      for (const completedKey of completedPendingTurnKeys) {
+        if (
+          releasedThreadIds.some((threadId) =>
+            completedKey.startsWith(`${threadId}:`)
+          )
+        ) {
+          completedPendingTurnKeys.delete(completedKey)
+        }
+      }
+      log("debug", "Released Codex session runtime state", {
+        sessionId: context.sessionId,
+        threadCount: releasedThreadIds.length,
+      })
+    },
+
     async exportChat(payload: OusiaChatExportPayload, outputPath: string) {
       try {
         if (payload.format === "markdown") {
@@ -1491,11 +1562,13 @@ export function createCodexAgentProvider({
     try {
       resolution = nativeBinaryResolver()
       const initialize = await client.start()
-      const accountResponse = await client.request<{
-        account?: unknown
-        requiresOpenaiAuth?: unknown
-      }>("account/read", { refreshToken: false })
-      const { defaultModelId, models } = await refreshModelCatalog()
+      const [accountResponse, { defaultModelId, models }] = await Promise.all([
+        client.request<{
+          account?: unknown
+          requiresOpenaiAuth?: unknown
+        }>("account/read", { refreshToken: false }),
+        refreshModelCatalog(),
+      ])
       return {
         account: mapCodexAccount(accountResponse.account),
         available: true,

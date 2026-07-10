@@ -1,50 +1,48 @@
 /* eslint-disable react-refresh/only-export-components */
 import type { SVGProps } from "react"
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
-import {
-  AlertCircleIcon,
-  ArrowDown01Icon,
-  ArrowDown02Icon,
-  ArrowShrinkIcon,
-  ArrowUp02Icon,
-  ArrowUpIcon,
-  BanIcon,
-  Cancel01Icon,
-  ChatAdd01Icon,
-  CheckIcon,
-  CheckmarkCircleIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  ChevronUpIcon,
-  ClockIcon,
-  CodeIcon,
-  ComputerTerminalIcon,
-  Copy01Icon,
-  DatabaseIcon,
-  Delete02Icon,
-  EyeIcon,
-  EyeOffIcon,
-  File01Icon,
-  FileImageIcon as HugeFileImageIcon,
-  FileScriptIcon,
-  Folder01Icon,
-  Folder02Icon,
-  FolderAddIcon,
-  GitBranchIcon,
-  GripVerticalIcon,
-  Loading03Icon,
-  MoreHorizontalIcon,
-  PanelLeftIcon,
-  PencilEdit02Icon,
-  PlusSignIcon,
-  Search01Icon,
-  SentIcon,
-  Settings02Icon,
-  SparklesIcon,
-  SplitIcon,
-  Tick02Icon,
-  Unlink05Icon,
-} from "@hugeicons/core-free-icons"
+import AlertCircleIcon from "@hugeicons/core-free-icons/AlertCircleIcon"
+import ArrowDown01Icon from "@hugeicons/core-free-icons/ArrowDown01Icon"
+import ArrowDown02Icon from "@hugeicons/core-free-icons/ArrowDown02Icon"
+import ArrowShrinkIcon from "@hugeicons/core-free-icons/ArrowShrinkIcon"
+import ArrowUp02Icon from "@hugeicons/core-free-icons/ArrowUp02Icon"
+import ArrowUpIcon from "@hugeicons/core-free-icons/ArrowUp01Icon"
+import BanIcon from "@hugeicons/core-free-icons/BanIcon"
+import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon"
+import ChatAdd01Icon from "@hugeicons/core-free-icons/ChatAdd01Icon"
+import CheckIcon from "@hugeicons/core-free-icons/CheckIcon"
+import CheckmarkCircleIcon from "@hugeicons/core-free-icons/CheckmarkCircle01Icon"
+import ChevronDownIcon from "@hugeicons/core-free-icons/ChevronDownIcon"
+import ChevronRightIcon from "@hugeicons/core-free-icons/ChevronRightIcon"
+import ChevronUpIcon from "@hugeicons/core-free-icons/ChevronUpIcon"
+import ClockIcon from "@hugeicons/core-free-icons/Clock01Icon"
+import CodeIcon from "@hugeicons/core-free-icons/CodeIcon"
+import ComputerTerminalIcon from "@hugeicons/core-free-icons/ComputerTerminal01Icon"
+import Copy01Icon from "@hugeicons/core-free-icons/Copy01Icon"
+import DatabaseIcon from "@hugeicons/core-free-icons/DatabaseIcon"
+import Delete02Icon from "@hugeicons/core-free-icons/Delete02Icon"
+import EyeIcon from "@hugeicons/core-free-icons/EyeIcon"
+import EyeOffIcon from "@hugeicons/core-free-icons/EyeOffIcon"
+import File01Icon from "@hugeicons/core-free-icons/File01Icon"
+import HugeFileImageIcon from "@hugeicons/core-free-icons/FileImageIcon"
+import FileScriptIcon from "@hugeicons/core-free-icons/FileScriptIcon"
+import Folder01Icon from "@hugeicons/core-free-icons/Folder01Icon"
+import Folder02Icon from "@hugeicons/core-free-icons/Folder02Icon"
+import FolderAddIcon from "@hugeicons/core-free-icons/FolderAddIcon"
+import GitBranchIcon from "@hugeicons/core-free-icons/GitBranchIcon"
+import GripVerticalIcon from "@hugeicons/core-free-icons/GripVerticalIcon"
+import Loading03Icon from "@hugeicons/core-free-icons/Loading03Icon"
+import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon"
+import PanelLeftIcon from "@hugeicons/core-free-icons/PanelLeftIcon"
+import PencilEdit02Icon from "@hugeicons/core-free-icons/PencilEdit02Icon"
+import PlusSignIcon from "@hugeicons/core-free-icons/PlusSignIcon"
+import Search01Icon from "@hugeicons/core-free-icons/Search01Icon"
+import SentIcon from "@hugeicons/core-free-icons/SentIcon"
+import Settings02Icon from "@hugeicons/core-free-icons/Settings02Icon"
+import SparklesIcon from "@hugeicons/core-free-icons/SparklesIcon"
+import SplitIcon from "@hugeicons/core-free-icons/SplitIcon"
+import Tick02Icon from "@hugeicons/core-free-icons/Tick02Icon"
+import Unlink05Icon from "@hugeicons/core-free-icons/Unlink05Icon"
 
 import { cn } from "@/lib/utils"
 

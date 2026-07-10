@@ -13,6 +13,8 @@ npm start
 
 Testing strategy and coverage scope are tracked in
 [docs/testing-plan.md](testing-plan.md).
+The current performance baseline, optimization roadmap, and regression
+guardrails are tracked in [docs/performance.md](performance.md).
 
 Public package smoke test:
 
@@ -45,6 +47,9 @@ Useful log tail:
 ```bash
 tail -200 ~/.ousia/logs/ousia-desktop.log
 ```
+
+Packaged startup timing is logged under `window.startup`, split into app-state,
+BrowserWindow, renderer-load, and total durations.
 
 ## Current Direction
 

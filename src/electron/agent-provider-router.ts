@@ -29,10 +29,10 @@ import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 export type AgentConversationProvider = {
+  dispose?(): Promise<void> | void
+  releaseChatSession?(context: OusiaChatContext): Promise<void> | void
   branchChat(payload: OusiaChatBranchPayload): Promise<OusiaChatBranchResult>
-  clearChatQueue(
-    context: OusiaChatContext
-  ): Promise<OusiaChatClearQueueResult>
+  clearChatQueue(context: OusiaChatContext): Promise<OusiaChatClearQueueResult>
   compactChat(payload: OusiaChatCompactPayload): Promise<OusiaChatCompactResult>
   exportChat(
     payload: OusiaChatExportPayload,
@@ -243,10 +243,10 @@ export function createAgentProviderRouter({
       })
       const targetProjectPath =
         payload.targetProjectId !== undefined
-        ? state.projects.find(
-            (candidate) => candidate.id === payload.targetProjectId
-          )?.path
-        : state.settings.defaultWorkDir
+          ? state.projects.find(
+              (candidate) => candidate.id === payload.targetProjectId
+            )?.path
+          : state.settings.defaultWorkDir
       if (!targetProjectPath) {
         writeRuntimeLog("agent.context", "error", {
           message: "Rejected move to unknown canonical project",
@@ -256,8 +256,10 @@ export function createAgentProviderRouter({
         throw new Error(`Unknown project: ${payload.targetProjectId}`)
       }
       if (
-        absoluteProjectPath(payload.targetProjectPath, "Requested target path") !==
-        absoluteProjectPath(targetProjectPath, "Canonical target path")
+        absoluteProjectPath(
+          payload.targetProjectPath,
+          "Requested target path"
+        ) !== absoluteProjectPath(targetProjectPath, "Canonical target path")
       ) {
         writeRuntimeLog("agent.context", "warn", {
           message: "Rejected non-canonical move target path",
@@ -266,7 +268,9 @@ export function createAgentProviderRouter({
           requestedProjectPath: payload.targetProjectPath,
           sessionId: payload.sessionId,
         })
-        throw new Error(`Target project path mismatch for session: ${payload.sessionId}`)
+        throw new Error(
+          `Target project path mismatch for session: ${payload.sessionId}`
+        )
       }
       return providerForRoute(route).moveChatSession({
         ...payload,

@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process"
+import { execFile, type ExecFileException } from "node:child_process"
 
 import { writeRuntimeLog } from "./runtime-logger.js"
 
@@ -24,42 +24,59 @@ function parseNullSeparatedEnv(stdout: Buffer) {
 }
 
 function readShellEnvironment(shell: string, args: string[]) {
-  const result = spawnSync(shell, args, {
-    env: {
-      ...process.env,
-      TERM: process.env.TERM || "xterm-256color",
-    },
-    maxBuffer: 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: SHELL_ENV_TIMEOUT_MS,
-    windowsHide: true,
+  return new Promise<Map<string, string> | undefined>((resolve) => {
+    execFile(
+      shell,
+      args,
+      {
+        encoding: "buffer",
+        env: {
+          ...process.env,
+          TERM: process.env.TERM || "xterm-256color",
+        },
+        maxBuffer: 1024 * 1024,
+        timeout: SHELL_ENV_TIMEOUT_MS,
+        windowsHide: true,
+      },
+      (error: ExecFileException | null, stdout: Buffer, stderr: Buffer) => {
+        if (error) {
+          writeRuntimeLog("shell-env", "warn", {
+            code: error.code,
+            error: error.message,
+            killed: error.killed,
+            signal: error.signal,
+            stderr: stderr.toString("utf8").trim().slice(0, 500),
+          })
+          resolve(undefined)
+          return
+        }
+        resolve(parseNullSeparatedEnv(stdout))
+      }
+    )
   })
-  if (result.error || result.status !== 0) {
-    writeRuntimeLog("shell-env", "warn", {
-      error: result.error instanceof Error ? result.error.message : undefined,
-      signal: result.signal,
-      status: result.status,
-      stderr: result.stderr.toString("utf8").trim().slice(0, 500),
-    })
-    return undefined
-  }
-  return parseNullSeparatedEnv(result.stdout)
 }
 
 function shouldImportShellEnv(name: string) {
-  return process.env[name] === undefined || process.env[name] === "" || name === "PATH"
+  return (
+    process.env[name] === undefined ||
+    process.env[name] === "" ||
+    name === "PATH"
+  )
 }
 
-export function hydrateShellEnvironment() {
+let hydrationPromise: Promise<void> | undefined
+
+async function hydrateShellEnvironmentOnce() {
   if (process.platform !== "darwin") {
     return
   }
 
+  const startedAt = performance.now()
   const shell = process.env.SHELL?.trim() || "/bin/zsh"
   const command = "printf '\\0'; /usr/bin/env -0"
   const shellEnv =
-    readShellEnvironment(shell, ["-ilc", command]) ??
-    readShellEnvironment(shell, ["-lc", command])
+    (await readShellEnvironment(shell, ["-ilc", command])) ??
+    (await readShellEnvironment(shell, ["-lc", command]))
   if (!shellEnv) {
     return
   }
@@ -74,10 +91,16 @@ export function hydrateShellEnvironment() {
   }
 
   writeRuntimeLog("shell-env", "info", {
+    durationMs: Math.round(performance.now() - startedAt),
     importedCount: importedNames.length,
     sensitiveEnvNames: importedNames
       .filter((name) => SENSITIVE_ENV_NAME_PATTERN.test(name))
       .sort(),
     shell,
   })
+}
+
+export function hydrateShellEnvironment() {
+  hydrationPromise ??= hydrateShellEnvironmentOnce()
+  return hydrationPromise
 }

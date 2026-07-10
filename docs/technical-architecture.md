@@ -46,6 +46,11 @@ Main renderer entrypoints:
   management.
 - `src/features/sidebar/Sidebar.tsx`: project/session/settings navigation.
 
+The shell surfaces are memoized and receive stable event callbacks. Chat event
+reduction preserves object references for no-op events and copies only the
+changed item path, so active streaming does not invalidate unrelated shell or
+history subtrees.
+
 The old workspace abstraction and right-side terminal panel are gone. Shell
 layout state only persists the sidebar width/collapse state and sidebar section
 ordering.
@@ -84,6 +89,16 @@ canonical path authorization, provider adapters, scope tombstones, and state IO
 belong to the host; React panel chrome belongs to desktop UI; a downstream
 Workspace App owns its renderer, state/event codec, effects, file policy, and
 product dependencies.
+
+The first window uses a fast persisted-state load and does not wait for shell
+environment hydration or Pi SDK parsing. Provider-heavy modules are imported at
+their first capability boundary. Adjacent text deltas are coalesced for one
+short frame window in main before renderer IPC, while non-delta events retain
+strict ordering.
+
+Ordinary main-process app-state reads never import Pi. The renderer's initial
+state IPC first awaits shell-environment hydration and then explicitly
+synchronizes Pi's retry preference, preventing environment/package-path races.
 
 ## Preload API
 
@@ -135,6 +150,12 @@ the supported configuration entry points are Pi itself, usually through the Pi
 TUI/login flow, and Ousia's settings UI; the concrete auth storage file is a
 Pi-owned implementation detail.
 
+Live Pi AgentSessions use a bounded idle-only LRU. Active, queued, or
+shell-running sessions are retained until idle. Deleting a session/project
+releases provider-local state; Pi listeners are unsubscribed and the session is
+disposed, while Codex thread/context maps are cleared. Disk history remains the
+source for lossless recreation after an idle eviction.
+
 On macOS, apps launched from Finder or a DMG do not inherit terminal shell
 environment variables. During main-process startup, Ousia reads the user's shell
 environment and imports missing variables into the Electron process so Pi can
@@ -173,6 +194,16 @@ sending transaction intents to main and then syncing from the returned canonical
 state. Renderer code must not save full app-state snapshots because stale
 snapshots can overwrite newer session/project index changes.
 
+Electron main keeps a canonical in-memory snapshot per app-state file. Public
+loads and transaction results are cloned, durable no-op transactions skip disk,
+and a new snapshot becomes visible only after the atomic file replacement
+succeeds.
+
+The desktop runtime does not support concurrent main processes. It holds
+Electron's single-instance lock, and a second launch focuses (or recreates) the
+existing window, ensuring that only one main process can mutate the canonical
+in-memory snapshot and `app-state.json`.
+
 Chat events carry their session context. The renderer routes contextual events
 only while that canonical session still exists; late events after deletion are
 logged and dropped instead of falling into the selected chat. Session/project
@@ -191,4 +222,9 @@ Runtime logs are written to:
 ```
 
 They include Electron main logs, renderer console messages, renderer uncaught
-errors, and chat/title-generation failures.
+errors, chat/title-generation failures, shell-environment hydration time, and
+structured BrowserWindow startup timings. The append descriptor is reused and
+the log rotates at 8 MiB on process startup.
+
+See [performance.md](performance.md) for the measured baseline and performance
+regression guardrails.

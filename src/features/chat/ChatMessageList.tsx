@@ -29,6 +29,13 @@ type ChatMessageListProps = {
   t: ReturnType<typeof getMessages>
 }
 
+const STREAMDOWN_LINK_SAFETY = { enabled: false } as const
+const ASSISTANT_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+})
+
 export const ChatMessageList = memo(function ChatMessageList({
   items,
   isAgentWorking,
@@ -120,7 +127,11 @@ function chatItemSpacingClass(item: ChatItem, previousItem?: ChatItem) {
 
 type ChatRenderItem =
   | { kind: "single"; item: ChatItem }
-  | { kind: "toolGroup"; id: string; items: Extract<ChatItem, { role: "tool" }>[] }
+  | {
+      kind: "toolGroup"
+      id: string
+      items: Extract<ChatItem, { role: "tool" }>[]
+    }
 
 function groupVisibleItems(items: ChatItem[]): ChatRenderItem[] {
   const grouped: ChatRenderItem[] = []
@@ -193,12 +204,19 @@ function chatRenderItemId(item: ChatRenderItem) {
   return item.kind === "single" ? item.item.id : item.id
 }
 
-function footerItemIdsForVisibleItems(items: ChatItem[], isAgentWorking: boolean) {
+function footerItemIdsForVisibleItems(
+  items: ChatItem[],
+  isAgentWorking: boolean
+) {
   const footerItemIds = new Set<string>()
   let latestFinishedAssistantId: string | undefined
 
   items.forEach((item) => {
-    if (item.role === "user" || item.role === "system" || item.role === "error") {
+    if (
+      item.role === "user" ||
+      item.role === "system" ||
+      item.role === "error"
+    ) {
       if (latestFinishedAssistantId) {
         footerItemIds.add(latestFinishedAssistantId)
         latestFinishedAssistantId = undefined
@@ -292,12 +310,17 @@ const ChatItemView = memo(function ChatItemView({
       <div
         className={[
           "flex items-center gap-1.5 text-xs leading-5",
-          chatItem.role === "error" ? "text-destructive" : "text-muted-foreground",
+          chatItem.role === "error"
+            ? "text-destructive"
+            : "text-muted-foreground",
         ].join(" ")}
       >
         <span>{chatItem.text}</span>
         {isStreamingSystemMessage ? (
-          <LoaderCircle size={13} className="animate-spin text-muted-foreground/70" />
+          <LoaderCircle
+            size={13}
+            className="animate-spin text-muted-foreground/70"
+          />
         ) : null}
       </div>
     )
@@ -306,7 +329,7 @@ const ChatItemView = memo(function ChatItemView({
   return (
     <article
       className={[
-        "group/message ousia-chat-message-text select-text text-sm leading-5",
+        "group/message ousia-chat-message-text text-sm leading-5 select-text",
         chatItem.role === "user"
           ? "ousia-squircle-corners ml-auto w-fit rounded-[18px] bg-card px-3 py-2 text-card-foreground dark:bg-muted dark:text-foreground"
           : "text-foreground",
@@ -318,7 +341,7 @@ const ChatItemView = memo(function ChatItemView({
           animated
           isAnimating={chatItem.status === "streaming"}
           controls={false}
-          linkSafety={{ enabled: false }}
+          linkSafety={STREAMDOWN_LINK_SAFETY}
           className="ousia-chat-markdown space-y-0 text-sm leading-5 break-words"
         >
           {chatItem.text}
@@ -329,7 +352,9 @@ const ChatItemView = memo(function ChatItemView({
             <MessageAttachmentList attachments={chatItem.attachments} />
           ) : null}
           {chatItem.text ? (
-            <p className="m-0 break-words whitespace-pre-wrap">{chatItem.text}</p>
+            <p className="m-0 break-words whitespace-pre-wrap">
+              {chatItem.text}
+            </p>
           ) : null}
         </>
       )}
@@ -402,15 +427,11 @@ function AssistantMessageFooter({
     return null
   }
   const timeLabel = item.timestamp
-    ? new Intl.DateTimeFormat(undefined, {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }).format(new Date(item.timestamp))
+    ? ASSISTANT_TIME_FORMATTER.format(new Date(item.timestamp))
     : ""
 
   return (
-    <div className="mt-2 flex h-5 items-center gap-1 text-muted-foreground/70 opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100">
+    <div className="mt-2 flex h-5 items-center gap-1 text-muted-foreground/70 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
       <button
         type="button"
         className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"

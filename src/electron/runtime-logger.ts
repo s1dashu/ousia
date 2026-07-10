@@ -1,4 +1,13 @@
-import { mkdirSync, writeFileSync } from "node:fs"
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { inspect } from "node:util"
@@ -9,6 +18,7 @@ import {
   type DesktopPathPolicy,
   type ProductIdentity,
 } from "@ousia/extension-api"
+const MAX_RUNTIME_LOG_BYTES = 8 * 1024 * 1024
 
 type LogLevel = "debug" | "info" | "warn" | "error"
 
@@ -28,6 +38,8 @@ let configuration:
       logFilePath: string
     }>
   | undefined
+let logDirectoryReady = false
+let logFileDescriptor: number | undefined
 
 function requireConfiguration() {
   if (!configuration) {
@@ -71,7 +83,29 @@ export function getDesktopRuntimeLogPath() {
 }
 
 function ensureLogDir() {
+  if (logDirectoryReady) {
+    return
+  }
   mkdirSync(getRuntimeLogDirectoryPath(), { recursive: true })
+  logDirectoryReady = true
+}
+
+function openRuntimeLog() {
+  if (logFileDescriptor !== undefined) {
+    return logFileDescriptor
+  }
+  ensureLogDir()
+  const logFilePath = getDesktopRuntimeLogPath()
+  const backupPath = `${logFilePath}.1`
+  if (
+    existsSync(logFilePath) &&
+    statSync(logFilePath).size >= MAX_RUNTIME_LOG_BYTES
+  ) {
+    rmSync(backupPath, { force: true })
+    renameSync(logFilePath, backupPath)
+  }
+  logFileDescriptor = openSync(logFilePath, "a")
+  return logFileDescriptor
 }
 
 function formatLogValue(value: unknown) {
@@ -89,11 +123,7 @@ function formatLogValue(value: unknown) {
 }
 
 function appendLine(line: string) {
-  ensureLogDir()
-  writeFileSync(getDesktopRuntimeLogPath(), `${line}\n`, {
-    encoding: "utf8",
-    flag: "a",
-  })
+  writeSync(openRuntimeLog(), `${line}\n`, undefined, "utf8")
 }
 
 export function writeRuntimeLog(
@@ -143,5 +173,11 @@ export function installRuntimeLogger() {
   process.on("unhandledRejection", (reason) => {
     writeRuntimeLog("main.unhandledRejection", "error", reason)
     originalConsole.error(reason)
+  })
+  process.once("exit", () => {
+    if (logFileDescriptor !== undefined) {
+      closeSync(logFileDescriptor)
+      logFileDescriptor = undefined
+    }
   })
 }

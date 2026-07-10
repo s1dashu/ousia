@@ -1,7 +1,4 @@
-import {
-  mkdirSync,
-  writeFileSync,
-} from "node:fs"
+import { mkdirSync, writeFileSync, type Stats } from "node:fs"
 import { stat, unlink } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
@@ -68,6 +65,17 @@ type AgentSessionBundle = {
   modelRegistry: ModelRegistry
   runtimeApiKeyProvider?: string
   session: AgentSession
+  unsubscribe: () => void
+}
+
+export function disposePiSessionBundle(
+  bundle: Pick<AgentSessionBundle, "session" | "unsubscribe">
+) {
+  try {
+    bundle.unsubscribe()
+  } finally {
+    bundle.session.dispose()
+  }
 }
 
 function requirePiThinkingLevel(level: string): OusiaPiThinkingLevel {
@@ -135,6 +143,10 @@ type HistoryCacheEntry = {
   sessionFile: string
 }
 
+const MAX_HISTORY_CACHE_ENTRIES = 12
+const MAX_AGENT_SESSION_ENTRIES = 8
+const MAX_SESSION_FILE_CACHE_ENTRIES = 64
+
 function now() {
   return new Date().toISOString()
 }
@@ -147,7 +159,9 @@ function shouldShowThinkingForLevel(level: string | undefined) {
   return Boolean(level && level !== "off")
 }
 
-function createStreamState(thinkingLevel: string | undefined = "off"): AgentStreamState {
+function createStreamState(
+  thinkingLevel: string | undefined = "off"
+): AgentStreamState {
   return {
     textId: "",
     thinkingId: "",
@@ -170,7 +184,10 @@ function displayToolCallId(
   if (!providerToolCallId) {
     return undefined
   }
-  return state.toolDisplayIdsByProviderId.get(providerToolCallId) ?? providerToolCallId
+  return (
+    state.toolDisplayIdsByProviderId.get(providerToolCallId) ??
+    providerToolCallId
+  )
 }
 
 function createStreamToolFilePreview({
@@ -588,6 +605,7 @@ function imageContentFromAttachments(
 function messageEntryToHistoryItems(
   entry: SessionMessageEntry,
   items: OusiaChatHistoryItem[],
+  toolItemIndexById: Map<string, number>,
   options: HistoryBuildOptions = {
     includeToolPayloads: true,
     showThinking: true,
@@ -650,11 +668,13 @@ function messageEntryToHistoryItems(
           args: block.arguments,
           toolName,
         })
+        const id =
+          typeof block.id === "string" ? block.id : `${entry.id}-tool-${index}`
+        if (!toolItemIndexById.has(id)) {
+          toolItemIndexById.set(id, items.length)
+        }
         items.push({
-          id:
-            typeof block.id === "string"
-              ? block.id
-              : `${entry.id}-tool-${index}`,
+          id,
           role: "tool",
           name: toolName,
           text: options.includeToolPayloads ? input : inputPreview,
@@ -670,17 +690,15 @@ function messageEntryToHistoryItems(
   if (role === "toolResult") {
     const toolCallId =
       typeof message.toolCallId === "string" ? message.toolCallId : entry.id
-    const index = items.findIndex(
-      (item) => item.role === "tool" && item.id === toolCallId
-    )
+    const index = toolItemIndexById.get(toolCallId) ?? -1
     const existing = index >= 0 ? items[index] : undefined
     const resultText = textFromContent(message.content)
     const toolName =
       typeof message.toolName === "string"
         ? message.toolName
         : existing?.role === "tool"
-        ? existing.name
-        : "tool"
+          ? existing.name
+          : "tool"
     const filePreview =
       createToolResultFilePreview({
         result: message,
@@ -696,7 +714,9 @@ function messageEntryToHistoryItems(
       text: options.includeToolPayloads ? text : previewText(text),
       input: existing?.role === "tool" ? existing.input : undefined,
       output:
-        options.includeToolPayloads && !message.isError ? resultText : undefined,
+        options.includeToolPayloads && !message.isError
+          ? resultText
+          : undefined,
       errorText:
         options.includeToolPayloads && message.isError ? resultText : undefined,
       filePreview,
@@ -706,6 +726,7 @@ function messageEntryToHistoryItems(
     if (index >= 0) {
       items[index] = item
     } else {
+      toolItemIndexById.set(toolCallId, items.length)
       items.push(item)
     }
     return
@@ -713,7 +734,9 @@ function messageEntryToHistoryItems(
   if (role === "bashExecution") {
     const command = typeof message.command === "string" ? message.command : ""
     const output = typeof message.output === "string" ? message.output : ""
-    const text = [command ? `$ ${command}` : "", output].filter(Boolean).join("\n")
+    const text = [command ? `$ ${command}` : "", output]
+      .filter(Boolean)
+      .join("\n")
     items.push({
       id: entry.id,
       role: "tool",
@@ -726,7 +749,9 @@ function messageEntryToHistoryItems(
         : undefined,
       output: options.includeToolPayloads ? output : undefined,
       errorText:
-        options.includeToolPayloads && message.exitCode !== 0 ? output : undefined,
+        options.includeToolPayloads && message.exitCode !== 0
+          ? output
+          : undefined,
       payloadOmitted: options.includeToolPayloads ? undefined : true,
       status: message.exitCode === 0 ? "finished" : "failed",
     })
@@ -752,13 +777,19 @@ function branchEntriesToHistoryItems(
   includeToolPayloads = true
 ) {
   let thinkingLevel: string | undefined = "off"
+  const toolItemIndexById = new Map<string, number>()
+  items.forEach((item, index) => {
+    if (item.role === "tool" && !toolItemIndexById.has(item.id)) {
+      toolItemIndexById.set(item.id, index)
+    }
+  })
   entries.forEach((entry) => {
     if (entry.type === "thinking_level_change") {
       thinkingLevel = entry.thinkingLevel
       return
     }
     if (entry.type === "message") {
-      messageEntryToHistoryItems(entry, items, {
+      messageEntryToHistoryItems(entry, items, toolItemIndexById, {
         includeToolPayloads,
         showThinking: shouldShowThinkingForLevel(thinkingLevel),
       })
@@ -767,9 +798,7 @@ function branchEntriesToHistoryItems(
 }
 
 function piEntryIdFromChatItemId(messageId: string) {
-  return messageId
-    .replace(/-text-\d+$/, "")
-    .replace(/-thinking-\d+$/, "")
+  return messageId.replace(/-text-\d+$/, "").replace(/-thinking-\d+$/, "")
 }
 
 function assistantTextFromSessionEntry(entry: PiSessionEntry) {
@@ -912,17 +941,99 @@ export function createAgentConversationModule({
 }: AgentConversationModuleOptions) {
   const sessionPromises = new Map<string, Promise<AgentSessionBundle>>()
   const historyCache = new Map<string, HistoryCacheEntry>()
+  const sessionFileByKey = new Map<string, string>()
   const streamState = new Map<string, AgentStreamState>()
   const interruptGenerations = new Map<string, number>()
+  let sessionEvictionQueue: Promise<void> = Promise.resolve()
 
-  function clearSessionRuntimeState(key: string) {
-    sessionPromises.delete(key)
+  function setHistoryCacheEntry(key: string, entry: HistoryCacheEntry) {
     historyCache.delete(key)
-    streamState.delete(key)
-    interruptGenerations.delete(key)
+    historyCache.set(key, entry)
+    while (historyCache.size > MAX_HISTORY_CACHE_ENTRIES) {
+      const oldestKey = historyCache.keys().next().value
+      if (typeof oldestKey !== "string") {
+        break
+      }
+      historyCache.delete(oldestKey)
+    }
   }
 
-  function setStreamThinkingLevel(key: string, thinkingLevel: string | undefined) {
+  function setSessionFile(key: string, sessionFile: string) {
+    sessionFileByKey.delete(key)
+    sessionFileByKey.set(key, sessionFile)
+    while (sessionFileByKey.size > MAX_SESSION_FILE_CACHE_ENTRIES) {
+      const oldestKey = sessionFileByKey.keys().next().value
+      if (typeof oldestKey !== "string") {
+        break
+      }
+      sessionFileByKey.delete(oldestKey)
+    }
+  }
+
+  async function clearSessionRuntimeState(key: string) {
+    const sessionPromise = sessionPromises.get(key)
+    sessionPromises.delete(key)
+    historyCache.delete(key)
+    sessionFileByKey.delete(key)
+    streamState.delete(key)
+    interruptGenerations.delete(key)
+    if (sessionPromise) {
+      try {
+        disposePiSessionBundle(await sessionPromise)
+      } catch (error) {
+        writeRuntimeLog("pi.session", "error", {
+          error: errorTextFromUnknown(error, "Failed to dispose Pi session."),
+          key,
+        })
+      }
+    }
+  }
+
+  function isSessionBusy(bundle: AgentSessionBundle) {
+    return (
+      bundle.session.isStreaming ||
+      bundle.session.pendingMessageCount > 0 ||
+      bundle.session.isBashRunning
+    )
+  }
+
+  async function enforceSessionCacheLimit() {
+    while (sessionPromises.size > MAX_AGENT_SESSION_ENTRIES) {
+      let releasedKey: string | undefined
+      for (const [key, promise] of sessionPromises) {
+        const bundle = await promise.catch(() => undefined)
+        if (!bundle || sessionPromises.get(key) !== promise) {
+          continue
+        }
+        if (isSessionBusy(bundle)) {
+          continue
+        }
+        releasedKey = key
+        break
+      }
+      if (!releasedKey) {
+        return
+      }
+      await clearSessionRuntimeState(releasedKey)
+      writeRuntimeLog("pi.session", "debug", {
+        key: releasedKey,
+        message: "Released least-recently-used idle Pi session.",
+        retainedSessions: sessionPromises.size,
+      })
+    }
+  }
+
+  function scheduleSessionCacheEnforcement() {
+    sessionEvictionQueue = sessionEvictionQueue.then(
+      enforceSessionCacheLimit,
+      enforceSessionCacheLimit
+    )
+  }
+
+  function setStreamThinkingLevel(
+    key: string,
+    thinkingLevel: string | undefined
+  ) {
     const state = streamState.get(key) ?? createStreamState(thinkingLevel)
     state.showThinking = shouldShowThinkingForLevel(thinkingLevel)
     if (!state.showThinking) {
@@ -935,16 +1046,40 @@ export function createAgentConversationModule({
     context: OusiaChatContext,
     includeToolPayloads: boolean
   ) {
-    const lookup = await findPiSessionFileForHistory(context)
-    if (!lookup) {
-      return []
-    }
-    const { sessionFile } = lookup
-
-    const fileStat = await stat(sessionFile)
     const key = sessionKey(context)
+    const activeBundle = await sessionPromises.get(key)?.catch(() => undefined)
+    let sessionFile =
+      activeBundle?.session.sessionManager.getSessionFile() ??
+      sessionFileByKey.get(key)
+    let fileStat: Stats | undefined
+
+    if (sessionFile) {
+      try {
+        fileStat = await stat(sessionFile)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          throw error
+        }
+        sessionFileByKey.delete(key)
+        sessionFile = undefined
+      }
+    }
+
+    if (!sessionFile) {
+      const lookup = await findPiSessionFileForHistory(context)
+      if (!lookup) {
+        return []
+      }
+      sessionFile = lookup.sessionFile
+      fileStat = await stat(sessionFile)
+    }
+    setSessionFile(key, sessionFile)
+    if (!fileStat) {
+      throw new Error(`Unable to stat Pi session file: ${sessionFile}`)
+    }
+
     const cached = historyCache.get(key)
-    const cacheEntry =
+    const cacheEntry: HistoryCacheEntry =
       cached &&
       cached.sessionFile === sessionFile &&
       cached.mtimeMs === fileStat.mtimeMs
@@ -955,15 +1090,19 @@ export function createAgentConversationModule({
           }
     const cacheField = includeToolPayloads ? "fullItems" : "lightweightItems"
     if (cacheEntry[cacheField]) {
-      historyCache.set(key, cacheEntry)
+      setHistoryCacheEntry(key, cacheEntry)
       return cacheEntry[cacheField]
     }
 
     const sessionManager = SessionManager.open(sessionFile)
     const items: OusiaChatHistoryItem[] = []
-    branchEntriesToHistoryItems(sessionManager.getBranch(), items, includeToolPayloads)
+    branchEntriesToHistoryItems(
+      sessionManager.getBranch(),
+      items,
+      includeToolPayloads
+    )
     cacheEntry[cacheField] = items
-    historyCache.set(key, cacheEntry)
+    setHistoryCacheEntry(key, cacheEntry)
     return items
   }
 
@@ -1034,8 +1173,10 @@ export function createAgentConversationModule({
         payload.sessionId
       )
       if (!sourceSession) {
-        clearSessionRuntimeState(sourceKey)
-        clearSessionRuntimeState(targetKey)
+        await Promise.all([
+          clearSessionRuntimeState(sourceKey),
+          clearSessionRuntimeState(targetKey),
+        ])
         return { ok: true, moved: false }
       }
 
@@ -1076,8 +1217,10 @@ export function createAgentConversationModule({
         throw error
       }
 
-      clearSessionRuntimeState(sourceKey)
-      clearSessionRuntimeState(targetKey)
+      await Promise.all([
+        clearSessionRuntimeState(sourceKey),
+        clearSessionRuntimeState(targetKey),
+      ])
       writeRuntimeLog("chat.move", "info", {
         sessionId: payload.sessionId,
         sourceProjectPath: payload.sourceProjectPath,
@@ -1144,7 +1287,7 @@ export function createAgentConversationModule({
         targetSessionId: payload.targetSessionId,
         leafId,
       })
-      sessionPromises.delete(
+      await clearSessionRuntimeState(
         sessionKey({
           projectPath: payload.projectPath,
           sessionId: payload.targetSessionId,
@@ -1238,6 +1381,7 @@ export function createAgentConversationModule({
       state.toolFilePreviewsById.clear()
       state.startedToolIds.clear()
       state.activeToolIds.clear()
+      scheduleSessionCacheEnforcement()
       return
     }
     if (event.type === "message_start") {
@@ -1360,10 +1504,7 @@ export function createAgentConversationModule({
     }
     if (event.type === "auto_retry_end") {
       if (!event.success) {
-        const text = errorTextFromUnknown(
-          event.finalError,
-          "智能体响应失败。"
-        )
+        const text = errorTextFromUnknown(event.finalError, "智能体响应失败。")
         if (text !== state.lastErrorText) {
           emitError(text)
         }
@@ -1408,7 +1549,8 @@ export function createAgentConversationModule({
       typeof messageEvent.delta === "string"
     ) {
       const current =
-        state.toolArgumentJsonByContentIndex.get(messageEvent.contentIndex) ?? ""
+        state.toolArgumentJsonByContentIndex.get(messageEvent.contentIndex) ??
+        ""
       state.toolArgumentJsonByContentIndex.set(
         messageEvent.contentIndex,
         current + messageEvent.delta
@@ -1420,8 +1562,8 @@ export function createAgentConversationModule({
       Array.isArray(messageEvent.partial.content)
         ? messageEvent.partial
         : message?.role === "assistant" && Array.isArray(message.content)
-        ? message
-        : undefined
+          ? message
+          : undefined
 
     const emitToolCallInputUpdate = (
       part: Record<string, unknown>,
@@ -1551,8 +1693,7 @@ export function createAgentConversationModule({
       return
     }
     if (messageEvent.type === "thinking_delta") {
-      state.thinkingId ||=
-        `thinking-${messageEvent.contentIndex ?? 0}-${Date.now()}`
+      state.thinkingId ||= `thinking-${messageEvent.contentIndex ?? 0}-${Date.now()}`
       emitChatEvent(
         {
           type: "thinking_delta",
@@ -1623,7 +1764,9 @@ export function createAgentConversationModule({
       agentDir,
       modelRegistry,
       resourceLoader,
-      sessionManager: await openOrCreatePiSessionManager(cwd, context.sessionId),
+      sessionManager: sessionFileByKey.get(key)
+        ? SessionManager.open(sessionFileByKey.get(key)!)
+        : await openOrCreatePiSessionManager(cwd, context.sessionId),
       settingsManager,
       model: selectedModel,
       thinkingLevel,
@@ -1649,12 +1792,19 @@ export function createAgentConversationModule({
     }
 
     streamState.set(key, createStreamState())
-    session.subscribe((event) => translateAgentEvent(event, context, key))
+    const sessionFile = session.sessionManager.getSessionFile()
+    if (sessionFile) {
+      setSessionFile(key, sessionFile)
+    }
+    const unsubscribe = session.subscribe((event) =>
+      translateAgentEvent(event, context, key)
+    )
     return {
       authStorage,
       modelRegistry,
       runtimeApiKeyProvider: model.apiKey ? model.provider : undefined,
       session,
+      unsubscribe,
     }
   }
 
@@ -1669,6 +1819,8 @@ export function createAgentConversationModule({
     const key = sessionKey(context)
     const existingPromise = sessionPromises.get(key)
     if (existingPromise) {
+      sessionPromises.delete(key)
+      sessionPromises.set(key, existingPromise)
       return existingPromise
     }
 
@@ -1687,7 +1839,28 @@ export function createAgentConversationModule({
       throw error
     })
     sessionPromises.set(key, promise)
+    void promise.then(scheduleSessionCacheEnforcement, () => undefined)
     return promise
+  }
+
+  async function releaseChatSession(context: OusiaChatContext) {
+    await clearSessionRuntimeState(sessionKey(context))
+  }
+
+  async function dispose() {
+    const pendingSessions = [...sessionPromises.values()]
+    sessionPromises.clear()
+    historyCache.clear()
+    sessionFileByKey.clear()
+    streamState.clear()
+    interruptGenerations.clear()
+
+    const settledSessions = await Promise.allSettled(pendingSessions)
+    for (const result of settledSessions) {
+      if (result.status === "fulfilled") {
+        disposePiSessionBundle(result.value)
+      }
+    }
   }
 
   async function getChatHistory(
@@ -1774,7 +1947,8 @@ export function createAgentConversationModule({
     try {
       const items = await getHistoryItems(payload, true)
       const item = items.find(
-        (candidate) => candidate.role === "tool" && candidate.id === payload.itemId
+        (candidate) =>
+          candidate.role === "tool" && candidate.id === payload.itemId
       )
       if (!item || item.role !== "tool") {
         writeRuntimeLog("chat.toolPayload", "warn", {
@@ -1800,7 +1974,10 @@ export function createAgentConversationModule({
     payload: OusiaChatSendPayload
   ): Promise<OusiaChatSendResult> {
     const attachments = payload.attachments ?? []
-    const text = buildPromptWithTextAttachments(payload.prompt, attachments).trim()
+    const text = buildPromptWithTextAttachments(
+      payload.prompt,
+      attachments
+    ).trim()
     const images = imageContentFromAttachments(attachments)
     const context = {
       projectPath: payload.projectPath,
@@ -1842,7 +2019,9 @@ export function createAgentConversationModule({
       setStreamThinkingLevel(key, thinkingLevel)
       const { session } = bundle
       if (images.length && !session.model?.input.includes("image")) {
-        throw new Error("当前模型不支持图片输入，请切换到支持识图的模型后重试。")
+        throw new Error(
+          "当前模型不支持图片输入，请切换到支持识图的模型后重试。"
+        )
       }
       if ((interruptGenerations.get(key) ?? 0) !== interruptGeneration) {
         return { ok: true }
@@ -1889,10 +2068,7 @@ export function createAgentConversationModule({
         },
         context
       )
-      emitChatEvent(
-        { type: "run_status", status: "error", timestamp },
-        context
-      )
+      emitChatEvent({ type: "run_status", status: "error", timestamp }, context)
       return { ok: false, error: text }
     }
   }
@@ -1935,8 +2111,9 @@ export function createAgentConversationModule({
       ].filter((message) => message.trim())
       if (context.continueQueuedMessages && messagesToContinue.length) {
         const combinedMessage = messagesToContinue.join("\n\n")
-        void session.prompt(combinedMessage, { source: "interactive" }).catch(
-          (error) => {
+        void session
+          .prompt(combinedMessage, { source: "interactive" })
+          .catch((error) => {
             const timestamp = now()
             const text = errorTextFromUnknown(error)
             emitChatEvent(
@@ -1952,8 +2129,7 @@ export function createAgentConversationModule({
               { type: "run_status", status: "error", timestamp },
               context
             )
-          }
-        )
+          })
       }
       return { ok: true }
     } catch (error) {
@@ -2097,6 +2273,8 @@ export function createAgentConversationModule({
     getChatToolPayload,
     interruptChat,
     moveChatSession,
+    releaseChatSession,
     sendChatMessage,
+    dispose,
   }
 }

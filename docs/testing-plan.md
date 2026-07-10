@@ -19,6 +19,9 @@ Automated tests should cover deterministic product logic first:
   opaque thread-id persistence.
 - Per-model Codex reasoning option/default mapping and independent Pi/Codex
   preference persistence.
+- Performance state machines: delta ordering/batching, copy-on-write reducer
+  no-ops, bounded history retry, tooltip frame cancellation, lightweight Pi
+  retry parsing, and app-state cache publication after atomic persistence.
 
 Electron window behavior and real Pi/Codex execution should be smoke-tested
 separately because they depend on native app launch state, local credentials,
@@ -65,6 +68,9 @@ P0 automated paths:
 - Write/edit tool previews expose meaningful diffs or explicit errors.
 - Chat streaming events reduce into stable user, assistant, thinking, tool,
   system, and error history items.
+- A failed app-state rename cannot poison the in-memory snapshot; transient Pi
+  retry reads remain retryable; public state/metadata clones cannot mutate the
+  canonical cache.
 
 P1 automated paths:
 
@@ -77,6 +83,8 @@ P1 automated paths:
 P2 / manual smoke paths:
 
 - App launches from `npm start`.
+- A packaged cold launch records `window.startup`; a second launch focuses the
+  one existing window, and relaunch after closing the macOS window recreates it.
 - A new session can be created, renamed, moved between projects, and deleted.
 - Settings can save provider credentials through Pi and refresh model status.
 - A text-only chat request reaches Pi and streams assistant/tool updates.
@@ -101,3 +109,5 @@ P2 / manual smoke paths:
   boundary rejection.
 - Any change to tool preview payload handling needs a write/edit preview test.
 - Any new user-visible settings field needs normalization and persistence tests.
+- Any cache or batching change needs a bound/invalidation test and an ordering
+  or reference-identity regression test, as appropriate.

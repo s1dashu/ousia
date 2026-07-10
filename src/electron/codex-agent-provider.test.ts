@@ -345,6 +345,19 @@ describe("Codex agent provider", () => {
     expect(
       events.every((entry) => entry.sessionId === state.sessions[0].id)
     ).toBe(true)
+    const eventCountBeforeRelease = events.length
+    expect(provider.releaseChatSession).toBeTypeOf("function")
+    await provider.releaseChatSession?.({
+      projectPath: "/tmp/project",
+      sessionId: state.sessions[0].id,
+    })
+    client.emit("item/agentMessage/delta", {
+      threadId: "thread-1",
+      turnId: "turn-1",
+      itemId: "agent-1",
+      delta: "ignored-after-release",
+    })
+    expect(events).toHaveLength(eventCountBeforeRelease)
     provider.dispose()
     expect(client.disposed).toBe(true)
   })

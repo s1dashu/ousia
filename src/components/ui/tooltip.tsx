@@ -12,6 +12,10 @@ import {
 } from "framer-motion"
 
 import { cn } from "@/lib/utils"
+import {
+  cancelTooltipPositionUpdate,
+  scheduleTooltipPositionUpdate,
+} from "@/components/ui/tooltip-position"
 
 type TooltipSide = "top" | "bottom" | "left" | "right"
 
@@ -168,7 +172,9 @@ function Tooltip({
               ? "left"
               : preferredSide
         const nextLeft =
-          nextSide === "right" ? rect.right + sideOffset : rect.left - sideOffset
+          nextSide === "right"
+            ? rect.right + sideOffset
+            : rect.left - sideOffset
         const nextTop = Math.min(
           Math.max(rect.top + rect.height / 2, 48),
           window.innerHeight - 48
@@ -204,9 +210,10 @@ function Tooltip({
     const currentAnimationFrameRef = animationFrameRef
 
     return () => {
-      if (currentAnimationFrameRef.current) {
-        cancelAnimationFrame(currentAnimationFrameRef.current)
-      }
+      cancelTooltipPositionUpdate(
+        currentAnimationFrameRef,
+        cancelAnimationFrame
+      )
     }
   }, [])
 
@@ -254,17 +261,23 @@ function TooltipTrigger({
   )
 
   const handleMouseLeave = React.useCallback(() => {
+    cancelTooltipPositionUpdate(animationFrameRef, cancelAnimationFrame)
     setIsHovered(false)
-  }, [setIsHovered])
+  }, [animationFrameRef, setIsHovered])
 
   const handleMouseMove = React.useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current)
-      }
-
-      animationFrameRef.current = requestAnimationFrame(() => {
-        updatePosition(event.currentTarget, event.clientX)
+      // React clears currentTarget after the event handler returns. Keep only
+      // the DOM/value snapshots that the deferred frame needs.
+      const target = event.currentTarget
+      const clientX = event.clientX
+      scheduleTooltipPositionUpdate({
+        animationFrameRef,
+        cancelFrame: cancelAnimationFrame,
+        clientX,
+        requestFrame: requestAnimationFrame,
+        target,
+        updatePosition,
       })
     },
     [animationFrameRef, updatePosition]
@@ -358,10 +371,7 @@ function TooltipContent({
   const context = useTooltipContext("TooltipContent")
   const { isHovered, position, sideOffsetRef, sideRef, x } = context
   const springConfig = { stiffness: 180, damping: 22 }
-  const rotate = useSpring(
-    useTransform(x, [-120, 120], [-4, 4]),
-    springConfig
-  )
+  const rotate = useSpring(useTransform(x, [-120, 120], [-4, 4]), springConfig)
   const translateX = useSpring(
     useTransform(x, [-120, 120], [-10, 10]),
     springConfig
@@ -413,7 +423,7 @@ function TooltipContent({
         >
           <span className="absolute inset-x-10 -bottom-px z-30 h-px w-[20%] bg-gradient-to-r from-transparent via-[var(--radix-scale-9)] to-transparent" />
           <span className="absolute -bottom-px left-10 z-30 h-px w-[40%] bg-gradient-to-r from-transparent via-[var(--ring)] to-transparent" />
-          <span className="relative z-30 whitespace-pre text-center text-xs leading-tight font-semibold text-white tabular-nums">
+          <span className="relative z-30 text-center text-xs leading-tight font-semibold whitespace-pre text-white tabular-nums">
             {children}
           </span>
         </motion.span>

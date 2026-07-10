@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -24,11 +25,7 @@ import {
   X,
 } from "@/components/icons/huge-icons"
 
-import type {
-  AppSettings,
-  ProjectRecord,
-  SessionRecord,
-} from "@/app/app-state"
+import type { AppSettings, ProjectRecord, SessionRecord } from "@/app/app-state"
 import { isDefaultSessionTitle } from "@/app/i18n"
 import {
   getConfiguredModelPresets,
@@ -108,8 +105,12 @@ import {
   shouldShowTurnWaitIndicator,
   useDelayedTurnWaitIndicator,
 } from "@/features/chat/chat-turn-wait"
-import { CHAT_HORIZONTAL_PADDING_CLASS, CHAT_CONTENT_MAX_WIDTH_CLASS } from "@/features/chat/chat-layout"
+import {
+  CHAT_HORIZONTAL_PADDING_CLASS,
+  CHAT_CONTENT_MAX_WIDTH_CLASS,
+} from "@/features/chat/chat-layout"
 import type { ChatItem } from "@/features/chat/chat-events"
+import { codexSendBlockReason } from "@/features/chat/chat-provider-readiness"
 import { cn } from "@/lib/utils"
 
 const CHAT_INPUT_MAX_HEIGHT = 192
@@ -206,7 +207,7 @@ function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
   )
 }
 
-export function ChatArea({
+function ChatAreaComponent({
   codexEnvironment,
   currentProject,
   currentSession,
@@ -252,8 +253,7 @@ export function ChatArea({
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [isComposerSettingsOpen, setIsComposerSettingsOpen] = useState(false)
   const [isCustomToolsDialogOpen, setIsCustomToolsDialogOpen] = useState(false)
-  const [isProviderKeyDialogOpen, setIsProviderKeyDialogOpen] =
-    useState(false)
+  const [isProviderKeyDialogOpen, setIsProviderKeyDialogOpen] = useState(false)
   const [providerKeyDialogProviderId, setProviderKeyDialogProviderId] =
     useState("")
   const [providerKeyDialogApiKey, setProviderKeyDialogApiKey] = useState("")
@@ -308,52 +308,76 @@ export function ChatArea({
     (settings.agentMode === "noTerminal" || settings.agentMode === "custom")
       ? "standard"
       : settings.agentMode
-  const piModelPresets = getConfiguredModelPresets(
-    settings.modelProviders,
-    modelRegistry,
-    settings.disabledModelProviderIds
+  const piModelPresets = useMemo(
+    () =>
+      getConfiguredModelPresets(
+        settings.modelProviders,
+        modelRegistry,
+        settings.disabledModelProviderIds
+      ),
+    [modelRegistry, settings.disabledModelProviderIds, settings.modelProviders]
   )
-  const configuredModelPresets = isCodexSession
-    ? (codexEnvironment?.models ?? [])
-    : piModelPresets
-  const selectedModelPreset = configuredModelPresets.find(
-    (model) =>
-      model.modelId ===
-      (isCodexSession
-        ? settings.codexModelId || codexEnvironment?.defaultModelId
-        : settings.modelId) &&
-      (isCodexSession || model.provider === settings.modelProvider)
+  const configuredModelPresets = useMemo(
+    () => (isCodexSession ? (codexEnvironment?.models ?? []) : piModelPresets),
+    [codexEnvironment?.models, isCodexSession, piModelPresets]
+  )
+  const selectedModelPreset = useMemo(
+    () =>
+      configuredModelPresets.find(
+        (model) =>
+          model.modelId ===
+            (isCodexSession
+              ? settings.codexModelId || codexEnvironment?.defaultModelId
+              : settings.modelId) &&
+          (isCodexSession || model.provider === settings.modelProvider)
+      ),
+    [
+      codexEnvironment?.defaultModelId,
+      configuredModelPresets,
+      isCodexSession,
+      settings.codexModelId,
+      settings.modelId,
+      settings.modelProvider,
+    ]
   )
   const storedReasoningEffort = isCodexSession
     ? settings.codexReasoningEffort
     : settings.thinkingLevel
-  const activeThinkingLevels =
-    selectedModelPreset?.thinkingLevels ?? [storedReasoningEffort ?? "medium"]
+  const activeThinkingLevels = selectedModelPreset?.thinkingLevels ?? [
+    storedReasoningEffort ?? "medium",
+  ]
   const selectedThinkingLevel = resolveModelReasoningEffort(
     selectedModelPreset,
     storedReasoningEffort
   )
-  const selectedModelLabel =
-    selectedModelPreset
-      ? modelLabel(selectedModelPreset)
-      : isCodexSession
-        ? "Codex"
-        : t.chat.model
-  const providerKeyDialogProviders =
-    modelRegistry?.providers.filter(
-      (provider) =>
-        provider.models.length > 0 &&
-        !settings.disabledModelProviderIds.includes(provider.id)
-    ) ??
-    []
-  const providerKeyDialogSelectItems = providerKeyDialogProviders.map(
-    (provider) => ({
-      label: provider.name,
-      value: provider.id,
-    })
+  const selectedModelLabel = selectedModelPreset
+    ? modelLabel(selectedModelPreset)
+    : isCodexSession
+      ? "Codex"
+      : t.chat.model
+  const providerKeyDialogProviders = useMemo(
+    () =>
+      modelRegistry?.providers.filter(
+        (provider) =>
+          provider.models.length > 0 &&
+          !settings.disabledModelProviderIds.includes(provider.id)
+      ) ?? [],
+    [modelRegistry?.providers, settings.disabledModelProviderIds]
   )
-  const providerKeyDialogProvider = providerKeyDialogProviders.find(
-    (provider) => provider.id === providerKeyDialogProviderId
+  const providerKeyDialogSelectItems = useMemo(
+    () =>
+      providerKeyDialogProviders.map((provider) => ({
+        label: provider.name,
+        value: provider.id,
+      })),
+    [providerKeyDialogProviders]
+  )
+  const providerKeyDialogProvider = useMemo(
+    () =>
+      providerKeyDialogProviders.find(
+        (provider) => provider.id === providerKeyDialogProviderId
+      ),
+    [providerKeyDialogProviderId, providerKeyDialogProviders]
   )
   const canSaveProviderKey =
     Boolean(providerKeyDialogProvider) &&
@@ -551,16 +575,19 @@ export function ChatArea({
     return true
   }, [clearChatLayoutAnchor])
 
-  const markManualScrollIntent = useCallback((awayFromLatest = false) => {
-    clearManualScrollIntent()
-    manualScrollIntentRef.current = true
-    manualScrollAwayFromLatestRef.current = awayFromLatest
-    manualScrollIntentTimerRef.current = window.setTimeout(() => {
-      manualScrollIntentRef.current = false
-      manualScrollAwayFromLatestRef.current = false
-      manualScrollIntentTimerRef.current = 0
-    }, 1200)
-  }, [clearManualScrollIntent])
+  const markManualScrollIntent = useCallback(
+    (awayFromLatest = false) => {
+      clearManualScrollIntent()
+      manualScrollIntentRef.current = true
+      manualScrollAwayFromLatestRef.current = awayFromLatest
+      manualScrollIntentTimerRef.current = window.setTimeout(() => {
+        manualScrollIntentRef.current = false
+        manualScrollAwayFromLatestRef.current = false
+        manualScrollIntentTimerRef.current = 0
+      }, 1200)
+    },
+    [clearManualScrollIntent]
+  )
 
   const releaseProgrammaticScrollAfterLayout = useCallback(
     (behavior: ScrollBehavior) => {
@@ -576,15 +603,19 @@ export function ChatArea({
       }
 
       if (behavior === "smooth") {
-        programmaticScrollResetTimerRef.current = window.setTimeout(release, 450)
+        programmaticScrollResetTimerRef.current = window.setTimeout(
+          release,
+          450
+        )
         return
       }
 
-      programmaticScrollResetFrameRef.current = window.requestAnimationFrame(() => {
-        programmaticScrollResetFrameRef.current = window.requestAnimationFrame(
-          release
-        )
-      })
+      programmaticScrollResetFrameRef.current = window.requestAnimationFrame(
+        () => {
+          programmaticScrollResetFrameRef.current =
+            window.requestAnimationFrame(release)
+        }
+      )
       programmaticScrollResetTimerRef.current = window.setTimeout(release, 120)
     },
     [clearProgrammaticScrollReset]
@@ -609,20 +640,18 @@ export function ChatArea({
     [clearManualScrollIntent, releaseProgrammaticScrollAfterLayout]
   )
 
-  const scrollToLatest = useCallback((behavior: ScrollBehavior = "auto") => {
-    isFollowingLatestRef.current = true
-    performLatestScroll(behavior)
-    setIsFollowingLatest(true)
-  }, [performLatestScroll])
+  const scrollToLatest = useCallback(
+    (behavior: ScrollBehavior = "auto") => {
+      isFollowingLatestRef.current = true
+      performLatestScroll(behavior)
+      setIsFollowingLatest(true)
+    },
+    [performLatestScroll]
+  )
 
   const loadOlderHistory = useCallback(() => {
     const node = scrollRef.current
-    if (
-      !node ||
-      !hasMoreHistory ||
-      isLoadingHistory ||
-      isLoadingOlderHistory
-    ) {
+    if (!node || !hasMoreHistory || isLoadingHistory || isLoadingOlderHistory) {
       return
     }
     olderHistoryScrollAnchorRef.current = {
@@ -665,7 +694,8 @@ export function ChatArea({
   useLayoutEffect(() => {
     if (isAgentWorking) {
       if (!wasAgentWorkingForVisibilityRef.current) {
-        latestFinishedAssistantIdBeforeRunRef.current = latestFinishedAssistantId()
+        latestFinishedAssistantIdBeforeRunRef.current =
+          latestFinishedAssistantId()
       }
       wasAgentWorkingForVisibilityRef.current = true
       pendingCompletionVisibilitySessionIdRef.current = null
@@ -697,19 +727,21 @@ export function ChatArea({
     }
     window.cancelAnimationFrame(completionVisibilityFrameRef.current)
     completionVisibilityFrameRef.current = window.requestAnimationFrame(() => {
-      completionVisibilityFrameRef.current = window.requestAnimationFrame(() => {
-        completionVisibilityFrameRef.current = 0
-        if (
-          pendingCompletionVisibilitySessionIdRef.current !== pendingSessionId
-        ) {
-          return
+      completionVisibilityFrameRef.current = window.requestAnimationFrame(
+        () => {
+          completionVisibilityFrameRef.current = 0
+          if (
+            pendingCompletionVisibilitySessionIdRef.current !== pendingSessionId
+          ) {
+            return
+          }
+          pendingCompletionVisibilitySessionIdRef.current = null
+          onSessionCompletionVisibility(
+            pendingSessionId,
+            isLatestAssistantMessageFullyVisible()
+          )
         }
-        pendingCompletionVisibilitySessionIdRef.current = null
-        onSessionCompletionVisibility(
-          pendingSessionId,
-          isLatestAssistantMessageFullyVisible()
-        )
-      })
+      )
     })
     return () => {
       if (completionVisibilityFrameRef.current) {
@@ -896,7 +928,8 @@ export function ChatArea({
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const node = event.currentTarget
     const scrollTop = node.scrollTop
-    const isScrollingTowardHistory = scrollTop < lastChatScrollTopRef.current - 1
+    const isScrollingTowardHistory =
+      scrollTop < lastChatScrollTopRef.current - 1
     lastChatScrollTopRef.current = scrollTop
     const isAtLatest = isScrolledToLatest(node)
     setIsChatScrolled(scrollTop > 2)
@@ -1032,8 +1065,7 @@ export function ChatArea({
         (provider) =>
           provider.models.length > 0 &&
           !settings.disabledModelProviderIds.includes(provider.id)
-      ) ??
-      []
+      ) ?? []
     const provider =
       providerOptions.find((item) => item.id === "deepseek") ??
       providerOptions.find((item) => item.id === settings.modelProvider) ??
@@ -1050,7 +1082,8 @@ export function ChatArea({
 
   const ensureSelectedProviderApiKey = useCallback(() => {
     if (isCodexSession) {
-      if (!codexEnvironment || codexEnvironment.available === false) {
+      const blockReason = codexSendBlockReason(codexEnvironment)
+      if (blockReason === "unavailable") {
         onLocalEvent({
           type: "error",
           id: `codex-unavailable-${Date.now()}`,
@@ -1059,11 +1092,7 @@ export function ChatArea({
         })
         return false
       }
-      if (
-        codexEnvironment &&
-        codexEnvironment.requiresOpenaiAuth &&
-        !codexEnvironment.account
-      ) {
+      if (blockReason === "sign-in-required") {
         onLocalEvent({
           type: "status_message",
           id: `codex-login-${Date.now()}`,
@@ -1178,9 +1207,7 @@ export function ChatArea({
         onLocalEvent({
           type: "error",
           id: `no-electron-${Date.now()}`,
-          text: window.ousia
-            ? t.chat.noSelection
-            : t.chat.noElectron,
+          text: window.ousia ? t.chat.noSelection : t.chat.noElectron,
           timestamp: new Date().toISOString(),
         })
         return
@@ -1268,7 +1295,10 @@ export function ChatArea({
     ]
   )
 
-  function queueDraftMessage(text: string, outgoingAttachments: OusiaChatAttachment[]) {
+  function queueDraftMessage(
+    text: string,
+    outgoingAttachments: OusiaChatAttachment[]
+  ) {
     setIsQueuePausedAfterInterrupt(false)
     if (editingQueueId) {
       setQueuedMessages((current) =>
@@ -1735,7 +1765,10 @@ export function ChatArea({
   }
 
   async function addFiles(files: File[]) {
-    const currentTotal = attachments.reduce((total, item) => total + item.size, 0)
+    const currentTotal = attachments.reduce(
+      (total, item) => total + item.size,
+      0
+    )
     const selectedTotal = files.reduce((total, file) => total + file.size, 0)
     if (currentTotal + selectedTotal > MAX_TOTAL_ATTACHMENT_BYTES) {
       onLocalEvent({
@@ -1785,7 +1818,7 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card"
+        "ousia-main-panel ousia-squircle-corners @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card"
       )}
       style={style}
       onKeyDownCapture={handleChatKeyDownCapture}
@@ -1817,7 +1850,7 @@ export function ChatArea({
       <div
         ref={scrollRef}
         className={cn(
-          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 select-text overflow-auto bg-white pt-4 pb-16 dark:bg-card",
+          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto bg-white pt-4 pb-16 select-text dark:bg-card",
           CHAT_HORIZONTAL_PADDING_CLASS
         )}
         onScroll={handleChatScroll}
@@ -1898,346 +1931,352 @@ export function ChatArea({
                 visibleQueuedMessages.length && "-mt-8"
               )}
             >
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(event) => {
-                const files = Array.from(event.currentTarget.files ?? [])
-                event.currentTarget.value = ""
-                void addFiles(files)
-              }}
-            />
-            {attachments.length ? (
-              <AttachmentStrip
-                attachments={attachments}
-                onRemove={removeAttachment}
-                t={t}
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  const files = Array.from(event.currentTarget.files ?? [])
+                  event.currentTarget.value = ""
+                  void addFiles(files)
+                }}
               />
-            ) : null}
-            <Textarea
-              ref={inputRef}
-              aria-label={t.chat.message}
-              value={draft}
-              onChange={handleDraftChange}
-              onPaste={handlePaste}
-              onCompositionStart={() => {
-                isComposingRef.current = true
-              }}
-              onCompositionEnd={() => {
-                isComposingRef.current = false
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  if (isComposingRef.current || event.nativeEvent.isComposing) {
-                    return
+              {attachments.length ? (
+                <AttachmentStrip
+                  attachments={attachments}
+                  onRemove={removeAttachment}
+                  t={t}
+                />
+              ) : null}
+              <Textarea
+                ref={inputRef}
+                aria-label={t.chat.message}
+                value={draft}
+                onChange={handleDraftChange}
+                onPaste={handlePaste}
+                onCompositionStart={() => {
+                  isComposingRef.current = true
+                }}
+                onCompositionEnd={() => {
+                  isComposingRef.current = false
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    if (
+                      isComposingRef.current ||
+                      event.nativeEvent.isComposing
+                    ) {
+                      return
+                    }
+                    event.preventDefault()
+                    event.currentTarget.form?.requestSubmit()
                   }
-                  event.preventDefault()
-                  event.currentTarget.form?.requestSubmit()
+                }}
+                className="ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 placeholder:text-muted-foreground/55 focus-visible:ring-0"
+                placeholder={
+                  editingQueueId
+                    ? t.chat.editQueuedMessage
+                    : isAgentWorking
+                      ? t.chat.continueMessage
+                      : t.chat.inputPlaceholder
                 }
-              }}
-              className="ousia-hover-scrollbar -mr-4 min-h-12 w-[calc(100%+1rem)] rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 placeholder:text-muted-foreground/55 [field-sizing:fixed] focus-visible:ring-0"
-              placeholder={
-                editingQueueId
-                  ? t.chat.editQueuedMessage
-                  : isAgentWorking
-                    ? t.chat.continueMessage
-                    : t.chat.inputPlaceholder
-              }
-            />
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="size-6"
-                  aria-label={t.chat.addAttachment}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Plus size={18} />
-                </Button>
-                <DropdownMenu
-                  modal={false}
-                  open={isComposerSettingsOpen}
-                  onOpenChange={setIsComposerSettingsOpen}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="size-6"
-                      aria-label={t.chat.composerSettings}
-                    >
-                      <SlidersHorizontal size={18} />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    side="top"
-                    sideOffset={8}
-                    align="start"
-                    className="ousia-hover-scrollbar w-72 rounded-xl p-2"
+              />
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-6"
+                    aria-label={t.chat.addAttachment}
+                    onClick={() => fileInputRef.current?.click()}
                   >
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                      {t.settings.agentMode}
-                    </DropdownMenuLabel>
-                    <DropdownMenuRadioGroup value={effectiveAgentMode}>
-                      <TooltipProvider>
-                        {(
-                          [
+                    <Plus size={18} />
+                  </Button>
+                  <DropdownMenu
+                    modal={false}
+                    open={isComposerSettingsOpen}
+                    onOpenChange={setIsComposerSettingsOpen}
+                  >
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-6"
+                        aria-label={t.chat.composerSettings}
+                      >
+                        <SlidersHorizontal size={18} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      side="top"
+                      sideOffset={8}
+                      align="start"
+                      className="ousia-hover-scrollbar w-72 rounded-xl p-2"
+                    >
+                      <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                        {t.settings.agentMode}
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup value={effectiveAgentMode}>
+                        <TooltipProvider>
+                          {(
                             [
-                              "standard",
-                              t.settings.standardMode,
-                              t.settings.standardModeDescription,
-                            ],
-                            [
-                              "readOnly",
-                              t.settings.readOnlyMode,
-                              t.settings.readOnlyModeDescription,
-                            ],
-                            [
-                              "noTerminal",
-                              t.settings.noTerminalMode,
-                              t.settings.noTerminalModeDescription,
-                            ],
-                            [
-                              "custom",
-                              t.chat.customMode,
-                              t.settings.customModeDescription,
-                            ],
-                          ] satisfies Array<[OusiaAgentMode, string, string]>
-                        )
-                          .filter(
-                            ([value]) =>
-                              !isCodexSession ||
-                              value === "standard" ||
-                              value === "readOnly"
+                              [
+                                "standard",
+                                t.settings.standardMode,
+                                t.settings.standardModeDescription,
+                              ],
+                              [
+                                "readOnly",
+                                t.settings.readOnlyMode,
+                                t.settings.readOnlyModeDescription,
+                              ],
+                              [
+                                "noTerminal",
+                                t.settings.noTerminalMode,
+                                t.settings.noTerminalModeDescription,
+                              ],
+                              [
+                                "custom",
+                                t.chat.customMode,
+                                t.settings.customModeDescription,
+                              ],
+                            ] satisfies Array<[OusiaAgentMode, string, string]>
                           )
-                          .map(([value, label, description]) => (
-                          <Tooltip key={value}>
-                            <TooltipTrigger asChild>
-                              <DropdownMenuRadioItem
-                                value={value}
-                                className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                                onClick={() => {
-                                  updateComposerSettings({ agentMode: value })
-                                  if (value === "custom") {
-                                    setIsCustomToolsDialogOpen(true)
-                                  }
-                                }}
-                              >
-                                {label}
-                              </DropdownMenuRadioItem>
-                            </TooltipTrigger>
-                            <TooltipContent
-                              side="right"
-                              align="center"
-                              className="max-w-56"
-                            >
-                              {description}
-                            </TooltipContent>
-                          </Tooltip>
-                          ))}
-                      </TooltipProvider>
-                    </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator className="my-2 bg-neutral-200" />
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                      {t.chat.appendMessages}
-                    </DropdownMenuLabel>
-                    <DropdownMenuRadioGroup
-                      value={sendDuringRunMode}
-                      onValueChange={(value) =>
-                        updateSendDuringRunMode(
-                          value === "queue" ? "queue" : "steer"
-                        )
-                      }
-                    >
-                      <DropdownMenuRadioItem
-                        value="queue"
-                        className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                            .filter(
+                              ([value]) =>
+                                !isCodexSession ||
+                                value === "standard" ||
+                                value === "readOnly"
+                            )
+                            .map(([value, label, description]) => (
+                              <Tooltip key={value}>
+                                <TooltipTrigger asChild>
+                                  <DropdownMenuRadioItem
+                                    value={value}
+                                    className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                                    onClick={() => {
+                                      updateComposerSettings({
+                                        agentMode: value,
+                                      })
+                                      if (value === "custom") {
+                                        setIsCustomToolsDialogOpen(true)
+                                      }
+                                    }}
+                                  >
+                                    {label}
+                                  </DropdownMenuRadioItem>
+                                </TooltipTrigger>
+                                <TooltipContent
+                                  side="right"
+                                  align="center"
+                                  className="max-w-56"
+                                >
+                                  {description}
+                                </TooltipContent>
+                              </Tooltip>
+                            ))}
+                        </TooltipProvider>
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator className="my-2 bg-neutral-200" />
+                      <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                        {t.chat.appendMessages}
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup
+                        value={sendDuringRunMode}
+                        onValueChange={(value) =>
+                          updateSendDuringRunMode(
+                            value === "queue" ? "queue" : "steer"
+                          )
+                        }
                       >
-                        {t.settings.queue}
-                      </DropdownMenuRadioItem>
-                      <DropdownMenuRadioItem
-                        value="steer"
-                        className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                      >
-                        {t.settings.steer}
-                      </DropdownMenuRadioItem>
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <DropdownMenu
-                  modal={false}
-                  open={isModelMenuOpen}
-                  onOpenChange={setIsModelMenuOpen}
-                >
-                  <DropdownMenuTrigger
-                    aria-label={t.chat.modelAndThinking}
-                    className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground"
-                  >
-                    <span className="hidden shrink-0 text-foreground @max-[520px]:inline">
-                      {t.chat.model}
-                    </span>
-                    <span className="min-w-0 truncate text-foreground @max-[520px]:hidden">
-                      {selectedModelLabel}
-                    </span>
-                    {selectedModelPreset && selectedThinkingLevel !== "off" ? (
-                      <span className="shrink-0 text-muted-foreground @max-[520px]:hidden">
-                        {reasoningEffortLabel(selectedThinkingLevel)}
-                      </span>
-                    ) : null}
-                    <ChevronDown
-                      size={18}
-                      strokeWidth={1.5}
-                      className="shrink-0 text-muted-foreground"
-                    />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    side="top"
-                    sideOffset={8}
-                    collisionPadding={24}
-                    align="start"
-                    className="ousia-hover-scrollbar max-h-[min(var(--radix-dropdown-menu-content-available-height),640px)] w-72 rounded-xl p-2"
-                  >
-                    <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                      Reasoning
-                    </DropdownMenuLabel>
-                    <DropdownMenuRadioGroup value={selectedThinkingLevel}>
-                      {activeThinkingLevels.map((level) => (
                         <DropdownMenuRadioItem
-                          key={level}
-                          value={level}
-                          title={
-                            selectedModelPreset?.thinkingLevelDescriptions?.[
-                              level
-                            ]
-                          }
-                          className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                          onClick={() => updateThinkingLevel(level)}
+                          value="queue"
+                          className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                         >
-                          <span className="min-w-0 flex-1 truncate">
-                            {reasoningEffortLabel(level)}
-                          </span>
+                          {t.settings.queue}
                         </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                    <DropdownMenuSeparator className="my-2 bg-neutral-200" />
-                    <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-1">
-                      <span className="text-sm text-neutral-500">
+                        <DropdownMenuRadioItem
+                          value="steer"
+                          className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                        >
+                          {t.settings.steer}
+                        </DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <DropdownMenu
+                    modal={false}
+                    open={isModelMenuOpen}
+                    onOpenChange={setIsModelMenuOpen}
+                  >
+                    <DropdownMenuTrigger
+                      aria-label={t.chat.modelAndThinking}
+                      className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground"
+                    >
+                      <span className="hidden shrink-0 text-foreground @max-[520px]:inline">
                         {t.chat.model}
                       </span>
-                      {isCodexSession ? (
-                        <span className="text-xs leading-5 font-medium text-neutral-500">
-                          Codex
+                      <span className="min-w-0 truncate text-foreground @max-[520px]:hidden">
+                        {selectedModelLabel}
+                      </span>
+                      {selectedModelPreset &&
+                      selectedThinkingLevel !== "off" ? (
+                        <span className="shrink-0 text-muted-foreground @max-[520px]:hidden">
+                          {reasoningEffortLabel(selectedThinkingLevel)}
                         </span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="text-xs leading-5 font-medium whitespace-nowrap text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline focus-visible:text-neutral-950 focus-visible:underline focus-visible:outline-none"
-                          onClick={() => openProviderKeyDialog()}
-                        >
-                          {t.chat.addModelProvider}
-                        </button>
-                      )}
-                    </div>
-                    <DropdownMenuRadioGroup
-                      value={
-                        selectedModelPreset
-                          ? modelPresetValue(
-                              selectedModelPreset.provider,
-                              selectedModelPreset.modelId
-                            )
-                          : undefined
-                      }
+                      ) : null}
+                      <ChevronDown
+                        size={18}
+                        strokeWidth={1.5}
+                        className="shrink-0 text-muted-foreground"
+                      />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      side="top"
+                      sideOffset={8}
+                      collisionPadding={24}
+                      align="start"
+                      className="ousia-hover-scrollbar max-h-[min(var(--radix-dropdown-menu-content-available-height),640px)] w-72 rounded-xl p-2"
                     >
-                      {configuredModelPresets.map((preset) => {
-                        const value = modelPresetValue(
-                          preset.provider,
-                          preset.modelId
-                        )
-
-                        return (
+                      <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                        Reasoning
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup value={selectedThinkingLevel}>
+                        {activeThinkingLevels.map((level) => (
                           <DropdownMenuRadioItem
-                            key={value}
-                            value={value}
+                            key={level}
+                            value={level}
+                            title={
+                              selectedModelPreset?.thinkingLevelDescriptions?.[
+                                level
+                              ]
+                            }
                             className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                            onClick={() => updateModel(preset)}
+                            onClick={() => updateThinkingLevel(level)}
                           >
                             <span className="min-w-0 flex-1 truncate">
-                              {modelLabel(preset)}
+                              {reasoningEffortLabel(level)}
                             </span>
                           </DropdownMenuRadioItem>
-                        )
-                      })}
-                    </DropdownMenuRadioGroup>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {shouldShowContextUsageRing ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="flex size-6 items-center justify-center text-muted-foreground/55"
-                          aria-label={t.chat.contextUsageDetails(
+                        ))}
+                      </DropdownMenuRadioGroup>
+                      <DropdownMenuSeparator className="my-2 bg-neutral-200" />
+                      <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-1">
+                        <span className="text-sm text-neutral-500">
+                          {t.chat.model}
+                        </span>
+                        {isCodexSession ? (
+                          <span className="text-xs leading-5 font-medium text-neutral-500">
+                            Codex
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="text-xs leading-5 font-medium whitespace-nowrap text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline focus-visible:text-neutral-950 focus-visible:underline focus-visible:outline-none"
+                            onClick={() => openProviderKeyDialog()}
+                          >
+                            {t.chat.addModelProvider}
+                          </button>
+                        )}
+                      </div>
+                      <DropdownMenuRadioGroup
+                        value={
+                          selectedModelPreset
+                            ? modelPresetValue(
+                                selectedModelPreset.provider,
+                                selectedModelPreset.modelId
+                              )
+                            : undefined
+                        }
+                      >
+                        {configuredModelPresets.map((preset) => {
+                          const value = modelPresetValue(
+                            preset.provider,
+                            preset.modelId
+                          )
+
+                          return (
+                            <DropdownMenuRadioItem
+                              key={value}
+                              value={value}
+                              className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
+                              onClick={() => updateModel(preset)}
+                            >
+                              <span className="min-w-0 flex-1 truncate">
+                                {modelLabel(preset)}
+                              </span>
+                            </DropdownMenuRadioItem>
+                          )
+                        })}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {shouldShowContextUsageRing ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span
+                            className="flex size-6 items-center justify-center text-muted-foreground/55"
+                            aria-label={t.chat.contextUsageDetails(
+                              contextUsagePercentLabel,
+                              contextRemainingLabel
+                            )}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              className="size-[18px] -rotate-90"
+                              viewBox="0 0 18 18"
+                            >
+                              <circle
+                                cx="9"
+                                cy="9"
+                                r="6"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeOpacity="0.12"
+                                strokeWidth="2.5"
+                              />
+                              <circle
+                                cx="9"
+                                cy="9"
+                                r="6"
+                                fill="none"
+                                pathLength="100"
+                                stroke="currentColor"
+                                strokeDasharray={contextUsageStrokeDasharray}
+                                strokeOpacity="0.5"
+                                strokeLinecap="round"
+                                strokeWidth="2.5"
+                              />
+                            </svg>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {t.chat.contextUsageDetails(
                             contextUsagePercentLabel,
                             contextRemainingLabel
                           )}
-                        >
-                          <svg
-                            aria-hidden="true"
-                            className="size-[18px] -rotate-90"
-                            viewBox="0 0 18 18"
-                          >
-                            <circle
-                              cx="9"
-                              cy="9"
-                              r="6"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeOpacity="0.12"
-                              strokeWidth="2.5"
-                            />
-                            <circle
-                              cx="9"
-                              cy="9"
-                              r="6"
-                              fill="none"
-                              pathLength="100"
-                              stroke="currentColor"
-                              strokeDasharray={contextUsageStrokeDasharray}
-                              strokeOpacity="0.5"
-                              strokeLinecap="round"
-                              strokeWidth="2.5"
-                            />
-                          </svg>
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {t.chat.contextUsageDetails(
-                          contextUsagePercentLabel,
-                          contextRemainingLabel
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : null}
-                <Button
-                  type="submit"
-                  size="icon-sm"
-                  className="size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] hover:bg-primary/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
-                  disabled={isSending || !hasDraftContent}
-                  aria-label={t.app.send}
-                >
-                  <SendArrowUp size={17} strokeWidth={1.9} />
-                </Button>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : null}
+                  <Button
+                    type="submit"
+                    size="icon-sm"
+                    className="size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] hover:bg-primary/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
+                    disabled={isSending || !hasDraftContent}
+                    aria-label={t.app.send}
+                  >
+                    <SendArrowUp size={17} strokeWidth={1.9} />
+                  </Button>
+                </div>
               </div>
             </div>
-          </div>
           </div>
         </div>
       </form>
@@ -2412,3 +2451,5 @@ export function ChatArea({
     </section>
   )
 }
+
+export const ChatArea = memo(ChatAreaComponent)

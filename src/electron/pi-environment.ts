@@ -57,12 +57,6 @@ function createPiSettingsManager() {
   return SettingsManager.create(homedir(), agentDir)
 }
 
-export function readPiAutoRetryOnFailure() {
-  const settingsManager = createPiSettingsManager()
-  const globalSettings = settingsManager.getGlobalSettings()
-  return globalSettings.retry?.enabled ?? true
-}
-
 export async function savePiRetrySettings(
   payload: OusiaPiRetrySettingsPayload
 ): Promise<OusiaPiRetrySettingsResult> {
