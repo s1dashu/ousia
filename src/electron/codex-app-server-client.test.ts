@@ -68,7 +68,7 @@ class FakeCodexProcess extends EventEmitter {
 
 const processByClient = new Map<CodexAppServerClient, FakeCodexProcess>()
 
-function createHarness() {
+function createHarness(options: { experimentalApi?: boolean } = {}) {
   const process = new FakeCodexProcess()
   const logger = vi.fn()
   const resolution: CodexNativeBinaryResolution = {
@@ -86,6 +86,9 @@ function createHarness() {
       spawnProcess,
     },
     env: { PATH: "/usr/bin" },
+    ...(options.experimentalApi === undefined
+      ? {}
+      : { experimentalApi: options.experimentalApi }),
   })
   processByClient.set(client, process)
   return { client, logger, process, resolution, spawnProcess }
@@ -202,6 +205,32 @@ describe("CodexAppServerClient", () => {
     expect(harness.client.initializeResult).toEqual(INITIALIZE_RESULT)
   })
 
+  it("enables the experimental API only when explicitly configured", async () => {
+    const harness = createHarness({ experimentalApi: true })
+    clients.push(harness.client)
+
+    const initializeRequest = await initialize(
+      harness.client,
+      harness.process
+    )
+
+    expect(initializeRequest).toMatchObject({
+      method: "initialize",
+      params: {
+        capabilities: {
+          experimentalApi: true,
+          requestAttestation: false,
+        },
+      },
+    })
+  })
+
+  it("rejects an invalid experimental API capability instead of defaulting it", () => {
+    expect(() =>
+      createHarness({ experimentalApi: "true" as never })
+    ).toThrow("Codex experimentalApi option must be a boolean")
+  })
+
   it("correlates JSONL request responses by id", async () => {
     const harness = createHarness()
     clients.push(harness.client)
@@ -282,7 +311,7 @@ describe("CodexAppServerClient", () => {
       "item/commandExecution/requestApproval",
       (request) => {
         received(request)
-        void harness.client.respond(request.id, { decision: "accept" })
+        return { result: { decision: "accept" } }
       }
     )
 
@@ -304,12 +333,142 @@ describe("CodexAppServerClient", () => {
     })
   })
 
+  it("gives a method-specific server request listener priority over the wildcard", async () => {
+    const harness = createHarness()
+    clients.push(harness.client)
+    await initialize(harness.client, harness.process)
+    const wildcardListener = vi.fn(() => ({
+      result: { owner: "wildcard" },
+    }))
+    const specificListener = vi.fn(() => ({
+      result: { owner: "specific" },
+    }))
+    harness.client.onServerRequest(wildcardListener)
+    const unsubscribeSpecific = harness.client.onServerRequest(
+      "item/tool/call",
+      specificListener
+    )
+
+    harness.process.send({
+      id: "tool-1",
+      method: "item/tool/call",
+      params: { tool: "create-image" },
+    })
+
+    await vi.waitFor(() => expect(harness.process.sent).toHaveLength(3))
+    expect(specificListener).toHaveBeenCalledTimes(1)
+    expect(wildcardListener).not.toHaveBeenCalled()
+    expect(harness.process.sent[2]).toEqual({
+      id: "tool-1",
+      result: { owner: "specific" },
+    })
+
+    unsubscribeSpecific()
+    harness.process.send({
+      id: "tool-2",
+      method: "item/tool/call",
+      params: { tool: "create-image" },
+    })
+
+    await vi.waitFor(() => expect(harness.process.sent).toHaveLength(4))
+    expect(specificListener).toHaveBeenCalledTimes(1)
+    expect(wildcardListener).toHaveBeenCalledTimes(1)
+    expect(harness.process.sent[3]).toEqual({
+      id: "tool-2",
+      result: { owner: "wildcard" },
+    })
+  })
+
+  it("rejects duplicate and invalid server request listener registrations", () => {
+    const harness = createHarness()
+    clients.push(harness.client)
+    const methodListener = vi.fn(() => ({ result: null }))
+    const wildcardListener = vi.fn(() => ({ result: null }))
+
+    const unsubscribeMethod = harness.client.onServerRequest(
+      "item/tool/call",
+      methodListener
+    )
+    expect(() =>
+      harness.client.onServerRequest("item/tool/call", () => ({ result: null }))
+    ).toThrow(
+      "Codex server request listener is already registered for item/tool/call"
+    )
+
+    const unsubscribeWildcard = harness.client.onServerRequest(wildcardListener)
+    expect(() =>
+      harness.client.onServerRequest(() => ({ result: null }))
+    ).toThrow(
+      "Codex wildcard server request listener is already registered"
+    )
+    expect(() =>
+      harness.client.onServerRequest("", () => ({ result: null }))
+    ).toThrow("must be a non-empty, trimmed string")
+    expect(() =>
+      harness.client.onServerRequest(" item/tool/call ", () => ({
+        result: null,
+      }))
+    ).toThrow("must be a non-empty, trimmed string")
+    expect(() =>
+      harness.client.onServerRequest("item/missing-listener", undefined as never)
+    ).toThrow(
+      "Codex server request listener for item/missing-listener must be a function"
+    )
+    expect(() =>
+      harness.client.onServerRequest(undefined as never)
+    ).toThrow("Codex server request listener must be a function")
+    expect(() =>
+      Reflect.apply(harness.client.onServerRequest, harness.client, [
+        wildcardListener,
+        () => ({ result: null }),
+      ])
+    ).toThrow(
+      "Codex wildcard server request registration does not accept a second listener"
+    )
+
+    unsubscribeMethod()
+    unsubscribeWildcard()
+    expect(() =>
+      harness.client.onServerRequest("item/tool/call", () => ({ result: null }))
+    ).not.toThrow()
+    expect(() =>
+      harness.client.onServerRequest(() => ({ result: null }))
+    ).not.toThrow()
+  })
+
+  it("answers server requests that have no owner with method-not-found", async () => {
+    const harness = createHarness()
+    clients.push(harness.client)
+    await initialize(harness.client, harness.process)
+
+    harness.process.send({
+      id: "unowned-1",
+      method: "item/unrecognized",
+      params: { value: true },
+    })
+
+    await vi.waitFor(() =>
+      expect(harness.logger).toHaveBeenCalledWith(
+        "codex.app-server",
+        "warn",
+        "Codex app-server request has no listener",
+        { idType: "string", method: "item/unrecognized" }
+      )
+    )
+    expect(harness.process.sent[2]).toEqual({
+      id: "unowned-1",
+      error: {
+        code: -32601,
+        message: "Unsupported Codex server request item/unrecognized.",
+      },
+    })
+  })
+
   it("contains notification and server-request listener failures", async () => {
     const harness = createHarness()
     clients.push(harness.client)
     await initialize(harness.client, harness.process)
     const healthyNotificationListener = vi.fn()
-    const healthyRequestListener = vi.fn()
 
     harness.client.onNotification("warning", () => {
       throw new Error("api_key=notification-secret")
@@ -321,7 +480,6 @@ describe("CodexAppServerClient", () => {
     harness.client.onServerRequest("approval/request", () => {
       throw new Error("Bearer request-secret")
     })
-    harness.client.onServerRequest("approval/request", healthyRequestListener)
 
     harness.process.send({ method: "warning", params: { message: "careful" } })
     harness.process.send({
@@ -332,7 +490,6 @@ describe("CodexAppServerClient", () => {
 
     await vi.waitFor(() => {
       expect(healthyNotificationListener).toHaveBeenCalledTimes(1)
-      expect(healthyRequestListener).toHaveBeenCalledTimes(1)
       expect(harness.logger).toHaveBeenCalledWith(
         "codex.app-server",
         "error",
@@ -351,6 +508,108 @@ describe("CodexAppServerClient", () => {
     expect(logs).not.toContain("notification-secret")
     expect(logs).not.toContain("async-secret")
     expect(logs).not.toContain("request-secret")
+    expect(harness.process.sent[2]).toEqual({
+      id: "approval-2",
+      error: {
+        code: -32603,
+        message: "Codex server request handler failed for approval/request.",
+      },
+    })
+  })
+
+  it("rejects duplicate in-flight inbound ids", async () => {
+    const harness = createHarness()
+    clients.push(harness.client)
+    await initialize(harness.client, harness.process)
+    let releaseHandler!: () => void
+    const handlerResponse = new Promise<{ result: { accepted: boolean } }>(
+      (resolve) => {
+        releaseHandler = () => resolve({ result: { accepted: true } })
+      }
+    )
+    const handler = vi.fn(() => handlerResponse)
+    harness.client.onServerRequest("item/tool/call", handler)
+
+    harness.process.send({
+      id: "tool-in-flight",
+      method: "item/tool/call",
+      params: { tool: "first" },
+    })
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(1))
+    expect(harness.process.sent).toHaveLength(2)
+
+    harness.process.send({
+      id: "tool-in-flight",
+      method: "item/tool/call",
+      params: { tool: "duplicate" },
+    })
+    await vi.waitFor(() =>
+      expect(harness.process.kill).toHaveBeenCalledWith("SIGTERM")
+    )
+    expect(harness.logger).toHaveBeenCalledWith(
+      "codex.app-server",
+      "error",
+      "Codex app-server duplicated an in-flight server request id",
+      { idType: "string", method: "item/tool/call" }
+    )
+    expect(handler).toHaveBeenCalledTimes(1)
+    releaseHandler()
+  })
+
+  it("allows a completed inbound id to be reused", async () => {
+    const harness = createHarness()
+    clients.push(harness.client)
+    await initialize(harness.client, harness.process)
+    const handler = vi.fn(() => ({ result: { accepted: true } }))
+    harness.client.onServerRequest("item/tool/call", handler)
+
+    harness.process.send({
+      id: "tool-reused",
+      method: "item/tool/call",
+      params: { tool: "first" },
+    })
+    await vi.waitFor(() => expect(harness.process.sent).toHaveLength(3))
+    harness.process.send({
+      id: "tool-reused",
+      method: "item/tool/call",
+      params: { tool: "second" },
+    })
+
+    await vi.waitFor(() => expect(harness.process.sent).toHaveLength(4))
+    expect(handler).toHaveBeenCalledTimes(2)
+    expect(harness.process.sent.slice(2)).toEqual([
+      { id: "tool-reused", result: { accepted: true } },
+      { id: "tool-reused", result: { accepted: true } },
+    ])
+    expect(harness.process.kill).not.toHaveBeenCalled()
+  })
+
+  it("rejects non-JSON handler results instead of silently rewriting them", async () => {
+    const harness = createHarness()
+    clients.push(harness.client)
+    await initialize(harness.client, harness.process)
+    harness.client.onServerRequest("item/tool/call", () => ({
+      result: { silentlyDropped: undefined },
+    }))
+
+    harness.process.send({
+      id: "tool-non-json",
+      method: "item/tool/call",
+      params: { tool: "bad-result" },
+    })
+
+    await vi.waitFor(() => expect(harness.process.sent).toHaveLength(3))
+    expect(harness.process.sent[2]).toEqual({
+      id: "tool-non-json",
+      error: {
+        code: -32603,
+        message:
+          "Codex server request handler returned an invalid response for item/tool/call.",
+      },
+    })
+    expect(JSON.stringify(harness.process.sent)).not.toContain(
+      "silentlyDropped"
+    )
   })
 
   it("rejects only the waiter whose notification predicate throws", async () => {

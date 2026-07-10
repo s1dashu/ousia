@@ -1,7 +1,10 @@
 # Technical Architecture
 
 Ousia Desktop is an Electron + Vite + React app. The simplified app has no
-Ousia extension runtime. The renderer hosts the sidebar, chat, and settings.
+user-local Ousia extension runtime. The renderer hosts the sidebar, chat, and
+settings. A separate compile-time product boundary is being extracted as
+versioned `@ousia/*` packages; see
+[product-extensions.md](product-extensions.md).
 
 ## Runtime Stack
 
@@ -9,6 +12,8 @@ Ousia extension runtime. The renderer hosts the sidebar, chat, and settings.
 - React renderer with Tailwind/shadcn UI.
 - Pi coding agent and bundled Codex app-server hosted in Electron main.
 - Streamdown for assistant Markdown rendering.
+- npm workspaces for public, built Ousia packages. The first package,
+  `@ousia/extension-api`, has no runtime-framework dependencies.
 
 Removed from this branch:
 
@@ -19,6 +24,10 @@ Removed from this branch:
 - Extension-owned state storage.
 - Local `ousia extension ...` CLI bridge.
 - Ousia extension usage skill injection into Pi sessions.
+
+These removals concern the old runtime loader. They do not prohibit explicit
+compile-time products from registering provider-neutral tools or private
+Workspace Apps through the public contracts.
 
 ## Renderer
 
@@ -58,6 +67,23 @@ Main process entrypoints:
 - `src/electron/app-state-store.ts`: persists shell, settings, project, session,
   and window state.
 - `src/electron/window-host.ts`: owns the BrowserWindow and window state.
+- `src/electron/ousia-product.ts`: supplies Ousia's validated product identity
+  and desktop path policy to the composition root.
+
+## Public Package Boundary
+
+`packages/extension-api` defines environment-neutral codecs and registries for
+product identity, Agent tools, and Workspace Apps. Ousia Desktop imports this
+package through its npm workspace instead of importing package source by
+relative path. Package builds run before app start, tests, typecheck, and
+packaging, so consumers always resolve generated JavaScript and declarations
+from `dist`.
+
+Future host/UI extraction must preserve the runtime split: Electron lifecycle,
+canonical path authorization, provider adapters, scope tombstones, and state IO
+belong to the host; React panel chrome belongs to desktop UI; a downstream
+Workspace App owns its renderer, state/event codec, effects, file policy, and
+product dependencies.
 
 ## Preload API
 

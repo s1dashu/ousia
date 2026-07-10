@@ -1,14 +1,47 @@
 import { app } from "electron"
 import { join } from "node:path"
 
-export const OUSIA_APP_NAME = "Ousia"
-export const OUSIA_USER_DATA_DIR_NAME = "ousia-desktop"
+import {
+  snapshotDesktopPathPolicy,
+  snapshotProductIdentity,
+  type DesktopPathPolicy,
+  type ProductIdentity,
+} from "@ousia/extension-api"
 
-export function getCanonicalUserDataPath() {
-  return join(app.getPath("appData"), OUSIA_USER_DATA_DIR_NAME)
+let configuration:
+  | Readonly<{
+      identity: ProductIdentity
+      pathPolicy: DesktopPathPolicy
+    }>
+  | undefined
+
+function requireConfiguration() {
+  if (!configuration) {
+    throw new Error(
+      "Desktop app paths have not been configured with a product identity and path policy."
+    )
+  }
+  return configuration
 }
 
-export function configureOusiaAppPaths() {
-  app.setName(OUSIA_APP_NAME)
+export function getCanonicalUserDataPath() {
+  return join(
+    app.getPath("appData"),
+    requireConfiguration().pathPolicy.userDataDirectoryName
+  )
+}
+
+export function configureDesktopAppPaths(
+  identity: ProductIdentity,
+  pathPolicy: DesktopPathPolicy
+) {
+  if (configuration) {
+    throw new Error("Desktop app paths are already configured.")
+  }
+  configuration = Object.freeze({
+    identity: snapshotProductIdentity(identity),
+    pathPolicy: snapshotDesktopPathPolicy(pathPolicy),
+  })
+  app.setName(configuration.identity.displayName)
   app.setPath("userData", getCanonicalUserDataPath())
 }

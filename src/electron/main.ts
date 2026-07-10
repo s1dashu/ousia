@@ -14,7 +14,7 @@ import {
   createAgentProviderRouter,
   resolveCanonicalAgentContext,
 } from "./agent-provider-router.js"
-import { configureOusiaAppPaths } from "./app-paths.js"
+import { configureDesktopAppPaths } from "./app-paths.js"
 import {
   createAppStateProject,
   createAppStateSession,
@@ -76,14 +76,20 @@ import {
   savePiRetrySettings,
 } from "./pi-environment.js"
 import {
+  configureRuntimeLogger,
+  getDesktopRuntimeLogPath,
   installRuntimeLogger,
-  OUSIA_DESKTOP_LOG_PATH,
   writeRuntimeLog,
 } from "./runtime-logger.js"
+import {
+  OUSIA_DESKTOP_PATH_POLICY,
+  OUSIA_PRODUCT_IDENTITY,
+} from "./ousia-product.js"
 import { hydrateShellEnvironment } from "./shell-environment.js"
 import { createWindowHost } from "./window-host.js"
 
-configureOusiaAppPaths()
+configureDesktopAppPaths(OUSIA_PRODUCT_IDENTITY, OUSIA_DESKTOP_PATH_POLICY)
+configureRuntimeLogger(OUSIA_PRODUCT_IDENTITY, OUSIA_DESKTOP_PATH_POLICY)
 installRuntimeLogger()
 hydrateShellEnvironment()
 
@@ -478,7 +484,11 @@ ipcMain.on("ousia:log:renderer-error", (_event, payload: unknown) => {
 })
 
 app.whenReady().then(async () => {
-  writeRuntimeLog("main", "info", `Runtime log path: ${OUSIA_DESKTOP_LOG_PATH}`)
+  writeRuntimeLog(
+    "main",
+    "info",
+    `Runtime log path: ${getDesktopRuntimeLogPath()}`
+  )
   writeRuntimeLog("main", "info", {
     appData: app.getPath("appData"),
     userData: app.getPath("userData"),

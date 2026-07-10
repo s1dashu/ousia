@@ -43,8 +43,9 @@ wraps each Agent in a clean macOS app with project-aware sessions, streaming
 Markdown, and persistent chat history — so you can keep the conversation going
 without leaving your codebase.
 
-Think of it as a focused GUI layer for coding agents. No tabs, no extensions,
-no hidden panels. Just your projects and your selected Agent, side by side.
+Think of it as a focused GUI layer for coding agents. No hidden panels or
+user-installed runtime extensions. Just your projects and your selected Agent,
+side by side.
 
 ## Why Ousia
 
@@ -113,6 +114,7 @@ On first launch, Ousia asks for a default workspace folder (defaults to
 | Agent    | Pi Coding Agent and Codex app-server, hosted in Electron main process |
 | Icons    | HugeIcons Core Free                                                   |
 | State    | Local JSON via `Electron.app.getPath('userData')`                     |
+| Public API | `@ousia/extension-api` compile-time product contracts              |
 
 The renderer talks to Agent providers through a narrow `window.ousia` IPC
 bridge. Electron main resolves every session's canonical project before routing
@@ -150,6 +152,7 @@ the request to Pi or Codex, so renderer paths cannot expand an Agent's workspace
 npm run typecheck    # Type-check all TypeScript targets
 npm run lint         # ESLint across the project
 npm run check        # Both of the above
+npm run build:packages # Build public @ousia workspace packages
 
 npm run package      # Production app bundle → out/
 npm run make         # Local unsigned DMG (fast iteration)
@@ -175,6 +178,7 @@ npm run make:dmg:notarized   # Signed DMG + notarization
 | `docs/product-context.md`        | Scope, product boundaries, glossary                     |
 | `docs/design-context.md`         | UI rules, icon policy, shell constraints                |
 | `docs/technical-architecture.md` | Stack, IPC model, state schema, logging                 |
+| `docs/product-extensions.md`     | Compile-time public package and product boundaries      |
 | `docs/streamdown.md`             | Markdown rendering config and link handling             |
 | `docs/shadcn-reference.md`       | Local shadcn/ui reference workflow                      |
 | `docs/development-state.md`      | Current implementation state and commands               |

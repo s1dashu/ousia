@@ -103,5 +103,3 @@ export function ensurePiPackageDir() {
   })
   return resolved
 }
-
-ensurePiPackageDir()

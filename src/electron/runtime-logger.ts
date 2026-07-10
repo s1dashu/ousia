@@ -3,8 +3,12 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { inspect } from "node:util"
 
-export const OUSIA_LOG_DIR = join(homedir(), ".ousia", "logs")
-export const OUSIA_DESKTOP_LOG_PATH = join(OUSIA_LOG_DIR, "ousia-desktop.log")
+import {
+  snapshotDesktopPathPolicy,
+  snapshotProductIdentity,
+  type DesktopPathPolicy,
+  type ProductIdentity,
+} from "@ousia/extension-api"
 
 type LogLevel = "debug" | "info" | "warn" | "error"
 
@@ -17,9 +21,57 @@ const originalConsole = {
 }
 
 let isInstalled = false
+let configuration:
+  | Readonly<{
+      identity: ProductIdentity
+      logDirectoryPath: string
+      logFilePath: string
+    }>
+  | undefined
+
+function requireConfiguration() {
+  if (!configuration) {
+    throw new Error(
+      "Runtime logger has not been configured with a product identity and path policy."
+    )
+  }
+  return configuration
+}
+
+export function configureRuntimeLogger(
+  identity: ProductIdentity,
+  pathPolicy: DesktopPathPolicy
+) {
+  if (configuration) {
+    throw new Error("Runtime logger is already configured.")
+  }
+  const identitySnapshot = snapshotProductIdentity(identity)
+  const pathPolicySnapshot = snapshotDesktopPathPolicy(pathPolicy)
+  const logDirectoryPath = join(
+    homedir(),
+    pathPolicySnapshot.runtimeLog.homeDirectoryName,
+    pathPolicySnapshot.runtimeLog.directoryName
+  )
+  configuration = Object.freeze({
+    identity: identitySnapshot,
+    logDirectoryPath,
+    logFilePath: join(
+      logDirectoryPath,
+      pathPolicySnapshot.runtimeLog.fileName
+    ),
+  })
+}
+
+export function getRuntimeLogDirectoryPath() {
+  return requireConfiguration().logDirectoryPath
+}
+
+export function getDesktopRuntimeLogPath() {
+  return requireConfiguration().logFilePath
+}
 
 function ensureLogDir() {
-  mkdirSync(OUSIA_LOG_DIR, { recursive: true })
+  mkdirSync(getRuntimeLogDirectoryPath(), { recursive: true })
 }
 
 function formatLogValue(value: unknown) {
@@ -38,7 +90,7 @@ function formatLogValue(value: unknown) {
 
 function appendLine(line: string) {
   ensureLogDir()
-  writeFileSync(OUSIA_DESKTOP_LOG_PATH, `${line}\n`, {
+  writeFileSync(getDesktopRuntimeLogPath(), `${line}\n`, {
     encoding: "utf8",
     flag: "a",
   })
@@ -54,12 +106,15 @@ export function writeRuntimeLog(
 }
 
 export function installRuntimeLogger() {
+  const { identity } = requireConfiguration()
   if (isInstalled) {
     return
   }
   isInstalled = true
   ensureLogDir()
-  appendLine(`${new Date().toISOString()} [info] [main] Ousia desktop starting`)
+  appendLine(
+    `${new Date().toISOString()} [info] [main] ${identity.displayName} desktop starting`
+  )
 
   console.debug = (...values: unknown[]) => {
     writeRuntimeLog("main.console", "debug", ...values)

@@ -1179,23 +1179,18 @@ export function createCodexAgentProvider({
       threadId: stringValue(params?.threadId),
       turnId: stringValue(params?.turnId),
     })
-    const response =
-      request.method === "item/commandExecution/requestApproval" ||
+    return request.method === "item/commandExecution/requestApproval" ||
       request.method === "item/fileChange/requestApproval"
-        ? client.respond(request.id, { decision: "decline" })
-        : request.method === "execCommandApproval" ||
-            request.method === "applyPatchApproval"
-          ? client.respond(request.id, { decision: "denied" })
-          : client.respondError(request.id, {
+      ? { result: { decision: "decline" } }
+      : request.method === "execCommandApproval" ||
+          request.method === "applyPatchApproval"
+        ? { result: { decision: "denied" } }
+        : {
+            error: {
               code: -32601,
               message: `Ousia does not support Codex server request ${request.method}.`,
-            })
-    void response.catch((error: unknown) => {
-      log("error", "Failed to answer Codex server request", {
-        error: errorText(error),
-        method: request.method,
-      })
-    })
+            },
+          }
   }
 
   const unsubscribeNotification = client.onNotification(notificationHandler)

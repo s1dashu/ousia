@@ -7,6 +7,8 @@ import { createRequire } from "node:module"
 import { delimiter, dirname, join } from "node:path"
 import { createInterface, type Interface as ReadlineInterface } from "node:readline"
 
+import { snapshotJsonValue } from "@ousia/extension-api"
+
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 const requireFromHere = createRequire(__filename)
@@ -81,6 +83,10 @@ export interface CodexAppServerRpcErrorShape {
   message: string
 }
 
+export type CodexAppServerRequestResponse =
+  | Readonly<{ result: unknown }>
+  | Readonly<{ error: CodexAppServerRpcErrorShape }>
+
 export class CodexAppServerRpcError extends Error {
   readonly code: number
   readonly data: unknown
@@ -131,6 +137,7 @@ export interface CodexAppServerClientOptions {
   cwd?: string
   dependencies?: CodexAppServerClientDependencies
   env?: NodeJS.ProcessEnv
+  experimentalApi?: boolean
 }
 
 export interface WaitForCodexNotificationOptions<TParams = unknown> {
@@ -151,10 +158,9 @@ type NotificationListener = {
   method?: string
 }
 
-type ServerRequestListener = {
-  listener: (request: CodexAppServerRequest) => Promise<void> | void
-  method?: string
-}
+type ServerRequestListener = (
+  request: CodexAppServerRequest
+) => CodexAppServerRequestResponse | Promise<CodexAppServerRequestResponse>
 
 type NotificationWaiter = {
   matches: (notification: CodexAppServerNotification) => boolean
@@ -182,6 +188,40 @@ function isRpcError(value: unknown): value is CodexAppServerRpcErrorShape {
     typeof value.code === "number" &&
     typeof value.message === "string"
   )
+}
+
+function snapshotOutboundRpcError(value: unknown): CodexAppServerRpcErrorShape {
+  if (!isJsonObject(value)) {
+    throw new TypeError("Server request response error must be an object")
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== "code" && key !== "message" && key !== "data") {
+      throw new TypeError(
+        `Server request response error.${key} is not supported`
+      )
+    }
+  }
+  if (typeof value.code !== "number" || !Number.isSafeInteger(value.code)) {
+    throw new TypeError(
+      "Server request response error.code must be a safe integer"
+    )
+  }
+  if (
+    typeof value.message !== "string" ||
+    !value.message ||
+    value.message !== value.message.trim()
+  ) {
+    throw new TypeError(
+      "Server request response error.message must be a non-empty, trimmed string"
+    )
+  }
+  return {
+    code: value.code,
+    message: value.message,
+    ...(hasOwn(value, "data")
+      ? { data: snapshotJsonValue(value.data, "serverRequest.error.data") }
+      : {}),
+  }
 }
 
 function isInitializeResult(value: unknown): value is CodexInitializeResult {
@@ -352,6 +392,7 @@ export class CodexAppServerClient {
   private readonly clientVersion: string
   private readonly cwd: string | undefined
   private readonly environmentOverrides: NodeJS.ProcessEnv | undefined
+  private readonly experimentalApi: boolean
   private readonly logger: CodexRuntimeLogger
   private readonly notificationListeners = new Set<NotificationListener>()
   private readonly notificationWaiters = new Set<NotificationWaiter>()
@@ -360,8 +401,14 @@ export class CodexAppServerClient {
     PendingRequest
   >()
   private readonly resolveNativeBinary: () => CodexNativeBinaryResolution
-  private readonly serverRequestListeners = new Set<ServerRequestListener>()
+  private readonly inFlightServerRequestIds = new Set<CodexAppServerRequestId>()
+  private readonly serverRequestListeners = new Map<
+    string,
+    ServerRequestListener
+  >()
   private readonly spawnProcess: CodexAppServerSpawner
+
+  private serverRequestWildcardListener: ServerRequestListener | undefined
 
   private childProcess: ChildProcessWithoutNullStreams | undefined
   private disposed = false
@@ -377,9 +424,17 @@ export class CodexAppServerClient {
   private _initializeResult: CodexInitializeResult | undefined
 
   constructor(options: CodexAppServerClientOptions = {}) {
+    if (
+      options.experimentalApi !== undefined &&
+      typeof options.experimentalApi !== "boolean"
+    ) {
+      throw new TypeError("Codex experimentalApi option must be a boolean")
+    }
+
     this.clientVersion = options.clientVersion ?? "0.0.0"
     this.cwd = options.cwd
     this.environmentOverrides = options.env
+    this.experimentalApi = options.experimentalApi ?? false
     this.logger = options.dependencies?.logger ?? writeRuntimeLog
     this.resolveNativeBinary =
       options.dependencies?.resolveNativeBinary ?? resolveCodexNativeBinary
@@ -418,19 +473,6 @@ export class CodexAppServerClient {
     this.writeMessage({ method, ...(params === undefined ? {} : { params }) })
   }
 
-  async respond(id: CodexAppServerRequestId, result: unknown) {
-    await this.start()
-    this.writeMessage({ id, result })
-  }
-
-  async respondError(
-    id: CodexAppServerRequestId,
-    error: CodexAppServerRpcErrorShape
-  ) {
-    await this.start()
-    this.writeMessage({ error, id })
-  }
-
   onNotification(
     listener: (
       notification: CodexAppServerNotification
@@ -466,33 +508,78 @@ export class CodexAppServerClient {
   }
 
   onServerRequest(
-    listener: (request: CodexAppServerRequest) => Promise<void> | void
+    listener: (
+      request: CodexAppServerRequest
+    ) => CodexAppServerRequestResponse | Promise<CodexAppServerRequestResponse>
   ): () => void
   onServerRequest<TParams = unknown>(
     method: string,
     listener: (
       request: CodexAppServerRequest<TParams>
-    ) => Promise<void> | void
+    ) => CodexAppServerRequestResponse | Promise<CodexAppServerRequestResponse>
   ): () => void
   onServerRequest<TParams = unknown>(
     methodOrListener:
       | string
-      | ((request: CodexAppServerRequest) => Promise<void> | void),
+      | ((
+          request: CodexAppServerRequest
+        ) =>
+          | CodexAppServerRequestResponse
+          | Promise<CodexAppServerRequestResponse>),
     maybeListener?: (
       request: CodexAppServerRequest<TParams>
-    ) => Promise<void> | void
+    ) => CodexAppServerRequestResponse | Promise<CodexAppServerRequestResponse>
   ) {
-    const registration: ServerRequestListener =
-      typeof methodOrListener === "string"
-        ? {
-            listener: maybeListener as (
-              request: CodexAppServerRequest
-            ) => Promise<void> | void,
-            method: methodOrListener,
-          }
-        : { listener: methodOrListener }
-    this.serverRequestListeners.add(registration)
-    return () => this.serverRequestListeners.delete(registration)
+    if (typeof methodOrListener === "string") {
+      if (
+        methodOrListener.trim().length === 0 ||
+        methodOrListener !== methodOrListener.trim()
+      ) {
+        throw new Error(
+          "Codex server request method must be a non-empty, trimmed string"
+        )
+      }
+      if (typeof maybeListener !== "function") {
+        throw new TypeError(
+          `Codex server request listener for ${methodOrListener} must be a function`
+        )
+      }
+      if (this.serverRequestListeners.has(methodOrListener)) {
+        throw new Error(
+          `Codex server request listener is already registered for ${methodOrListener}`
+        )
+      }
+
+      const listener = maybeListener as ServerRequestListener
+      this.serverRequestListeners.set(methodOrListener, listener)
+      return () => {
+        if (this.serverRequestListeners.get(methodOrListener) === listener) {
+          this.serverRequestListeners.delete(methodOrListener)
+        }
+      }
+    }
+
+    if (typeof methodOrListener !== "function") {
+      throw new TypeError("Codex server request listener must be a function")
+    }
+    if (maybeListener !== undefined) {
+      throw new TypeError(
+        "Codex wildcard server request registration does not accept a second listener"
+      )
+    }
+    if (this.serverRequestWildcardListener) {
+      throw new Error(
+        "Codex wildcard server request listener is already registered"
+      )
+    }
+
+    const listener = methodOrListener
+    this.serverRequestWildcardListener = listener
+    return () => {
+      if (this.serverRequestWildcardListener === listener) {
+        this.serverRequestWildcardListener = undefined
+      }
+    }
   }
 
   waitForNotification<TParams = unknown>(
@@ -611,7 +698,7 @@ export class CodexAppServerClient {
 
       const initializeResult = await this.requestRaw<unknown>("initialize", {
         capabilities: {
-          experimentalApi: false,
+          experimentalApi: this.experimentalApi,
           requestAttestation: false,
         },
         clientInfo: {
@@ -721,10 +808,21 @@ export class CodexAppServerClient {
           this.protocolFailure("Codex app-server request has an invalid id")
           return
         }
-        this.dispatchServerRequest({
+        const request = {
           id: message.id,
           method: message.method,
           ...(hasOwn(message, "params") ? { params: message.params } : {}),
+        }
+        void this.dispatchServerRequest(request).catch((error: unknown) => {
+          if (!this.terminalError) {
+            this.protocolFailure(
+              "Failed to dispatch Codex app-server request",
+              {
+                error: errorDetails(error),
+                method: request.method,
+              }
+            )
+          }
         })
       } else {
         this.dispatchNotification({
@@ -796,27 +894,112 @@ export class CodexAppServerClient {
     }
   }
 
-  private dispatchServerRequest(request: CodexAppServerRequest) {
-    let handled = false
-    for (const registration of this.serverRequestListeners) {
-      if (!registration.method || registration.method === request.method) {
-        handled = true
-        this.invokeListener(
-          "server request",
-          request.method,
-          registration.listener,
-          request
-        )
-      }
+  private async dispatchServerRequest(request: CodexAppServerRequest) {
+    if (this.inFlightServerRequestIds.has(request.id)) {
+      this.protocolFailure(
+        "Codex app-server duplicated an in-flight server request id",
+        {
+          idType: typeof request.id,
+          method: request.method,
+        }
+      )
+      return
     }
-    if (!handled) {
+    this.inFlightServerRequestIds.add(request.id)
+    try {
+      await this.answerServerRequest(request)
+    } finally {
+      this.inFlightServerRequestIds.delete(request.id)
+    }
+  }
+
+  private async answerServerRequest(request: CodexAppServerRequest) {
+    const listener =
+      this.serverRequestListeners.get(request.method) ??
+      this.serverRequestWildcardListener
+    if (!listener) {
       this.logger(
         "codex.app-server",
         "warn",
         "Codex app-server request has no listener",
         { idType: typeof request.id, method: request.method }
       )
+      this.writeMessage({
+        id: request.id,
+        error: {
+          code: -32601,
+          message: `Unsupported Codex server request ${request.method}.`,
+        },
+      })
+      return
     }
+
+    let response: CodexAppServerRequestResponse
+    try {
+      response = await listener(request)
+    } catch (error) {
+      this.logListenerError("server request", request.method, error)
+      this.writeMessage({
+        id: request.id,
+        error: {
+          code: -32603,
+          message: `Codex server request handler failed for ${request.method}.`,
+        },
+      })
+      return
+    }
+
+    const responseRecord: JsonObject | undefined = isJsonObject(response)
+      ? (response as JsonObject)
+      : undefined
+    const hasResult = responseRecord ? hasOwn(responseRecord, "result") : false
+    const hasError = responseRecord ? hasOwn(responseRecord, "error") : false
+    if (
+      !responseRecord ||
+      hasResult === hasError ||
+      Object.keys(responseRecord).length !== 1 ||
+      (hasResult && responseRecord.result === undefined)
+    ) {
+      this.writeInvalidServerRequestHandlerResponse(
+        request,
+        new TypeError("Handler must return exactly one result or error")
+      )
+      return
+    }
+
+    let responseMessage: JsonObject
+    try {
+      responseMessage = hasResult
+        ? {
+          id: request.id,
+          result: snapshotJsonValue(
+            responseRecord.result,
+            "serverRequest.result"
+          ),
+        }
+        : {
+          id: request.id,
+          error: snapshotOutboundRpcError(responseRecord.error),
+        }
+    } catch (error) {
+      this.writeInvalidServerRequestHandlerResponse(request, error)
+      return
+    }
+    this.writeMessage(responseMessage)
+  }
+
+  private writeInvalidServerRequestHandlerResponse(
+    request: CodexAppServerRequest,
+    error: unknown
+  ) {
+    this.logListenerError("server request", request.method, error)
+    this.writeMessage({
+      id: request.id,
+      error: {
+        code: -32603,
+        message: `Codex server request handler returned an invalid response for ${request.method}.`,
+      },
+    })
   }
 
   private requestRaw<TResult>(method: string, params?: unknown) {

@@ -1,0 +1,43 @@
+{
+  "name": "@ousia/extension-api",
+  "version": "0.1.0",
+  "description": "Environment-neutral contracts for compile-time Ousia product extensions.",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/s1dashu/ousia#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/s1dashu/ousia.git",
+    "directory": "packages/extension-api"
+  },
+  "bugs": {
+    "url": "https://github.com/s1dashu/ousia/issues"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "check:pack": "npm run build && node scripts/check-pack.cjs",
+    "clean": "node scripts/clean.cjs",
+    "prepack": "npm run build",
+    "typecheck": "tsc -p tsconfig.type-tests.json --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

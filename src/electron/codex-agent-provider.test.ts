@@ -4,6 +4,7 @@ import type {
   CodexAppServerClient,
   CodexAppServerNotification,
   CodexAppServerRequest,
+  CodexAppServerRequestResponse,
   CodexInitializeResult,
   WaitForCodexNotificationOptions,
 } from "./codex-app-server-client.js"
@@ -35,8 +36,14 @@ class FakeCodexClient {
     (notification: CodexAppServerNotification) => void
   >()
   readonly requests: Array<{ method: string; params: unknown }> = []
-  readonly responses: Array<{ id: number | string; result: unknown }> = []
-  readonly serverRequests = new Set<(request: CodexAppServerRequest) => void>()
+  readonly responses: Array<
+    { id: number | string } & CodexAppServerRequestResponse
+  > = []
+  readonly serverRequests = new Set<
+    (
+      request: CodexAppServerRequest
+    ) => CodexAppServerRequestResponse | Promise<CodexAppServerRequestResponse>
+  >()
   disposed = false
   requestHandler: (method: string, params: unknown) => unknown = () => ({})
 
@@ -59,7 +66,11 @@ class FakeCodexClient {
     return () => this.notifications.delete(listener)
   }
 
-  onServerRequest(listener: (request: CodexAppServerRequest) => void) {
+  onServerRequest(
+    listener: (
+      request: CodexAppServerRequest
+    ) => CodexAppServerRequestResponse | Promise<CodexAppServerRequestResponse>
+  ) {
     this.serverRequests.add(listener)
     return () => this.serverRequests.delete(listener)
   }
@@ -94,15 +105,6 @@ class FakeCodexClient {
     })
   }
 
-  respond(id: number | string, result: unknown) {
-    this.responses.push({ id, result })
-    return Promise.resolve()
-  }
-
-  respondError() {
-    return Promise.resolve()
-  }
-
   emit(method: string, params: unknown) {
     for (const listener of [...this.notifications]) {
       listener({ method, params })
@@ -111,7 +113,9 @@ class FakeCodexClient {
 
   emitServerRequest(request: CodexAppServerRequest) {
     for (const listener of [...this.serverRequests]) {
-      listener(request)
+      void Promise.resolve(listener(request)).then((response) => {
+        this.responses.push({ id: request.id, ...response })
+      })
     }
   }
 

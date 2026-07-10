@@ -1,4 +1,3 @@
-import "./pi-package-dir.js"
 import {
   mkdirSync,
   writeFileSync,

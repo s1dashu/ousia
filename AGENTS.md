@@ -8,6 +8,7 @@ match the task.
 - Product intent and scope: [docs/product-context.md](docs/product-context.md)
 - UI direction and interaction rules: [docs/design-context.md](docs/design-context.md)
 - Technical architecture: [docs/technical-architecture.md](docs/technical-architecture.md)
+- Compile-time product extension API: [docs/product-extensions.md](docs/product-extensions.md)
 - Codex provider architecture: [docs/codex-integration.md](docs/codex-integration.md)
 - Streamdown Markdown rendering: [docs/streamdown.md](docs/streamdown.md)
 - shadcn/ui local reference workflow: [docs/shadcn-reference.md](docs/shadcn-reference.md)
@@ -17,7 +18,9 @@ match the task.
 
 - The current app is a reduced desktop agent client.
 - The app shell is assembled from React surfaces: sidebar, chat, and settings.
-- There is no Ousia extension/runtime-extension/plugin surface in this branch.
+- There is no user-local runtime-extension/plugin surface in this branch.
+- `@ousia/extension-api` is a compile-time, environment-neutral public package;
+  Ousia Desktop consumes it through the repository's npm workspace.
 - The desktop runtime is Electron + Vite + React.
 - The app supports Pi and Codex coding agents, both hosted from Electron main.
 - Agent provider is immutable per session. Pi uses the Ousia session id; Codex
@@ -39,6 +42,8 @@ match the task.
 - App shell and current UI state: [src/App.tsx](src/App.tsx)
 - Chat UI: [src/features/chat/ChatArea.tsx](src/features/chat/ChatArea.tsx)
 - Electron main process and agent router: [src/electron/main.ts](src/electron/main.ts)
+- Ousia product composition: [src/electron/ousia-product.ts](src/electron/ousia-product.ts)
+- Public extension contracts: [packages/extension-api/src/index.ts](packages/extension-api/src/index.ts)
 - Codex app-server client: [src/electron/codex-app-server-client.ts](src/electron/codex-app-server-client.ts)
 - Codex provider adapter: [src/electron/codex-agent-provider.ts](src/electron/codex-agent-provider.ts)
 - Electron preload API: [src/electron/preload.ts](src/electron/preload.ts)
@@ -56,6 +61,12 @@ match the task.
 - Do not reintroduce Ousia extension, runtime extension, plugin, addon, browser,
   editor, PDF, Excalidraw, or Sheets workspace surfaces unless the user
   explicitly asks to reverse this branch direction.
+- Compile-time product contracts are not authorization to restore directory
+  scanning, arbitrary local code loading, the extension marketplace, or the old
+  `~/.ousia/extensions`/CLI compatibility surface.
+- Keep `@ousia/extension-api` free of React, Electron, Pi, Codex, and downstream
+  product imports. Package exports must point to built `dist` files, and public
+  releases must pass build, tests, and `npm pack --dry-run`.
 - Do not inject an Ousia extension usage skill or CLI bridge into Pi sessions.
 - Preserve the shadcn preset theme direction unless the user explicitly changes
   it.

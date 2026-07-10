@@ -3,6 +3,7 @@
 ## Commands
 
 ```bash
+npm run build:packages
 npm run typecheck
 npm run lint
 npm test
@@ -12,6 +13,12 @@ npm start
 
 Testing strategy and coverage scope are tracked in
 [docs/testing-plan.md](testing-plan.md).
+
+Public package smoke test:
+
+```bash
+npm pack --dry-run --workspace @ousia/extension-api
+```
 
 Packaging commands:
 
@@ -41,8 +48,9 @@ tail -200 ~/.ousia/logs/ousia-desktop.log
 
 ## Current Direction
 
-The simplified app removes the Ousia extension system and keeps a smaller
-desktop agent client:
+The simplified app removes the user-local Ousia runtime extension system and
+keeps a smaller desktop agent client. A compile-time public contract package is
+maintained separately:
 
 - Sidebar for sessions/projects/settings.
 - Chat as the primary agent surface.
@@ -51,6 +59,8 @@ desktop agent client:
   extension watcher, browser host, editor/PDF host, or extension state store.
 - No `ousia extension ...` CLI bridge.
 - No Ousia extension usage skill injection into Pi sessions.
+- `@ousia/extension-api` provides strict product/tool/workspace contracts but
+  does not load arbitrary local extensions.
 
 ## Implemented UI State
 
