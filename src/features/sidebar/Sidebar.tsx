@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -37,7 +38,10 @@ import {
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages, type I18nMessages } from "@/app/i18n"
 import { Button } from "@/components/ui/button"
-import type { OusiaLanguage, OusiaSidebarSectionId } from "@/electron/chat-types"
+import type {
+  OusiaLanguage,
+  OusiaSidebarSectionId,
+} from "@/electron/chat-types"
 
 const sidebarAddIconSize = 18
 const sidebarFolderIconSize = 18
@@ -47,8 +51,7 @@ const sidebarIconStrokeWidth = 1.5
 const sidebarActionButtonClass = "size-6 justify-self-end"
 const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
 const sidebarProjectActionButtonClass = "size-6 justify-self-end"
-const sidebarProjectLeadGridClass =
-  "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
+const sidebarProjectLeadGridClass = "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarScrollPaddingXClass = "px-0"
 const sidebarFooterPaddingXClass = "px-[7px]"
@@ -355,7 +358,9 @@ function SortableSessionRow({
         "group/session ousia-squircle-corners font-radix-regular relative grid h-8.5 cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing",
         isSelectedSession ? sidebarSelectedRowClass : sidebarRowStateClass,
         projectChild ? "gap-x-0 gap-y-1" : "gap-1",
-        projectChild ? sidebarProjectSessionGridClass : sidebarSingleActionGridClass,
+        projectChild
+          ? sidebarProjectSessionGridClass
+          : sidebarSingleActionGridClass,
         sidebarSessionRowXClass,
         isDragging ? sidebarDragPlaceholderClass : "",
       ].join(" ")}
@@ -420,7 +425,7 @@ function SortableSessionRow({
               <div
                 className={[
                   "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
-                  "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
+                  "group-focus-within/session:opacity-0 group-hover/session:opacity-0",
                 ].join(" ")}
                 aria-hidden="true"
               >
@@ -437,7 +442,7 @@ function SortableSessionRow({
                 "absolute inset-0",
                 sidebarActionButtonClass,
                 sidebarGhostActionClass,
-                "opacity-0 transition-opacity group-hover/session:opacity-100 group-focus-within/session:opacity-100",
+                "opacity-0 transition-opacity group-focus-within/session:opacity-100 group-hover/session:opacity-100",
               ].join(" ")}
               aria-label={t.sidebar.deleteSession(session.title)}
               onClick={(event) => {
@@ -634,7 +639,7 @@ function SortableSidebarSection({
               "shrink-0 text-muted-foreground transition-[opacity,transform] duration-150",
               isCollapsed
                 ? "-rotate-90 opacity-100"
-                : "rotate-0 opacity-0 group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100",
+                : "rotate-0 opacity-0 group-focus-within/section-header:opacity-100 group-hover/section-header:opacity-100",
             ].join(" ")}
             size={sidebarSectionIconSize}
             strokeWidth={sidebarIconStrokeWidth}
@@ -669,7 +674,7 @@ function SortableSidebarSection({
   )
 }
 
-export function Sidebar({
+function SidebarComponent({
   onCreateProjectSession,
   onCreateSession,
   onDeleteProject,
@@ -706,7 +711,9 @@ export function Sidebar({
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<
     OusiaSidebarSectionId[]
   >([])
-  const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(null)
+  const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(
+    null
+  )
   const editingInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
@@ -760,8 +767,7 @@ export function Sidebar({
           const containerRect = container.getBoundingClientRect()
           const targetRect = target.getBoundingClientRect()
           const revealTop = containerRect.top + sidebarScrollRevealPadding
-          const revealBottom =
-            containerRect.bottom - sidebarScrollRevealPadding
+          const revealBottom = containerRect.bottom - sidebarScrollRevealPadding
           const isTargetVisible =
             targetRect.top >= revealTop && targetRect.bottom <= revealBottom
 
@@ -871,7 +877,10 @@ export function Sidebar({
           activeData.groupId === overData.groupId
         ) {
           onReorderSessions(sourceSessionId, String(event.over.id))
-        } else if (activeData.groupId !== overData.groupId && overData.groupId) {
+        } else if (
+          activeData.groupId !== overData.groupId &&
+          overData.groupId
+        ) {
           void onMoveSession({
             sessionId: sourceSessionId,
             targetProjectId: projectIdFromSessionGroup(overData.groupId),
@@ -904,7 +913,10 @@ export function Sidebar({
     if (activeData.kind === "section" && overData.kind === "section") {
       const activeSectionId = String(event.active.id)
       const overSectionId = String(event.over.id)
-      if (isSidebarSectionId(activeSectionId) && isSidebarSectionId(overSectionId)) {
+      if (
+        isSidebarSectionId(activeSectionId) &&
+        isSidebarSectionId(overSectionId)
+      ) {
         onReorderSidebarSections(activeSectionId, overSectionId)
       }
     } else if (activeData.kind === "project" && overData.kind === "project") {
@@ -1022,9 +1034,8 @@ export function Sidebar({
               )
               const canCompactProjectSessions =
                 projectSessions.length > sidebarProjectSessionPreviewCount
-              const isProjectSessionListCompact = compactProjectSessionIds.includes(
-                project.id
-              )
+              const isProjectSessionListCompact =
+                compactProjectSessionIds.includes(project.id)
               const visibleProjectSessions =
                 canCompactProjectSessions && isProjectSessionListCompact
                   ? projectSessions.slice(0, sidebarProjectSessionCompactCount)
@@ -1043,9 +1054,11 @@ export function Sidebar({
                   t={t}
                 >
                   {isExpanded ? (
-                    <div className="overflow-visible py-1 -my-1">
+                    <div className="-my-1 overflow-visible py-1">
                       <SortableContext
-                        items={visibleProjectSessions.map((session) => session.id)}
+                        items={visibleProjectSessions.map(
+                          (session) => session.id
+                        )}
                         strategy={verticalListSortingStrategy}
                       >
                         <div className={`${sidebarListGapClass} pt-px`}>
@@ -1118,9 +1131,7 @@ export function Sidebar({
         easing: "cubic-bezier(0.2, 0, 0, 1)",
       }}
     >
-      {dragPreview ? (
-        <DragPreview preview={dragPreview} />
-      ) : null}
+      {dragPreview ? <DragPreview preview={dragPreview} /> : null}
     </DragOverlay>
   )
 
@@ -1167,3 +1178,5 @@ export function Sidebar({
     </aside>
   )
 }
+
+export const Sidebar = memo(SidebarComponent)

@@ -17,11 +17,40 @@ import {
 } from "./chat-types"
 
 const mockState = vi.hoisted(() => ({
+  failNextRename: undefined as Error | undefined,
   homeDir: "",
+  readFileCallCount: 0,
   readPiAutoRetryOnFailure: vi.fn(() => true),
   userDataPath: "",
+  writeFileCallCount: 0,
   writeRuntimeLog: vi.fn(),
 }))
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:fs/promises")>()
+  const readFile = actual.readFile as (...args: unknown[]) => unknown
+  const rename = actual.rename as (...args: unknown[]) => unknown
+  const writeFile = actual.writeFile as (...args: unknown[]) => unknown
+  return {
+    ...actual,
+    readFile: (...args: unknown[]) => {
+      mockState.readFileCallCount += 1
+      return readFile(...args)
+    },
+    rename: (...args: unknown[]) => {
+      if (mockState.failNextRename) {
+        const error = mockState.failNextRename
+        mockState.failNextRename = undefined
+        return Promise.reject(error)
+      }
+      return rename(...args)
+    },
+    writeFile: (...args: unknown[]) => {
+      mockState.writeFileCallCount += 1
+      return writeFile(...args)
+    },
+  }
+})
 
 vi.mock("node:os", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:os")>()
@@ -42,7 +71,7 @@ vi.mock("electron", () => ({
   },
 }))
 
-vi.mock("./pi-environment.js", () => ({
+vi.mock("./pi-retry-settings.js", () => ({
   readPiAutoRetryOnFailure: mockState.readPiAutoRetryOnFailure,
 }))
 
@@ -61,6 +90,7 @@ import {
   renameAppStateSession,
   reorderAppStateSessions,
   reorderAppStateProjects,
+  resetAppStateStoreForTests,
   saveAppStateSelection,
   saveAppStateSettings,
   saveAppStateShellLayout,
@@ -72,16 +102,22 @@ describe("app state store", () => {
   let testRoot: string
 
   beforeEach(() => {
+    resetAppStateStoreForTests()
     testRoot = join(tmpdir(), `ousia-app-state-${Date.now()}`)
     mockState.homeDir = join(testRoot, "home")
     mockState.userDataPath = join(testRoot, "userData")
+    mockState.failNextRename = undefined
+    mockState.readFileCallCount = 0
     mockState.readPiAutoRetryOnFailure.mockReturnValue(true)
+    mockState.readPiAutoRetryOnFailure.mockClear()
+    mockState.writeFileCallCount = 0
     mockState.writeRuntimeLog.mockClear()
     mkdirSync(mockState.homeDir, { recursive: true })
     mkdirSync(mockState.userDataPath, { recursive: true })
   })
 
   afterEach(() => {
+    resetAppStateStoreForTests()
     rmSync(testRoot, { force: true, recursive: true })
   })
 
@@ -110,6 +146,46 @@ describe("app state store", () => {
     expect(state.selectedSessionId).toBe(state.sessions[0].id)
     expect(state.settings.autoRetryOnFailure).toBe(true)
     expect(readStoredState().selectedSessionId).toBe(state.selectedSessionId)
+  })
+
+  it("reuses the in-memory snapshot across consecutive loads", async () => {
+    await loadAppState()
+    resetAppStateStoreForTests()
+    mockState.readFileCallCount = 0
+    mockState.readPiAutoRetryOnFailure.mockClear()
+
+    const first = await loadAppState({ synchronizePiRetry: true })
+    const second = await loadAppState({ synchronizePiRetry: true })
+
+    expect(second).toEqual(first)
+    expect(second).not.toBe(first)
+    expect(mockState.readFileCallCount).toBe(1)
+    expect(mockState.readPiAutoRetryOnFailure).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not import Pi settings during ordinary main-process state reads", async () => {
+    await loadAppState()
+
+    expect(mockState.readPiAutoRetryOnFailure).not.toHaveBeenCalled()
+  })
+
+  it("isolates snapshots by the canonical app state path", async () => {
+    const firstUserDataPath = mockState.userDataPath
+    const first = await saveAppStateShellLayout({
+      shellLayout: {
+        ...(await loadAppState()).shellLayout,
+        sidebarWidth: 300,
+      },
+    })
+    expect(first.ok).toBe(true)
+
+    mockState.userDataPath = join(testRoot, "other-userData")
+    mkdirSync(mockState.userDataPath, { recursive: true })
+    const other = await loadAppState()
+    expect(other.shellLayout.sidebarWidth).not.toBe(300)
+
+    mockState.userDataPath = firstUserDataPath
+    expect((await loadAppState()).shellLayout.sidebarWidth).toBe(300)
   })
 
   it("falls back to defaults for invalid persisted state", async () => {
@@ -277,7 +353,10 @@ describe("app state store", () => {
       mockState.homeDir,
       OUSIA_LEGACY_DEFAULT_WORK_DIR.slice(2)
     )
-    const defaultWorkDir = join(mockState.homeDir, OUSIA_DEFAULT_WORK_DIR.slice(2))
+    const defaultWorkDir = join(
+      mockState.homeDir,
+      OUSIA_DEFAULT_WORK_DIR.slice(2)
+    )
     mkdirSync(legacyWorkDir, { recursive: true })
     mkdirSync(defaultWorkDir, { recursive: true })
     writeFileSync(join(legacyWorkDir, "move-me.txt"), "legacy", "utf8")
@@ -352,15 +431,27 @@ describe("app state store", () => {
     })
   })
 
-  it("logs Pi retry read failures without hiding the settings save", async () => {
-    const baseSettings = (await loadAppState()).settings
+  it("defers Pi retry hydration for the window and logs failures without hiding settings saves", async () => {
     mockState.readPiAutoRetryOnFailure.mockImplementation(() => {
       throw new Error("Pi settings unavailable")
     })
+    const windowState = await loadAppState({ synchronizePiRetry: false })
+    expect(mockState.readPiAutoRetryOnFailure).not.toHaveBeenCalled()
+
+    const hydratedState = await loadAppState({ synchronizePiRetry: true })
+    expect(hydratedState).toEqual(windowState)
+    expect(mockState.writeRuntimeLog).toHaveBeenCalledWith(
+      "app-state",
+      "warn",
+      {
+        error: "Pi settings unavailable",
+        message: "Failed to read Pi retry setting",
+      }
+    )
 
     const result = await saveAppStateSettings({
       settings: {
-        ...baseSettings,
+        ...hydratedState.settings,
         autoRetryOnFailure: false,
         language: "en",
       },
@@ -372,14 +463,21 @@ describe("app state store", () => {
     }
     expect(result.state.settings.language).toBe("en")
     expect(result.state.settings.autoRetryOnFailure).toBe(false)
-    expect(mockState.writeRuntimeLog).toHaveBeenCalledWith(
-      "app-state",
-      "warn",
-      {
-        error: "Pi settings unavailable",
-        message: "Failed to read Pi retry setting",
-      }
-    )
+  })
+
+  it("retries Pi retry hydration after a transient read failure", async () => {
+    mockState.readPiAutoRetryOnFailure
+      .mockImplementationOnce(() => {
+        throw new Error("temporary Pi settings failure")
+      })
+      .mockReturnValueOnce(false)
+
+    const first = await loadAppState({ synchronizePiRetry: true })
+    const second = await loadAppState({ synchronizePiRetry: true })
+
+    expect(first.settings.autoRetryOnFailure).toBe(true)
+    expect(second.settings.autoRetryOnFailure).toBe(false)
+    expect(mockState.readPiAutoRetryOnFailure).toHaveBeenCalledTimes(2)
   })
 
   it("filters selection state through known sessions and projects", async () => {
@@ -407,6 +505,10 @@ describe("app state store", () => {
   })
 
   it("serializes concurrent session creation without dropping writes", async () => {
+    await loadAppState()
+    resetAppStateStoreForTests()
+    mockState.readFileCallCount = 0
+
     const [first, second] = await Promise.all([
       createAppStateSession({ title: "First queued write" }),
       createAppStateSession({ title: "Second queued write" }),
@@ -415,10 +517,48 @@ describe("app state store", () => {
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(true)
 
-    const titles = (await loadAppState()).sessions.map((session) => session.title)
+    const titles = (await loadAppState()).sessions.map(
+      (session) => session.title
+    )
     expect(titles).toEqual(
       expect.arrayContaining(["First queued write", "Second queued write"])
     )
+    expect(mockState.readFileCallCount).toBe(1)
+  })
+
+  it("publishes a transaction snapshot only after its atomic rename succeeds", async () => {
+    const initial = await loadAppState()
+    mockState.failNextRename = new Error("simulated rename failure")
+
+    const failed = await saveAppStateShellLayout({
+      shellLayout: {
+        ...initial.shellLayout,
+        sidebarWidth: 300,
+      },
+    })
+
+    expect(failed).toMatchObject({
+      error: "simulated rename failure",
+      ok: false,
+    })
+    expect(expectDefined(failed.state).shellLayout.sidebarWidth).toBe(
+      initial.shellLayout.sidebarWidth
+    )
+    expect((await loadAppState()).shellLayout.sidebarWidth).toBe(
+      initial.shellLayout.sidebarWidth
+    )
+    expect(readStoredState().shellLayout.sidebarWidth).toBe(
+      initial.shellLayout.sidebarWidth
+    )
+
+    const recovered = await saveAppStateShellLayout({
+      shellLayout: {
+        ...initial.shellLayout,
+        sidebarWidth: 300,
+      },
+    })
+    expect(recovered.ok).toBe(true)
+    expect((await loadAppState()).shellLayout.sidebarWidth).toBe(300)
   })
 
   it("normalizes persisted session providers and opaque Codex thread ids", async () => {
@@ -565,6 +705,48 @@ describe("app state store", () => {
       ok: true,
       session: { agentThreadId: "thread-first" },
     })
+  })
+
+  it("skips disk writes for a reference-identical durable transaction", async () => {
+    const created = await createAppStateSession({
+      agentProvider: "codex",
+      title: "Codex",
+    })
+    expect(created.ok).toBe(true)
+    if (!created.ok || !created.session) {
+      return
+    }
+    await bindAppStateSessionAgentThread({
+      agentThreadId: "thread-stable",
+      sessionId: created.session.id,
+    })
+    mockState.readFileCallCount = 0
+    mockState.writeFileCallCount = 0
+
+    const repeated = await bindAppStateSessionAgentThread({
+      agentThreadId: "thread-stable",
+      sessionId: created.session.id,
+    })
+
+    expect(repeated).toMatchObject({
+      ok: true,
+      session: { agentThreadId: "thread-stable" },
+    })
+    if (!repeated.ok) {
+      return
+    }
+    expect(mockState.readFileCallCount).toBe(0)
+    expect(mockState.writeFileCallCount).toBe(0)
+
+    expectDefined(repeated.session).title = "mutated result"
+    repeated.state.sessions.find(
+      (session) => session.id === created.session?.id
+    )!.title = "mutated state result"
+    expect(
+      (await loadAppState()).sessions.find(
+        (session) => session.id === created.session?.id
+      )?.title
+    ).toBe("Codex")
   })
 
   it("preserves Codex bindings across session transactions", async () => {
@@ -723,10 +905,12 @@ describe("app state store", () => {
   })
 
   it("rejects empty project paths and empty session titles", async () => {
-    await expect(createAppStateProject({ path: "   " })).resolves.toMatchObject({
-      error: "Project path cannot be empty.",
-      ok: false,
-    })
+    await expect(createAppStateProject({ path: "   " })).resolves.toMatchObject(
+      {
+        error: "Project path cannot be empty.",
+        ok: false,
+      }
+    )
 
     const sessionId = (await loadAppState()).selectedSessionId
     await expect(

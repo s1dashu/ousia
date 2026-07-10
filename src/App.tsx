@@ -27,6 +27,11 @@ import {
   resolveChatEventTarget,
 } from "@/app/chat-event-routing"
 import {
+  shouldResetEmptyChatHistory,
+  shouldRetryChatHistoryAfterSelection,
+  shouldScheduleAutomaticChatHistoryRetry,
+} from "@/app/chat-history-state"
+import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
   resolveOusiaFontFamilyValue,
@@ -43,6 +48,7 @@ import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
 import { SettingsPage } from "@/features/settings/SettingsPage"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 import { Sidebar } from "@/features/sidebar/Sidebar"
+import { useStableEvent } from "@/lib/use-stable-event"
 
 const MIN_SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSE_THRESHOLD = 120
@@ -50,6 +56,8 @@ const MAX_SIDEBAR_WIDTH = 320
 const MIN_CHAT_WIDTH = 300
 const RESIZE_HANDLE_WIDTH = 1
 const CHAT_HISTORY_PAGE_SIZE = 20
+const SIDEBAR_STYLE = { width: "var(--ousia-sidebar-live-width)" }
+const MAIN_PANEL_STYLE = { flex: "1 1 0", width: "auto" }
 
 type AgentRunStatus = "idle" | "working"
 type ShellResizeHandle = "sidebar"
@@ -71,12 +79,7 @@ type ChatHistoryPageState = {
   cursor?: string
   error?: string
   hasMore: boolean
-  status:
-    | "loading-initial"
-    | "ready"
-    | "loading-older"
-    | "empty"
-    | "error"
+  status: "loading-initial" | "ready" | "loading-older" | "empty" | "error"
   totalItems?: number
 }
 type TextDeltaChatEvent = Extract<
@@ -197,8 +200,12 @@ function reorderSessionsById(
   sourceSessionId: string,
   targetSessionId: string
 ) {
-  const sourceSession = sessions.find((session) => session.id === sourceSessionId)
-  const targetSession = sessions.find((session) => session.id === targetSessionId)
+  const sourceSession = sessions.find(
+    (session) => session.id === sourceSessionId
+  )
+  const targetSession = sessions.find(
+    (session) => session.id === targetSessionId
+  )
   if (
     !sourceSession ||
     !targetSession ||
@@ -251,7 +258,9 @@ function moveSessionToProjectGroup(
     sourceSession,
     normalizedTargetProjectId
   )
-  const remainingSessions = sessions.filter((session) => session.id !== sessionId)
+  const remainingSessions = sessions.filter(
+    (session) => session.id !== sessionId
+  )
   const targetIndex = canInsertAtTarget
     ? remainingSessions.findIndex((session) => session.id === targetSessionId)
     : -1
@@ -275,7 +284,9 @@ function moveSessionToGroupFront(
     return sessions
   }
   const updatedSession = { ...targetSession, time }
-  const remainingSessions = sessions.filter((session) => session.id !== sessionId)
+  const remainingSessions = sessions.filter(
+    (session) => session.id !== sessionId
+  )
   const groupStartIndex = remainingSessions.findIndex(
     (session) => session.projectId === targetSession.projectId
   )
@@ -316,13 +327,10 @@ function ResizeHandle({
         className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-full transition-[width,background-color,opacity] ${
           isActive
             ? "w-1 bg-ring/80"
-            : "w-px bg-transparent group-hover/resize:w-1 group-hover/resize:bg-ring/70 group-focus-within/resize:bg-ring/70"
+            : "w-px bg-transparent group-focus-within/resize:bg-ring/70 group-hover/resize:w-1 group-hover/resize:bg-ring/70"
         }`}
       />
-      <div
-        aria-hidden="true"
-        className="window-drag relative h-10 shrink-0"
-      />
+      <div aria-hidden="true" className="window-drag relative h-10 shrink-0" />
       <div
         aria-label={label}
         className="window-no-drag group relative min-h-0 flex-1 overflow-visible"
@@ -338,7 +346,9 @@ function ResizeHandle({
 
 export function App() {
   const { theme, setTheme } = useTheme()
-  const [initialState] = useState<InitialAppState>(() => createDefaultAppState())
+  const [initialState] = useState<InitialAppState>(() =>
+    createDefaultAppState()
+  )
   const [isAppStateLoaded, setIsAppStateLoaded] = useState(!window.ousia)
   const shellRef = useRef<HTMLElement>(null)
   const sidebarShellRef = useRef<HTMLDivElement>(null)
@@ -355,9 +365,9 @@ export function App() {
     useState<ShellResizeHandle | null>(null)
   const isShellResizing = activeShellResizeHandle !== null
   const [isWindowFullscreen, setIsWindowFullscreen] = useState(false)
-  const [zoomIndicatorPercent, setZoomIndicatorPercent] = useState<number | null>(
-    null
-  )
+  const [zoomIndicatorPercent, setZoomIndicatorPercent] = useState<
+    number | null
+  >(null)
   const zoomIndicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   )
@@ -391,6 +401,8 @@ export function App() {
   const itemsBySessionRef = useRef(itemsBySession)
   const historyPageStateBySessionRef = useRef(historyPageStateBySession)
   const historyInFlightKeysRef = useRef<Set<string>>(new Set())
+  const historyRetryAttemptsRef = useRef<Map<string, number>>(new Map())
+  const historyRetryTimersRef = useRef<Map<string, number>>(new Map())
   const pendingChatEventsRef = useRef<Map<string, OusiaChatEvent[]>>(new Map())
   const pendingChatEventsFrameRef = useRef(0)
   const sidebarResizeFrameRef = useRef(0)
@@ -477,9 +489,6 @@ export function App() {
   )
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? sessions[0]
-  const hasCodexSessions = sessions.some(
-    (session) => session.agentProvider === "codex"
-  )
   const selectedSessionIdForHistory = selectedSession?.id
   const selectedProject = selectedSession?.projectId
     ? projects.find((project) => project.id === selectedSession.projectId)
@@ -487,17 +496,21 @@ export function App() {
   const selectedProjectPath = selectedSession
     ? projectPathForSession(selectedSession)
     : settings.defaultWorkDir
-  const defaultWorkDirProject: ProjectRecord = {
-    id: "default-workdir",
-    name: projectNameFromPath(settings.defaultWorkDir),
-    path: selectedProjectPath,
-  }
-  const currentProject = selectedProject ?? defaultWorkDirProject
+  const currentProject = useMemo<ProjectRecord>(
+    () =>
+      selectedProject ?? {
+        id: "default-workdir",
+        name: projectNameFromPath(settings.defaultWorkDir),
+        path: selectedProjectPath,
+      },
+    [selectedProject, selectedProjectPath, settings.defaultWorkDir]
+  )
   const selectedChatKey =
     currentProject && selectedSession
       ? chatKey(selectedProjectPath, selectedSession.id)
       : ""
   const selectedChatKeyRef = useRef(selectedChatKey)
+  const previousHistorySelectionRef = useRef(selectedChatKey)
   const selectedSessionIdRef = useRef(selectedSessionId)
   const isSettingsOpenRef = useRef(isSettingsOpen)
   const runStatusBySessionRef = useRef(runStatusBySession)
@@ -570,8 +583,7 @@ export function App() {
     (nextSettings: AppSettings) => {
       const normalizedSettings = normalizeOusiaAppSettings(nextSettings)
       if (
-        normalizedSettings.autoRetryOnFailure !==
-        settings.autoRetryOnFailure
+        normalizedSettings.autoRetryOnFailure !== settings.autoRetryOnFailure
       ) {
         void window.ousia
           ?.savePiRetrySettings({
@@ -661,8 +673,9 @@ export function App() {
       if (pendingChatEventsFrameRef.current) {
         return
       }
-      pendingChatEventsFrameRef.current =
-        window.requestAnimationFrame(flushPendingChatEvents)
+      pendingChatEventsFrameRef.current = window.requestAnimationFrame(
+        flushPendingChatEvents
+      )
     },
     [flushPendingChatEvents]
   )
@@ -682,25 +695,33 @@ export function App() {
   }, [applyPersistentAppState])
 
   useEffect(() => {
-    if (!isAppStateLoaded) {
+    if (
+      !isAppStateLoaded ||
+      (selectedSession?.agentProvider !== "pi" && !isSettingsOpen)
+    ) {
       return
     }
     void refreshModelRegistry()
-  }, [isAppStateLoaded, refreshModelRegistry])
+  }, [
+    isAppStateLoaded,
+    isSettingsOpen,
+    refreshModelRegistry,
+    selectedSession?.agentProvider,
+  ])
 
   useEffect(() => {
     if (
       !isAppStateLoaded ||
-      (settings.defaultAgentProvider !== "codex" && !hasCodexSessions)
+      (selectedSession?.agentProvider !== "codex" && !isSettingsOpen)
     ) {
       return
     }
     void refreshCodexEnvironment()
   }, [
     isAppStateLoaded,
+    isSettingsOpen,
     refreshCodexEnvironment,
-    hasCodexSessions,
-    settings.defaultAgentProvider,
+    selectedSession?.agentProvider,
   ])
 
   useEffect(() => {
@@ -824,12 +845,7 @@ export function App() {
           console.warn(result.error)
         }
       })
-  }, [
-    expandedProjectIds,
-    isAppStateLoaded,
-    projects,
-    selectedSession?.id,
-  ])
+  }, [expandedProjectIds, isAppStateLoaded, projects, selectedSession?.id])
 
   useEffect(() => {
     sessionsRef.current = sessions
@@ -860,11 +876,11 @@ export function App() {
   }, [isSettingsOpen])
 
   useEffect(() => {
-    if (!selectedChatKey || selectedItems.length > 0) {
+    if (!selectedChatKey) {
       return
     }
     const status = selectedHistoryPageState?.status
-    if (status !== "ready" && status !== "error") {
+    if (!shouldResetEmptyChatHistory(status, selectedItems.length)) {
       return
     }
     setHistoryPageStateBySession((current) => {
@@ -876,6 +892,46 @@ export function App() {
       return next
     })
   }, [selectedChatKey, selectedHistoryPageState?.status, selectedItems.length])
+
+  useEffect(() => {
+    const previousChatKey = previousHistorySelectionRef.current
+    previousHistorySelectionRef.current = selectedChatKey
+    if (previousChatKey !== selectedChatKey && selectedChatKey) {
+      historyRetryAttemptsRef.current.delete(selectedChatKey)
+      const retryTimer = historyRetryTimersRef.current.get(selectedChatKey)
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer)
+        historyRetryTimersRef.current.delete(selectedChatKey)
+      }
+    }
+    if (
+      !shouldRetryChatHistoryAfterSelection(
+        previousChatKey,
+        selectedChatKey,
+        selectedHistoryPageState?.status
+      )
+    ) {
+      return
+    }
+    setHistoryPageStateBySession((current) => {
+      if (current[selectedChatKey]?.status !== "error") {
+        return current
+      }
+      const next = { ...current }
+      delete next[selectedChatKey]
+      return next
+    })
+  }, [selectedChatKey, selectedHistoryPageState?.status])
+
+  useEffect(() => {
+    const retryTimers = historyRetryTimersRef.current
+    return () => {
+      for (const timer of retryTimers.values()) {
+        window.clearTimeout(timer)
+      }
+      retryTimers.clear()
+    }
+  }, [])
 
   useEffect(() => {
     const inconsistentKeys = Object.entries(historyPageStateBySession)
@@ -920,7 +976,9 @@ export function App() {
     const historyProjectPath = selectedProjectPath
     const historySessionId = selectedSessionIdForHistory
     const pageState = historyPageStateBySessionRef.current[historyKey]
-    const hasLoadedItems = Boolean(itemsBySessionRef.current[historyKey]?.length)
+    const hasLoadedItems = Boolean(
+      itemsBySessionRef.current[historyKey]?.length
+    )
     if (
       (draftSessionKeysRef.current.has(historyKey) && !hasLoadedItems) ||
       historyInFlightKeysRef.current.has(historyKey) ||
@@ -950,6 +1008,7 @@ export function App() {
           sessionId: historySessionId,
         })
         .then((history) => {
+          historyRetryAttemptsRef.current.delete(historyKey)
           startTransition(() => {
             setItemsBySession((current) => ({
               ...current,
@@ -964,15 +1023,38 @@ export function App() {
             }))
           })
         })
-        .catch(() => {
+        .catch((error: unknown) => {
+          console.error("[chat.history] Failed to load session history", error)
+          const errorMessage =
+            error instanceof Error ? error.message : String(error)
           setHistoryPageStateBySession((current) => ({
             ...current,
             [historyKey]: {
-              error: "会话历史加载失败。",
+              error: errorMessage,
               hasMore: false,
               status: "error",
             },
           }))
+          const completedRetries =
+            historyRetryAttemptsRef.current.get(historyKey) ?? 0
+          if (shouldScheduleAutomaticChatHistoryRetry(completedRetries)) {
+            historyRetryAttemptsRef.current.set(
+              historyKey,
+              completedRetries + 1
+            )
+            const retryTimer = window.setTimeout(() => {
+              historyRetryTimersRef.current.delete(historyKey)
+              setHistoryPageStateBySession((current) => {
+                if (current[historyKey]?.status !== "error") {
+                  return current
+                }
+                const next = { ...current }
+                delete next[historyKey]
+                return next
+              })
+            }, 750)
+            historyRetryTimersRef.current.set(historyKey, retryTimer)
+          }
         })
         .finally(() => {
           historyInFlightKeysRef.current.delete(historyKey)
@@ -1027,7 +1109,8 @@ export function App() {
           event.status === "starting" || event.status === "running"
             ? "working"
             : "idle"
-        const wasWorking = runStatusBySessionRef.current[targetKey] === "working"
+        const wasWorking =
+          runStatusBySessionRef.current[targetKey] === "working"
         setRunStatusBySession((current) => ({
           ...current,
           [targetKey]: nextStatus,
@@ -1640,7 +1723,9 @@ export function App() {
     }
     setSessions((current) =>
       current.map((candidate) =>
-        candidate.id === sessionId ? { ...candidate, title: nextTitle } : candidate
+        candidate.id === sessionId
+          ? { ...candidate, title: nextTitle }
+          : candidate
       )
     )
   }
@@ -1739,13 +1824,18 @@ export function App() {
     )
     if (targetProjectId) {
       setExpandedProjectIds((current) =>
-        current.includes(targetProjectId) ? current : [...current, targetProjectId]
+        current.includes(targetProjectId)
+          ? current
+          : [...current, targetProjectId]
       )
     }
     setSidebarScrollTargetSessionId(sessionId)
   }
 
-  function handleReorderProjects(sourceProjectId: string, targetProjectId: string) {
+  function handleReorderProjects(
+    sourceProjectId: string,
+    targetProjectId: string
+  ) {
     setProjects((current) =>
       reorderById(current, sourceProjectId, targetProjectId)
     )
@@ -1757,7 +1847,10 @@ export function App() {
       .then(applyAppStateTransaction)
   }
 
-  function handleReorderSessions(sourceSessionId: string, targetSessionId: string) {
+  function handleReorderSessions(
+    sourceSessionId: string,
+    targetSessionId: string
+  ) {
     setSessions((current) =>
       reorderSessionsById(current, sourceSessionId, targetSessionId)
     )
@@ -1832,8 +1925,7 @@ export function App() {
         }
         setSessions((current) =>
           current.map((candidate) =>
-            candidate.id === sessionId &&
-            isDefaultSessionTitle(candidate.title)
+            candidate.id === sessionId && isDefaultSessionTitle(candidate.title)
               ? { ...candidate, title: result.title }
               : candidate
           )
@@ -2140,6 +2232,29 @@ export function App() {
     setIsSidebarCollapsed(false)
   }, [])
 
+  const stableCreateProjectSession = useStableEvent(createProjectSession)
+  const stableCreateSession = useStableEvent(handleCreateSession)
+  const stableDeleteProject = useStableEvent(handleDeleteProject)
+  const stableDeleteSession = useStableEvent(handleDeleteSession)
+  const stableMoveSession = useStableEvent(handleMoveSession)
+  const stableOpenProject = useStableEvent(handleOpenProject)
+  const stableOpenSettings = useStableEvent(handleOpenSettings)
+  const stableRenameSession = useStableEvent(handleRenameSession)
+  const stableReorderProjects = useStableEvent(handleReorderProjects)
+  const stableReorderSidebarSections = useStableEvent(
+    handleReorderSidebarSections
+  )
+  const stableReorderSessions = useStableEvent(handleReorderSessions)
+  const stableSelectSession = useStableEvent(handleSelectSession)
+  const stableAppendLocalEvent = useStableEvent(appendLocalEvent)
+  const stableGenerateSessionTitle = useStableEvent(handleGenerateSessionTitle)
+  const stableBranchFromMessage = useStableEvent(handleBranchFromMessage)
+  const handleSidebarScrollTargetHandled = useCallback(
+    () => setSidebarScrollTargetSessionId(""),
+    []
+  )
+  const handleCloseSettings = useCallback(() => setIsSettingsOpen(false), [])
+
   useEffect(() => {
     function handleGlobalKeyDown(event: globalThis.KeyboardEvent) {
       if (
@@ -2173,7 +2288,7 @@ export function App() {
         aria-hidden={zoomIndicatorPercent === null}
         aria-live="polite"
         className={[
-          "pointer-events-none fixed top-3 right-3 z-50 rounded-md border border-foreground/10 bg-popover/92 px-3 py-1.5 text-sm font-medium tabular-nums text-popover-foreground shadow-lg backdrop-blur transition-all duration-150",
+          "pointer-events-none fixed top-3 right-3 z-50 rounded-md border border-foreground/10 bg-popover/92 px-3 py-1.5 text-sm font-medium text-popover-foreground tabular-nums shadow-lg backdrop-blur transition-all duration-150",
           zoomIndicatorPercent === null
             ? "translate-y-1 opacity-0"
             : "translate-y-0 opacity-100",
@@ -2192,19 +2307,19 @@ export function App() {
           }
         >
           <Sidebar
-            onCreateProjectSession={createProjectSession}
-            onCreateSession={handleCreateSession}
-            onDeleteProject={handleDeleteProject}
-            onDeleteSession={handleDeleteSession}
-            onMoveSession={handleMoveSession}
-            onOpenProject={handleOpenProject}
-            onOpenSettings={handleOpenSettings}
-            onRenameSession={handleRenameSession}
-            onReorderProjects={handleReorderProjects}
-            onReorderSidebarSections={handleReorderSidebarSections}
-            onReorderSessions={handleReorderSessions}
-            onSelectSession={handleSelectSession}
-            onScrollTargetHandled={() => setSidebarScrollTargetSessionId("")}
+            onCreateProjectSession={stableCreateProjectSession}
+            onCreateSession={stableCreateSession}
+            onDeleteProject={stableDeleteProject}
+            onDeleteSession={stableDeleteSession}
+            onMoveSession={stableMoveSession}
+            onOpenProject={stableOpenProject}
+            onOpenSettings={stableOpenSettings}
+            onRenameSession={stableRenameSession}
+            onReorderProjects={stableReorderProjects}
+            onReorderSidebarSections={stableReorderSidebarSections}
+            onReorderSessions={stableReorderSessions}
+            onSelectSession={stableSelectSession}
+            onScrollTargetHandled={handleSidebarScrollTargetHandled}
             expandedProjectIds={expandedProjectIds}
             onExpandedProjectIdsChange={setExpandedProjectIds}
             projects={projects}
@@ -2215,7 +2330,7 @@ export function App() {
             unreadCompletedSessionIds={unreadCompletedSessionIdSet}
             sessions={sessions}
             language={settings.language}
-            style={{ width: "var(--ousia-sidebar-live-width)" }}
+            style={SIDEBAR_STYLE}
           />
           <ResizeHandle
             isActive={activeShellResizeHandle === "sidebar"}
@@ -2233,7 +2348,7 @@ export function App() {
               isWindowFullscreen={isWindowFullscreen}
               modelRegistry={modelRegistry}
               settings={settings}
-              onClose={() => setIsSettingsOpen(false)}
+              onClose={handleCloseSettings}
               onRefreshModelRegistry={refreshModelRegistry}
               onRefreshCodexEnvironment={refreshCodexEnvironment}
               onSettingsChange={handleSettingsChange}
@@ -2251,9 +2366,9 @@ export function App() {
               }
               isSidebarCollapsed={isSidebarCollapsed}
               isWindowFullscreen={isWindowFullscreen}
-              onLocalEvent={appendLocalEvent}
-              onGenerateSessionTitle={handleGenerateSessionTitle}
-              onBranchFromMessage={handleBranchFromMessage}
+              onLocalEvent={stableAppendLocalEvent}
+              onGenerateSessionTitle={stableGenerateSessionTitle}
+              onBranchFromMessage={stableBranchFromMessage}
               onLoadOlderHistory={handleLoadOlderHistory}
               onRefreshModelRegistry={refreshModelRegistry}
               onSessionCompletionVisibility={markSessionCompletionVisibility}
@@ -2271,7 +2386,7 @@ export function App() {
               queuedChatState={selectedQueuedChatState}
               settings={settings}
               language={settings.language}
-              style={{ flex: "1 1 0", width: "auto" }}
+              style={MAIN_PANEL_STYLE}
             />
           )}
         </div>

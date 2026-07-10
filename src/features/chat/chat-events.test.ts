@@ -68,6 +68,57 @@ describe("applyChatEvent", () => {
     ])
   })
 
+  it("updates a streaming tail in a long history without scanning old item ids", () => {
+    const firstItem = new Proxy<ChatItem>(
+      { id: "user-0", role: "user", text: "old" },
+      {
+        get(target, property, receiver) {
+          if (property === "id") {
+            throw new Error(
+              "historical ids should not be read for a tail update"
+            )
+          }
+          return Reflect.get(target, property, receiver)
+        },
+      }
+    )
+    const historicalItems: ChatItem[] = [
+      firstItem,
+      ...Array.from({ length: 2_000 }, (_, index) => ({
+        id: `user-${index + 1}`,
+        role: "user" as const,
+        text: `message ${index + 1}`,
+      })),
+    ]
+    const streamingItem: ChatItem = {
+      id: "assistant-live",
+      role: "assistant",
+      status: "streaming",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:00.000Z",
+    }
+    const items = [...historicalItems, streamingItem]
+
+    const updated = applyChatEvent(items, {
+      delta: " world",
+      id: streamingItem.id,
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "assistant_text_delta",
+    })
+
+    expect(updated).not.toBe(items)
+    expect(updated).toHaveLength(items.length)
+    expect(updated[0]).toBe(firstItem)
+    expect(updated[1_000]).toBe(items[1_000])
+    expect(updated.at(-1)).not.toBe(streamingItem)
+    expect(updated.at(-1)).toMatchObject({
+      id: "assistant-live",
+      status: "streaming",
+      text: "hello world",
+      timestamp: "2026-07-07T00:00:01.000Z",
+    })
+  })
+
   it("creates thinking items when deltas arrive before start", () => {
     const items = applyChatEvent([], {
       delta: "reasoning",
@@ -136,6 +187,48 @@ describe("applyChatEvent", () => {
         text: "wrote file",
       },
     ])
+  })
+
+  it("updates a tool at the tail of a long history and preserves old references", () => {
+    const historicalItems: ChatItem[] = Array.from(
+      { length: 2_000 },
+      (_, index) => ({
+        id: `user-${index}`,
+        role: "user",
+        text: `message ${index}`,
+      })
+    )
+    const runningTool: ChatItem = {
+      id: "tool-live",
+      input: "{}",
+      name: "bash",
+      role: "tool",
+      status: "running",
+      text: "{}",
+    }
+    const items = [...historicalItems, runningTool]
+
+    const updated = applyChatEvent(items, {
+      id: runningTool.id,
+      name: "bash",
+      phase: "output",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "tool_update",
+      value: { chunk: "done" },
+    })
+
+    expect(updated).not.toBe(items)
+    expect(updated).toHaveLength(items.length)
+    expect(updated[0]).toBe(items[0])
+    expect(updated[1_000]).toBe(items[1_000])
+    expect(updated.at(-1)).not.toBe(runningTool)
+    expect(updated.at(-1)).toMatchObject({
+      id: "tool-live",
+      name: "bash",
+      output: '{\n  "chunk": "done"\n}',
+      status: "running",
+      text: '{\n  "chunk": "done"\n}',
+    })
   })
 
   it("updates an existing tool when a duplicate start event arrives", () => {
@@ -320,7 +413,7 @@ describe("applyChatEvent", () => {
         tokens: 50,
         type: "context_usage",
       })
-    ).toEqual(items)
+    ).toBe(items)
     expect(
       applyChatEvent(items, {
         followUp: ["next"],
@@ -328,7 +421,57 @@ describe("applyChatEvent", () => {
         timestamp: "2026-07-07T00:00:01.000Z",
         type: "queue_update",
       })
-    ).toEqual(items)
+    ).toBe(items)
+  })
+
+  it("returns the original array for explicit no-op events", () => {
+    const items: ChatItem[] = [
+      {
+        id: "assistant-1",
+        role: "assistant",
+        status: "streaming",
+        text: "hello",
+        timestamp: "2026-07-07T00:00:00.000Z",
+      },
+      {
+        id: "tool-1",
+        input: "{}",
+        name: "bash",
+        role: "tool",
+        status: "running",
+        text: "{}",
+      },
+    ]
+
+    expect(
+      applyChatEvent(items, {
+        id: "assistant-1",
+        timestamp: "2026-07-07T00:00:00.000Z",
+        type: "assistant_text_start",
+      })
+    ).toBe(items)
+    expect(
+      applyChatEvent(items, {
+        id: "tool-1",
+        timestamp: "2026-07-07T00:00:01.000Z",
+        type: "tool_update",
+      })
+    ).toBe(items)
+    expect(
+      applyChatEvent(items, {
+        id: "missing-tool",
+        result: "ignored",
+        timestamp: "2026-07-07T00:00:02.000Z",
+        type: "tool_end",
+      })
+    ).toBe(items)
+    expect(
+      applyChatEvent(items, {
+        status: "running",
+        timestamp: "2026-07-07T00:00:03.000Z",
+        type: "run_status",
+      })
+    ).toBe(items)
   })
 
   it("stringifies unstringifiable tool payloads without failing the reducer", () => {

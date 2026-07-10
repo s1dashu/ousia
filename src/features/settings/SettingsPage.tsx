@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { memo, useEffect, useState } from "react"
 import {
   Ban,
   Check,
@@ -93,7 +93,7 @@ type ProviderRow = {
   isDisabled: boolean
 }
 
-export function SettingsPage({
+function SettingsPageComponent({
   codexEnvironment,
   isSidebarCollapsed,
   isWindowFullscreen,
@@ -1426,3 +1426,5 @@ export function SettingsPage({
     </section>
   )
 }
+
+export const SettingsPage = memo(SettingsPageComponent)

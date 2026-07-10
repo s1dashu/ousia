@@ -11,6 +11,11 @@ const external = [
 ]
 
 export default defineConfig({
+  resolve: {
+    // pi-coding-agent ships a nested copy of the exact same pi-ai version.
+    // Force one module graph so provider implementations are not emitted twice.
+    dedupe: ["@earendil-works/pi-ai"],
+  },
   build: {
     rollupOptions: {
       external,

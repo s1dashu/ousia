@@ -12,10 +12,22 @@ match the task.
 - Streamdown Markdown rendering: [docs/streamdown.md](docs/streamdown.md)
 - shadcn/ui local reference workflow: [docs/shadcn-reference.md](docs/shadcn-reference.md)
 - Current development state and commands: [docs/development-state.md](docs/development-state.md)
+- Performance architecture, baseline, and roadmap: [docs/performance.md](docs/performance.md)
 
 ## High-Signal Facts
 
 - The current app is a reduced desktop agent client.
+- Ousia has two responsibilities: it is a standalone desktop Agent product and
+  the upstream framework used to build downstream Agent products such as Miki.
+  Preserve clean compile-time extension boundaries even when Ousia Desktop does
+  not use every extension point itself.
+- Reusable shell, provider, lifecycle, IPC, persistence, observability, and UI
+  behavior belongs upstream in Ousia. Product prompts, product tools, private
+  Workspace Apps, branding, and product file policies are injected by a
+  downstream composition root; Ousia core must never import downstream code.
+- Public framework contracts live in versioned `@ousia/*` packages. The first
+  extraction branch is `codex/extract-public-host-packages`; do not restore the
+  removed user-local runtime extension loader to provide product extensibility.
 - The app shell is assembled from React surfaces: sidebar, chat, and settings.
 - There is no Ousia extension/runtime-extension/plugin surface in this branch.
 - The desktop runtime is Electron + Vite + React.
@@ -33,6 +45,18 @@ match the task.
 - Runtime logs are persisted at `~/.ousia/logs/ousia-desktop.log`; check this
   file first for Electron main errors, renderer console messages, renderer
   uncaught errors, and chat/title-generation failures.
+- The first BrowserWindow must not wait for shell-environment hydration or Pi
+  runtime parsing. Provider-heavy modules are loaded only at capability
+  boundaries; see `docs/performance.md` before changing startup imports.
+- Streaming text deltas are coalesced in Electron main for at most 16 ms. Any
+  non-delta event flushes pending text first so visible event ordering remains
+  unchanged.
+- Ousia is single-instance because Electron main owns a canonical in-memory app
+  state snapshot. A second launch must focus the existing window instead of
+  creating a competing writer for `app-state.json`.
+- Live Pi AgentSessions are capped with idle-only LRU eviction. Never evict a
+  streaming, queued, or bash-running session; deletion must release provider
+  state and unsubscribe/dispose Pi resources.
 
 ## Important Source Entrypoints
 
@@ -56,6 +80,14 @@ match the task.
 - Do not reintroduce Ousia extension, runtime extension, plugin, addon, browser,
   editor, PDF, Excalidraw, or Sheets workspace surfaces unless the user
   explicitly asks to reverse this branch direction.
+- Do not solve a downstream product need with an Ousia-side product special
+  case. Add a strict, versioned host contract or product contribution point,
+  make Ousia consume that boundary itself, and keep unknown capabilities and
+  invalid state as hard errors.
+- Keep framework performance and reliability changes separable from Ousia-only
+  product changes so downstream products can upgrade the host without merging
+  the Ousia application wholesale. Record material host behavior changes in
+  the relevant architecture docs and package release notes.
 - Do not inject an Ousia extension usage skill or CLI bridge into Pi sessions.
 - Preserve the shadcn preset theme direction unless the user explicitly changes
   it.

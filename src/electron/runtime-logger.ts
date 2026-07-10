@@ -1,10 +1,21 @@
-import { mkdirSync, writeFileSync } from "node:fs"
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeSync,
+} from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { inspect } from "node:util"
 
 export const OUSIA_LOG_DIR = join(homedir(), ".ousia", "logs")
 export const OUSIA_DESKTOP_LOG_PATH = join(OUSIA_LOG_DIR, "ousia-desktop.log")
+const OUSIA_DESKTOP_LOG_BACKUP_PATH = `${OUSIA_DESKTOP_LOG_PATH}.1`
+const MAX_RUNTIME_LOG_BYTES = 8 * 1024 * 1024
 
 type LogLevel = "debug" | "info" | "warn" | "error"
 
@@ -17,9 +28,31 @@ const originalConsole = {
 }
 
 let isInstalled = false
+let logDirectoryReady = false
+let logFileDescriptor: number | undefined
 
 function ensureLogDir() {
+  if (logDirectoryReady) {
+    return
+  }
   mkdirSync(OUSIA_LOG_DIR, { recursive: true })
+  logDirectoryReady = true
+}
+
+function openRuntimeLog() {
+  if (logFileDescriptor !== undefined) {
+    return logFileDescriptor
+  }
+  ensureLogDir()
+  if (
+    existsSync(OUSIA_DESKTOP_LOG_PATH) &&
+    statSync(OUSIA_DESKTOP_LOG_PATH).size >= MAX_RUNTIME_LOG_BYTES
+  ) {
+    rmSync(OUSIA_DESKTOP_LOG_BACKUP_PATH, { force: true })
+    renameSync(OUSIA_DESKTOP_LOG_PATH, OUSIA_DESKTOP_LOG_BACKUP_PATH)
+  }
+  logFileDescriptor = openSync(OUSIA_DESKTOP_LOG_PATH, "a")
+  return logFileDescriptor
 }
 
 function formatLogValue(value: unknown) {
@@ -37,11 +70,7 @@ function formatLogValue(value: unknown) {
 }
 
 function appendLine(line: string) {
-  ensureLogDir()
-  writeFileSync(OUSIA_DESKTOP_LOG_PATH, `${line}\n`, {
-    encoding: "utf8",
-    flag: "a",
-  })
+  writeSync(openRuntimeLog(), `${line}\n`, undefined, "utf8")
 }
 
 export function writeRuntimeLog(
@@ -88,5 +117,11 @@ export function installRuntimeLogger() {
   process.on("unhandledRejection", (reason) => {
     writeRuntimeLog("main.unhandledRejection", "error", reason)
     originalConsole.error(reason)
+  })
+  process.once("exit", () => {
+    if (logFileDescriptor !== undefined) {
+      closeSync(logFileDescriptor)
+      logFileDescriptor = undefined
+    }
   })
 }

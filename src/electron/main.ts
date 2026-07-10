@@ -9,10 +9,10 @@ import {
 import { mkdirSync, statSync } from "node:fs"
 import { basename, isAbsolute, resolve } from "node:path"
 
-import { createAgentConversationModule } from "./agent-conversations.js"
 import {
   createAgentProviderRouter,
   resolveCanonicalAgentContext,
+  type AgentConversationProvider,
 } from "./agent-provider-router.js"
 import { configureOusiaAppPaths } from "./app-paths.js"
 import {
@@ -30,8 +30,8 @@ import {
   saveAppStateShellLayout,
   touchAppStateSession,
 } from "./app-state-store.js"
-import { generateChatTitleWithUtilityModel } from "./chat-title-generator.js"
 import { createCodexAgentProvider } from "./codex-agent-provider.js"
+import { createChatEventBatcher } from "./chat-event-batcher.js"
 import type {
   OusiaAppStateCreateProjectPayload,
   OusiaAppStateCreateSessionPayload,
@@ -45,6 +45,7 @@ import type {
   OusiaAppStateSettingsPayload,
   OusiaAppStateShellLayoutPayload,
   OusiaAppStateTouchSessionPayload,
+  OusiaAppStateTransactionResult,
   OusiaChatBranchPayload,
   OusiaChatCompactPayload,
   OusiaChatContext,
@@ -65,16 +66,10 @@ import type {
   OusiaSelectDirectoryResult,
   OusiaShowFileInFinderPayload,
   OusiaShowFileInFinderResult,
+  OusiaSessionRecord,
   OusiaWindowThemePayload,
 } from "./chat-types.js"
 import { expandHomePath, resolveProjectFilePath } from "./host-paths.js"
-import { listPiModels } from "./model-registry.js"
-import {
-  checkPiEnvironment,
-  removePiProviderCredential,
-  savePiProviderCredential,
-  savePiRetrySettings,
-} from "./pi-environment.js"
 import {
   installRuntimeLogger,
   OUSIA_DESKTOP_LOG_PATH,
@@ -84,36 +79,185 @@ import { hydrateShellEnvironment } from "./shell-environment.js"
 import { createWindowHost } from "./window-host.js"
 
 configureOusiaAppPaths()
-installRuntimeLogger()
-hydrateShellEnvironment()
+const hasSingleInstanceLock = app.requestSingleInstanceLock()
+if (hasSingleInstanceLock) {
+  installRuntimeLogger()
+} else {
+  app.quit()
+}
+const shellEnvironmentReady = hasSingleInstanceLock
+  ? hydrateShellEnvironment()
+  : Promise.resolve()
 
 const enabledTools = ["read", "write", "edit", "bash", "grep", "find", "ls"]
 
 let mainWindow: BrowserWindow | undefined
 
+const chatEventBatcher = createChatEventBatcher<ReturnType<typeof setTimeout>>({
+  cancel: (handle) => globalThis.clearTimeout(handle),
+  emit(event, context) {
+    mainWindow?.webContents.send(
+      "ousia:chat:event",
+      context ? { ...event, context } : event
+    )
+  },
+  schedule: (callback) => globalThis.setTimeout(callback, 16),
+})
+
 function emitChatEvent(event: OusiaChatEvent, context?: OusiaChatContext) {
   if (event.type === "error") {
     writeRuntimeLog("chat.event", "error", { context, text: event.text })
   }
-  mainWindow?.webContents.send(
-    "ousia:chat:event",
-    context ? { ...event, context } : event
-  )
+  chatEventBatcher.enqueue(event, context)
 }
 
-const piAgentConversations = createAgentConversationModule({
-  enabledTools,
-  emitChatEvent,
-})
 const codexAgentProvider = createCodexAgentProvider({
   clientVersion: app.getVersion(),
   emitChatEvent,
   openExternal: (url: string) => shell.openExternal(url),
 })
+
+function createDeferredAgentProvider(
+  load: () => Promise<AgentConversationProvider>
+): AgentConversationProvider {
+  let providerPromise: Promise<AgentConversationProvider> | undefined
+  const getProvider = () => (providerPromise ??= load())
+
+  return {
+    async dispose() {
+      if (providerPromise) {
+        await (await providerPromise).dispose?.()
+      }
+    },
+    async branchChat(payload) {
+      return (await getProvider()).branchChat(payload)
+    },
+    async clearChatQueue(context) {
+      return (await getProvider()).clearChatQueue(context)
+    },
+    async compactChat(payload) {
+      return (await getProvider()).compactChat(payload)
+    },
+    async exportChat(payload, outputPath) {
+      return (await getProvider()).exportChat(payload, outputPath)
+    },
+    async getContextUsage(context) {
+      return (await getProvider()).getContextUsage(context)
+    },
+    async getChatHistory(payload) {
+      return (await getProvider()).getChatHistory(payload)
+    },
+    async getChatToolPayload(payload) {
+      return (await getProvider()).getChatToolPayload(payload)
+    },
+    async interruptChat(payload) {
+      return (await getProvider()).interruptChat(payload)
+    },
+    async moveChatSession(payload) {
+      return (await getProvider()).moveChatSession(payload)
+    },
+    async releaseChatSession(context) {
+      if (providerPromise) {
+        await (await providerPromise).releaseChatSession?.(context)
+      }
+    },
+    async sendChatMessage(payload) {
+      return (await getProvider()).sendChatMessage(payload)
+    },
+  }
+}
+
+const piAgentConversations = createDeferredAgentProvider(async () => {
+  await shellEnvironmentReady
+  const { createAgentConversationModule } =
+    await import("./agent-conversations.js")
+  return createAgentConversationModule({ enabledTools, emitChatEvent })
+})
+const routedCodexAgentProvider = createDeferredAgentProvider(async () => {
+  await shellEnvironmentReady
+  return codexAgentProvider
+})
 const agentConversations = createAgentProviderRouter({
-  codex: codexAgentProvider,
+  codex: routedCodexAgentProvider,
   pi: piAgentConversations,
 })
+
+function removedSessionProjectPath(
+  result: Extract<OusiaAppStateTransactionResult, { ok: true }>,
+  session: OusiaSessionRecord
+) {
+  if (!session.projectId) {
+    return result.state.settings.defaultWorkDir
+  }
+  const retainedProject = result.state.projects.find(
+    (project) => project.id === session.projectId
+  )
+  if (retainedProject) {
+    return retainedProject.path
+  }
+  if (result.project?.id === session.projectId) {
+    return result.project.path
+  }
+  throw new Error(
+    `Removed session references an unknown project: ${session.projectId}`
+  )
+}
+
+async function releaseRemovedAgentSessions(
+  result: OusiaAppStateTransactionResult
+) {
+  if (!result.ok || !result.removedSessions?.length) {
+    return result
+  }
+  await Promise.all(
+    result.removedSessions.map(async (session) => {
+      try {
+        const provider =
+          session.agentProvider === "codex"
+            ? codexAgentProvider
+            : piAgentConversations
+        await provider.releaseChatSession?.({
+          projectPath: removedSessionProjectPath(result, session),
+          sessionId: session.id,
+        })
+      } catch (error) {
+        // The state deletion is already durable, so cleanup failures are
+        // observable without misreporting the completed transaction.
+        writeRuntimeLog("agent.release", "error", {
+          agentProvider: session.agentProvider,
+          error: error instanceof Error ? error.message : String(error),
+          sessionId: session.id,
+        })
+      }
+    })
+  )
+  return result
+}
+
+let piEnvironmentModulePromise:
+  | Promise<typeof import("./pi-environment.js")>
+  | undefined
+let piModelRegistryModulePromise:
+  | Promise<typeof import("./model-registry.js")>
+  | undefined
+let piTitleGeneratorModulePromise:
+  | Promise<typeof import("./chat-title-generator.js")>
+  | undefined
+
+async function loadPiEnvironmentModule() {
+  await shellEnvironmentReady
+  return (piEnvironmentModulePromise ??= import("./pi-environment.js"))
+}
+
+async function loadPiModelRegistryModule() {
+  await shellEnvironmentReady
+  return (piModelRegistryModulePromise ??= import("./model-registry.js"))
+}
+
+async function loadPiTitleGeneratorModule() {
+  await shellEnvironmentReady
+  return (piTitleGeneratorModulePromise ??= import("./chat-title-generator.js"))
+}
 
 const windowHost = createWindowHost({
   onClosed() {},
@@ -121,6 +265,42 @@ const windowHost = createWindowHost({
     mainWindow = window
   },
 })
+
+let mainWindowCreationPromise: Promise<void> | undefined
+
+function focusMainWindow() {
+  const window = windowHost.getMainWindow()
+  if (!window || window.isDestroyed()) {
+    return
+  }
+  if (window.isMinimized()) {
+    window.restore()
+  }
+  window.show()
+  window.focus()
+}
+
+function ensureMainWindow({ focus = false } = {}) {
+  const existingWindow = windowHost.getMainWindow()
+  if (existingWindow && !existingWindow.isDestroyed()) {
+    if (focus) {
+      focusMainWindow()
+    }
+    return Promise.resolve()
+  }
+
+  mainWindowCreationPromise ??= app
+    .whenReady()
+    .then(() => windowHost.createWindow())
+    .finally(() => {
+      mainWindowCreationPromise = undefined
+    })
+  return mainWindowCreationPromise.then(() => {
+    if (focus) {
+      focusMainWindow()
+    }
+  })
+}
 
 ipcMain.handle("ousia:chat:send", (_event, payload: OusiaChatSendPayload) =>
   agentConversations.sendChatMessage(payload)
@@ -137,21 +317,28 @@ ipcMain.handle(
         requestedAgentProvider: payload.agentProvider,
         sessionId: payload.sessionId,
       })
-      throw new Error(`Agent provider mismatch for session: ${payload.sessionId}`)
+      throw new Error(
+        `Agent provider mismatch for session: ${payload.sessionId}`
+      )
     }
     const canonicalPayload = {
       ...payload,
       projectPath: route.context.projectPath,
     }
     if (route.agentProvider === "codex") {
+      await shellEnvironmentReady
       return codexAgentProvider.generateTitle(canonicalPayload)
     }
+    const { generateChatTitleWithUtilityModel } =
+      await loadPiTitleGeneratorModule()
     return generateChatTitleWithUtilityModel(canonicalPayload)
   }
 )
 
-ipcMain.handle("ousia:chat:history", (_event, payload: OusiaChatHistoryPayload) =>
-  agentConversations.getChatHistory(payload)
+ipcMain.handle(
+  "ousia:chat:history",
+  (_event, payload: OusiaChatHistoryPayload) =>
+    agentConversations.getChatHistory(payload)
 )
 
 ipcMain.handle(
@@ -198,60 +385,78 @@ ipcMain.handle(
       payload,
       result.filePath
     )
-    writeRuntimeLog(
-      "chat.export",
-      exportResult.ok ? "info" : "error",
-      {
-        format: payload.format,
-        requestedPath: result.filePath,
-        result: exportResult,
-      }
-    )
+    writeRuntimeLog("chat.export", exportResult.ok ? "info" : "error", {
+      format: payload.format,
+      requestedPath: result.filePath,
+      result: exportResult,
+    })
     return exportResult
   }
 )
 
-ipcMain.handle("ousia:chat:interrupt", (_event, payload: OusiaChatInterruptPayload) =>
-  agentConversations.interruptChat(payload)
+ipcMain.handle(
+  "ousia:chat:interrupt",
+  (_event, payload: OusiaChatInterruptPayload) =>
+    agentConversations.interruptChat(payload)
 )
 
 ipcMain.handle("ousia:chat:clear-queue", (_event, payload: OusiaChatContext) =>
   agentConversations.clearChatQueue(payload)
 )
 
-ipcMain.handle("ousia:chat:compact", (_event, payload: OusiaChatCompactPayload) =>
-  agentConversations.compactChat(payload)
+ipcMain.handle(
+  "ousia:chat:compact",
+  (_event, payload: OusiaChatCompactPayload) =>
+    agentConversations.compactChat(payload)
 )
 
-ipcMain.handle("ousia:models:list", () => listPiModels())
+ipcMain.handle("ousia:models:list", async () => {
+  const { listPiModels } = await loadPiModelRegistryModule()
+  return listPiModels()
+})
 
-ipcMain.handle("ousia:pi:environment", () => checkPiEnvironment())
+ipcMain.handle("ousia:pi:environment", async () => {
+  const { checkPiEnvironment } = await loadPiEnvironmentModule()
+  return checkPiEnvironment()
+})
 
-ipcMain.handle("ousia:codex:environment", () =>
-  codexAgentProvider.checkEnvironment()
-)
+ipcMain.handle("ousia:codex:environment", async () => {
+  await shellEnvironmentReady
+  return codexAgentProvider.checkEnvironment()
+})
 
-ipcMain.handle("ousia:codex:login", () =>
-  codexAgentProvider.loginWithChatGPT()
-)
+ipcMain.handle("ousia:codex:login", async () => {
+  await shellEnvironmentReady
+  return codexAgentProvider.loginWithChatGPT()
+})
 
-ipcMain.handle("ousia:codex:logout", () => codexAgentProvider.logout())
+ipcMain.handle("ousia:codex:logout", async () => {
+  await shellEnvironmentReady
+  return codexAgentProvider.logout()
+})
 
 ipcMain.handle(
   "ousia:pi:provider-credential",
-  (_event, payload: OusiaPiProviderCredentialPayload) =>
-    savePiProviderCredential(payload)
+  async (_event, payload: OusiaPiProviderCredentialPayload) => {
+    const { savePiProviderCredential } = await loadPiEnvironmentModule()
+    return savePiProviderCredential(payload)
+  }
 )
 
 ipcMain.handle(
   "ousia:pi:provider-credential:remove",
-  (_event, payload: OusiaPiProviderCredentialRemovalPayload) =>
-    removePiProviderCredential(payload)
+  async (_event, payload: OusiaPiProviderCredentialRemovalPayload) => {
+    const { removePiProviderCredential } = await loadPiEnvironmentModule()
+    return removePiProviderCredential(payload)
+  }
 )
 
 ipcMain.handle(
   "ousia:pi:retry-settings",
-  (_event, payload: OusiaPiRetrySettingsPayload) => savePiRetrySettings(payload)
+  async (_event, payload: OusiaPiRetrySettingsPayload) => {
+    const { savePiRetrySettings } = await loadPiEnvironmentModule()
+    return savePiRetrySettings(payload)
+  }
 )
 
 async function selectDirectory(
@@ -399,7 +604,10 @@ ipcMain.on("ousia:window:theme", (_event, payload: OusiaWindowThemePayload) => {
   windowHost.setWindowTheme(payload)
 })
 
-ipcMain.handle("ousia:app-state:load", () => loadAppState())
+ipcMain.handle("ousia:app-state:load", async () => {
+  await shellEnvironmentReady
+  return loadAppState({ synchronizePiRetry: true })
+})
 
 ipcMain.handle(
   "ousia:app-state:settings:save",
@@ -427,8 +635,8 @@ ipcMain.handle(
 
 ipcMain.handle(
   "ousia:app-state:session:delete",
-  (_event, payload: OusiaAppStateDeleteSessionPayload) =>
-    deleteAppStateSession(payload)
+  async (_event, payload: OusiaAppStateDeleteSessionPayload) =>
+    releaseRemovedAgentSessions(await deleteAppStateSession(payload))
 )
 
 ipcMain.handle(
@@ -463,8 +671,8 @@ ipcMain.handle(
 
 ipcMain.handle(
   "ousia:app-state:project:delete",
-  (_event, payload: OusiaAppStateDeleteProjectPayload) =>
-    deleteAppStateProject(payload)
+  async (_event, payload: OusiaAppStateDeleteProjectPayload) =>
+    releaseRemovedAgentSessions(await deleteAppStateProject(payload))
 )
 
 ipcMain.handle(
@@ -478,12 +686,24 @@ ipcMain.on("ousia:log:renderer-error", (_event, payload: unknown) => {
 })
 
 app.whenReady().then(async () => {
+  if (!hasSingleInstanceLock) {
+    return
+  }
   writeRuntimeLog("main", "info", `Runtime log path: ${OUSIA_DESKTOP_LOG_PATH}`)
   writeRuntimeLog("main", "info", {
     appData: app.getPath("appData"),
     userData: app.getPath("userData"),
   })
-  await windowHost.createWindow()
+  await ensureMainWindow()
+})
+
+app.on("second-instance", () => {
+  void ensureMainWindow({ focus: true }).catch((error: unknown) => {
+    writeRuntimeLog("main.instance", "error", {
+      error: error instanceof Error ? error.message : String(error),
+      message: "Failed to restore the main window for a second launch.",
+    })
+  })
 })
 
 app.on("window-all-closed", () => {
@@ -493,13 +713,42 @@ app.on("window-all-closed", () => {
   }
 })
 
+function disposeProviderOnExit(
+  provider: string,
+  dispose: () => Promise<void> | void
+) {
+  try {
+    void Promise.resolve(dispose()).catch((error: unknown) => {
+      writeRuntimeLog("agent.dispose", "error", {
+        error: error instanceof Error ? error.message : String(error),
+        provider,
+      })
+    })
+  } catch (error) {
+    writeRuntimeLog("agent.dispose", "error", {
+      error: error instanceof Error ? error.message : String(error),
+      provider,
+    })
+  }
+}
+
 app.on("before-quit", () => {
-  void codexAgentProvider.dispose()
+  chatEventBatcher.dispose()
+  disposeProviderOnExit("pi", () => piAgentConversations.dispose?.())
+  disposeProviderOnExit("codex", () => codexAgentProvider.dispose())
 })
 
 app.on("activate", () => {
+  if (!hasSingleInstanceLock) {
+    return
+  }
   if (BrowserWindow.getAllWindows().length === 0) {
     writeRuntimeLog("main", "info", "Recreating main window after activate")
-    void windowHost.createWindow()
+    void ensureMainWindow({ focus: true }).catch((error: unknown) => {
+      writeRuntimeLog("main.window", "error", {
+        error: error instanceof Error ? error.message : String(error),
+        message: "Failed to recreate the main window after activation.",
+      })
+    })
   }
 })

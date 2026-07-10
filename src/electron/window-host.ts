@@ -1,11 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  Menu,
-  nativeTheme,
-  screen,
-  shell,
-} from "electron"
+import { app, BrowserWindow, Menu, nativeTheme, screen, shell } from "electron"
 import { existsSync } from "node:fs"
 import { platform } from "node:process"
 import { join } from "node:path"
@@ -43,7 +36,9 @@ const WINDOW_BACKGROUND_BY_THEME: Record<OusiaResolvedTheme, string> = {
   light: "#fffefb",
 }
 
-function resolveThemePreference(theme: OusiaThemePreference): OusiaResolvedTheme {
+function resolveThemePreference(
+  theme: OusiaThemePreference
+): OusiaResolvedTheme {
   if (theme === "system") {
     return nativeTheme.shouldUseDarkColors ? "dark" : "light"
   }
@@ -61,7 +56,10 @@ function applyNativeThemePreference(theme: OusiaThemePreference) {
 
 function resolveInitialWindowBounds(windowState: OusiaWindowState) {
   const width = Math.max(MAIN_WINDOW_MIN_WIDTH, Math.round(windowState.width))
-  const height = Math.max(MAIN_WINDOW_MIN_HEIGHT, Math.round(windowState.height))
+  const height = Math.max(
+    MAIN_WINDOW_MIN_HEIGHT,
+    Math.round(windowState.height)
+  )
   const bounds =
     typeof windowState.x === "number" && typeof windowState.y === "number"
       ? {
@@ -84,8 +82,14 @@ function resolveInitialWindowBounds(windowState: OusiaWindowState) {
   const visibleWidth = Math.min(bounds.width, workArea.width)
   const visibleHeight = Math.min(bounds.height, workArea.height)
   return {
-    x: Math.min(Math.max(bounds.x, workArea.x), workArea.x + workArea.width - 80),
-    y: Math.min(Math.max(bounds.y, workArea.y), workArea.y + workArea.height - 80),
+    x: Math.min(
+      Math.max(bounds.x, workArea.x),
+      workArea.x + workArea.width - 80
+    ),
+    y: Math.min(
+      Math.max(bounds.y, workArea.y),
+      workArea.y + workArea.height - 80
+    ),
     width: visibleWidth,
     height: visibleHeight,
   }
@@ -97,7 +101,8 @@ function zoomPercentForWindow(window: BrowserWindow | undefined) {
 
 function isIgnorableRendererConsoleMessage(message: string) {
   return (
-    message === "ResizeObserver loop completed with undelivered notifications." ||
+    message ===
+      "ResizeObserver loop completed with undelivered notifications." ||
     message === "ResizeObserver loop limit exceeded"
   )
 }
@@ -130,7 +135,10 @@ function setWindowZoomLevel(
   emitWindowZoomState(window)
 }
 
-function adjustWindowZoomLevel(window: BrowserWindow | undefined, delta: number) {
+function adjustWindowZoomLevel(
+  window: BrowserWindow | undefined,
+  delta: number
+) {
   if (!window || window.isDestroyed()) {
     return
   }
@@ -204,10 +212,7 @@ function installApplicationMenu(getWindow: () => BrowserWindow | undefined) {
         { role: "minimize" },
         { role: "zoom" },
         ...(platform === "darwin"
-          ? [
-              { type: "separator" as const },
-              { role: "front" as const },
-            ]
+          ? [{ type: "separator" as const }, { role: "front" as const }]
           : [{ role: "close" as const }]),
       ],
     },
@@ -216,7 +221,10 @@ function installApplicationMenu(getWindow: () => BrowserWindow | undefined) {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template))
 }
 
-export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOptions) {
+export function createWindowHost({
+  onClosed,
+  onWindowChanged,
+}: WindowHostOptions) {
   let mainWindow: BrowserWindow | undefined
   let lastEmittedFullscreen: boolean | undefined
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
@@ -225,7 +233,9 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     return mainWindow
   }
 
-  function emitWindowFullscreenState(isFullscreen = mainWindow?.isFullScreen()) {
+  function emitWindowFullscreenState(
+    isFullscreen = mainWindow?.isFullScreen()
+  ) {
     const nextFullscreen = Boolean(isFullscreen)
     if (lastEmittedFullscreen === nextFullscreen) {
       return
@@ -307,8 +317,11 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
   }
 
   async function createWindow() {
+    const startupStartedAt = performance.now()
     installApplicationMenu(getMainWindow)
-    const appState = await loadAppState()
+    const appStateLoadStartedAt = performance.now()
+    const appState = await loadAppState({ synchronizePiRetry: false })
+    const appStateReadyAt = performance.now()
     applyNativeThemePreference(appState.settings.theme)
     const initialBounds = resolveInitialWindowBounds(appState.windowState)
 
@@ -336,6 +349,7 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
     }
     applyWindowButtonPosition(mainWindow)
     onWindowChanged(mainWindow)
+    const browserWindowReadyAt = performance.now()
 
     mainWindow.webContents.on(
       "console-message",
@@ -462,6 +476,10 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       onWindowChanged(undefined)
     })
 
+    const rendererSource = MAIN_WINDOW_VITE_DEV_SERVER_URL
+      ? "dev-server"
+      : "file"
+    const rendererLoadStartedAt = performance.now()
     if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
       await mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
     } else {
@@ -474,6 +492,18 @@ export function createWindowHost({ onClosed, onWindowChanged }: WindowHostOption
       }
       await mainWindow.loadFile(indexHtml)
     }
+    const startupFinishedAt = performance.now()
+    writeRuntimeLog("window.startup", "info", {
+      appStateMs: Number((appStateReadyAt - appStateLoadStartedAt).toFixed(1)),
+      browserWindowMs: Number(
+        (browserWindowReadyAt - appStateReadyAt).toFixed(1)
+      ),
+      rendererLoadMs: Number(
+        (startupFinishedAt - rendererLoadStartedAt).toFixed(1)
+      ),
+      source: rendererSource,
+      totalMs: Number((startupFinishedAt - startupStartedAt).toFixed(1)),
+    })
   }
 
   return {

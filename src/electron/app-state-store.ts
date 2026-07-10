@@ -44,17 +44,34 @@ import {
 } from "./chat-types.js"
 import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
+import { readPiAutoRetryOnFailure } from "./pi-retry-settings.js"
 import {
   MAIN_WINDOW_MIN_HEIGHT,
   MAIN_WINDOW_MIN_WIDTH,
 } from "./window-constants.js"
-import { readPiAutoRetryOnFailure } from "./pi-environment.js"
-
 const appStateFileName = "app-state.json"
 let appStateWriteQueue: Promise<void> = Promise.resolve()
 
+type AppStateSnapshot = {
+  hasSynchronizedPiRetry: boolean
+  /**
+   * True only when this exact normalized snapshot was written successfully by
+   * this process. A snapshot loaded from disk may normalize malformed fields in
+   * memory, so the first transaction still gets a chance to persist that
+   * normalization.
+   */
+  isDurablyNormalized: boolean
+  state: OusiaAppState
+}
+
+const appStateSnapshots = new Map<string, AppStateSnapshot>()
+
 function appStatePath() {
   return join(app.getPath("userData"), appStateFileName)
+}
+
+function cloneAppState(state: OusiaAppState) {
+  return structuredClone(state)
 }
 
 function enqueueAppStateWrite<T>(write: () => Promise<T>): Promise<T> {
@@ -70,7 +87,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
-function clampNumber(value: unknown, fallback: number, min: number, max: number) {
+function clampNumber(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number
+) {
   return typeof value === "number" && Number.isFinite(value)
     ? Math.min(Math.max(value, min), max)
     : fallback
@@ -84,7 +106,9 @@ function normalizeShellLayout(value: unknown): OusiaShellLayoutState {
 
   const storedSectionOrder = Array.isArray(value.sidebarSectionOrder)
     ? value.sidebarSectionOrder.filter(
-        (sectionId): sectionId is OusiaShellLayoutState["sidebarSectionOrder"][number] =>
+        (
+          sectionId
+        ): sectionId is OusiaShellLayoutState["sidebarSectionOrder"][number] =>
           sectionId === "sessions" || sectionId === "projects"
       )
     : []
@@ -93,7 +117,12 @@ function normalizeShellLayout(value: unknown): OusiaShellLayoutState {
   ]
 
   return {
-    sidebarWidth: clampNumber(value.sidebarWidth, fallback.sidebarWidth, 200, 320),
+    sidebarWidth: clampNumber(
+      value.sidebarWidth,
+      fallback.sidebarWidth,
+      200,
+      320
+    ),
     isSidebarCollapsed:
       typeof value.isSidebarCollapsed === "boolean"
         ? value.isSidebarCollapsed
@@ -128,22 +157,10 @@ function normalizeWindowState(value: unknown): OusiaWindowState {
 }
 
 function normalizeSettings(settings: OusiaAppSettings): OusiaAppSettings {
-  let nextSettings = normalizeOusiaAppSettings({
+  const nextSettings = normalizeOusiaAppSettings({
     ...defaultOusiaAppSettings,
     ...settings,
   })
-
-  try {
-    nextSettings = {
-      ...nextSettings,
-      autoRetryOnFailure: readPiAutoRetryOnFailure(),
-    }
-  } catch (error) {
-    writeRuntimeLog("app-state", "warn", {
-      message: "Failed to read Pi retry setting",
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
 
   migrateLegacyDefaultWorkDir()
 
@@ -366,8 +383,12 @@ function reorderSessionsById(
   sourceSessionId: string,
   targetSessionId: string
 ) {
-  const sourceSession = sessions.find((session) => session.id === sourceSessionId)
-  const targetSession = sessions.find((session) => session.id === targetSessionId)
+  const sourceSession = sessions.find(
+    (session) => session.id === sourceSessionId
+  )
+  const targetSession = sessions.find(
+    (session) => session.id === targetSessionId
+  )
   if (
     !sourceSession ||
     !targetSession ||
@@ -410,7 +431,9 @@ function moveSessionToProjectGroup(
     sourceSession,
     normalizedTargetProjectId
   )
-  const remainingSessions = sessions.filter((session) => session.id !== sessionId)
+  const remainingSessions = sessions.filter(
+    (session) => session.id !== sessionId
+  )
   const targetIndex = canInsertBeforeTarget
     ? remainingSessions.findIndex((session) => session.id === targetSessionId)
     : -1
@@ -438,7 +461,9 @@ function moveSessionToGroupFront(
     return sessions
   }
   const updatedSession = { ...targetSession, time }
-  const remainingSessions = sessions.filter((session) => session.id !== sessionId)
+  const remainingSessions = sessions.filter(
+    (session) => session.id !== sessionId
+  )
   const groupStartIndex = remainingSessions.findIndex(
     (session) => session.projectId === targetSession.projectId
   )
@@ -488,6 +513,12 @@ type AppStateTransactionMetadata = Omit<
   "ok" | "state"
 >
 
+function cloneTransactionMetadata(
+  metadata: AppStateTransactionMetadata | undefined
+) {
+  return metadata ? structuredClone(metadata) : {}
+}
+
 async function updateAppState(
   mutate: (state: OusiaAppState) => {
     metadata?: AppStateTransactionMetadata
@@ -497,18 +528,32 @@ async function updateAppState(
   return enqueueAppStateWrite(async () => {
     const filePath = appStatePath()
     mkdirSync(dirname(filePath), { recursive: true })
-    const currentState =
-      (await readNormalizedAppStateFromDisk()) ??
-      normalizeAppState(createDefaultOusiaAppState())
+    const currentSnapshot = await loadAppStateSnapshot(filePath)
+    const currentState = currentSnapshot.state
 
     try {
       const transaction = mutate(currentState)
+      if (
+        transaction.state === currentState &&
+        currentSnapshot.isDurablyNormalized
+      ) {
+        return {
+          ok: true,
+          state: cloneAppState(currentState),
+          ...cloneTransactionMetadata(transaction.metadata),
+        }
+      }
       const normalizedState = normalizeAppState(transaction.state)
       await writeNormalizedAppStateFile(filePath, normalizedState)
+      appStateSnapshots.set(filePath, {
+        hasSynchronizedPiRetry: currentSnapshot.hasSynchronizedPiRetry,
+        isDurablyNormalized: true,
+        state: normalizedState,
+      })
       return {
         ok: true,
-        state: normalizedState,
-        ...transaction.metadata,
+        state: cloneAppState(normalizedState),
+        ...cloneTransactionMetadata(transaction.metadata),
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -519,7 +564,7 @@ async function updateAppState(
       return {
         ok: false,
         error: message,
-        state: currentState,
+        state: cloneAppState(currentState),
       }
     }
   })
@@ -547,8 +592,62 @@ async function readNormalizedAppStateFile(
   }
 }
 
-async function readNormalizedAppStateFromDisk(): Promise<OusiaAppState | null> {
-  return readNormalizedAppStateFile(appStatePath())
+async function loadAppStateSnapshot(
+  filePath: string
+): Promise<AppStateSnapshot> {
+  const cached = appStateSnapshots.get(filePath)
+  if (cached) {
+    return cached
+  }
+
+  const state =
+    (await readNormalizedAppStateFile(filePath)) ??
+    normalizeAppState(createDefaultOusiaAppState())
+  const snapshot = {
+    hasSynchronizedPiRetry: false,
+    // Loading normalizes in memory but intentionally does not rewrite existing
+    // files. Mark it durable only after one of our atomic writes succeeds.
+    isDurablyNormalized: false,
+    state,
+  }
+  appStateSnapshots.set(filePath, snapshot)
+  return snapshot
+}
+
+async function synchronizePiRetrySetting(
+  filePath: string,
+  snapshot: AppStateSnapshot
+) {
+  let nextState = snapshot.state
+  try {
+    const autoRetryOnFailure = await readPiAutoRetryOnFailure()
+    if (autoRetryOnFailure !== snapshot.state.settings.autoRetryOnFailure) {
+      nextState = {
+        ...snapshot.state,
+        settings: {
+          ...snapshot.state.settings,
+          autoRetryOnFailure,
+        },
+      }
+    }
+  } catch (error) {
+    writeRuntimeLog("app-state", "warn", {
+      message: "Failed to read Pi retry setting",
+      error: error instanceof Error ? error.message : String(error),
+    })
+    // Keep the snapshot retryable. A transient SDK/config error must not be
+    // remembered as a successful synchronization for the rest of the process.
+    return snapshot
+  }
+
+  const synchronizedSnapshot: AppStateSnapshot = {
+    hasSynchronizedPiRetry: true,
+    isDurablyNormalized:
+      snapshot.isDurablyNormalized && nextState === snapshot.state,
+    state: nextState,
+  }
+  appStateSnapshots.set(filePath, synchronizedSnapshot)
+  return synchronizedSnapshot
 }
 
 async function writeNormalizedAppStateFile(
@@ -558,7 +657,11 @@ async function writeNormalizedAppStateFile(
   mkdirSync(dirname(filePath), { recursive: true })
   const temporaryPath = `${filePath}.${Date.now()}.${process.pid}.tmp`
   try {
-    await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, "utf8")
+    await writeFile(
+      temporaryPath,
+      `${JSON.stringify(state, null, 2)}\n`,
+      "utf8"
+    )
     await rename(temporaryPath, filePath)
   } catch (error) {
     await unlink(temporaryPath).catch(() => undefined)
@@ -566,19 +669,42 @@ async function writeNormalizedAppStateFile(
   }
 }
 
-export async function loadAppState(): Promise<OusiaAppState> {
+export async function loadAppState(
+  options: { synchronizePiRetry?: boolean } = {}
+): Promise<OusiaAppState> {
   return enqueueAppStateWrite(async () => {
     const filePath = appStatePath()
-    const state = await readNormalizedAppStateFile(filePath)
-    if (state) {
-      return state
+    let snapshot = appStateSnapshots.get(filePath)
+    if (!snapshot) {
+      const state = await readNormalizedAppStateFile(filePath)
+      if (state) {
+        snapshot = {
+          hasSynchronizedPiRetry: false,
+          isDurablyNormalized: false,
+          state,
+        }
+      } else {
+        const defaultState = normalizeAppState(createDefaultOusiaAppState())
+        const shouldPersistDefault = !existsSync(filePath)
+        if (shouldPersistDefault) {
+          await writeNormalizedAppStateFile(filePath, defaultState)
+        }
+        snapshot = {
+          hasSynchronizedPiRetry: false,
+          isDurablyNormalized: shouldPersistDefault,
+          state: defaultState,
+        }
+      }
+      appStateSnapshots.set(filePath, snapshot)
     }
 
-    const defaultState = normalizeAppState(createDefaultOusiaAppState())
-    if (!existsSync(filePath)) {
-      await writeNormalizedAppStateFile(filePath, defaultState)
+    if (
+      options.synchronizePiRetry === true &&
+      !snapshot.hasSynchronizedPiRetry
+    ) {
+      snapshot = await synchronizePiRetrySetting(filePath, snapshot)
     }
-    return defaultState
+    return cloneAppState(snapshot.state)
   })
 }
 
@@ -588,16 +714,26 @@ export async function saveWindowState(
   return enqueueAppStateWrite(async () => {
     const filePath = appStatePath()
     mkdirSync(dirname(filePath), { recursive: true })
-    const currentState =
-      (await readNormalizedAppStateFromDisk()) ??
-      normalizeAppState(createDefaultOusiaAppState())
+    const currentSnapshot = await loadAppStateSnapshot(filePath)
+    const currentState = currentSnapshot.state
     const normalizedState = normalizeAppState({
       ...currentState,
       windowState: normalizeWindowState(windowState),
     })
     await writeNormalizedAppStateFile(filePath, normalizedState)
+    appStateSnapshots.set(filePath, {
+      hasSynchronizedPiRetry: currentSnapshot.hasSynchronizedPiRetry,
+      isDurablyNormalized: true,
+      state: normalizedState,
+    })
     return { ok: true }
   })
+}
+
+/** Test-only: callers must wait for any pending store operation before reset. */
+export function resetAppStateStoreForTests() {
+  appStateSnapshots.clear()
+  appStateWriteQueue = Promise.resolve()
 }
 
 export async function saveAppStateSettings(
@@ -640,7 +776,10 @@ export async function createAppStateSession(
 ): Promise<OusiaAppStateTransactionResult> {
   return updateAppState((state) => {
     const projectId = payload.projectId || undefined
-    if (projectId && !state.projects.some((project) => project.id === projectId)) {
+    if (
+      projectId &&
+      !state.projects.some((project) => project.id === projectId)
+    ) {
       throw new Error(`Unknown project: ${projectId}`)
     }
 
@@ -677,7 +816,9 @@ export async function deleteAppStateSession(
       throw new Error(`Unknown session: ${payload.sessionId}`)
     }
 
-    const sessions = state.sessions.filter((item) => item.id !== payload.sessionId)
+    const sessions = state.sessions.filter(
+      (item) => item.id !== payload.sessionId
+    )
     return {
       metadata: { removedSessions: [session] },
       state: {
@@ -848,7 +989,9 @@ export async function createAppStateProject(
       throw new Error("Project path cannot be empty.")
     }
 
-    const existingProject = state.projects.find((project) => project.path === path)
+    const existingProject = state.projects.find(
+      (project) => project.path === path
+    )
     const project = existingProject ?? createOusiaProject(path, payload.name)
     const existingSession = state.sessions.find(
       (session) => session.projectId === project.id
@@ -875,7 +1018,9 @@ export async function createAppStateProject(
           state.expandedProjectIds,
           project.id
         ),
-        projects: existingProject ? state.projects : [...state.projects, project],
+        projects: existingProject
+          ? state.projects
+          : [...state.projects, project],
         selectedSessionId:
           shouldSelectSession && targetSession
             ? targetSession.id
@@ -914,7 +1059,9 @@ export async function deleteAppStateProject(
         expandedProjectIds: state.expandedProjectIds.filter(
           (projectId) => projectId !== payload.projectId
         ),
-        projects: state.projects.filter((item) => item.id !== payload.projectId),
+        projects: state.projects.filter(
+          (item) => item.id !== payload.projectId
+        ),
         selectedSessionId: selectedSessionWasRemoved
           ? (sessions[0]?.id ?? "")
           : state.selectedSessionId,
