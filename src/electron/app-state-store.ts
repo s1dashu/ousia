@@ -20,6 +20,8 @@ import {
   OUSIA_APP_STATE_SCHEMA_VERSION,
   type OusiaAppStateCreateProjectPayload,
   type OusiaAppStateCreateSessionPayload,
+  type OusiaAppStateBindSessionAgentThreadPayload,
+  type OusiaAppStateBindSessionAgentThreadResult,
   type OusiaAppStateDeleteProjectPayload,
   type OusiaAppStateDeleteSessionPayload,
   type OusiaAppStateMoveSessionPayload,
@@ -34,6 +36,7 @@ import {
   type OusiaAppStateShellLayoutPayload,
   type OusiaAppStateTouchSessionPayload,
   type OusiaAppStateTransactionResult,
+  type OusiaAgentProvider,
   type OusiaProjectRecord,
   type OusiaSessionRecord,
   type OusiaShellLayoutState,
@@ -211,23 +214,35 @@ function normalizeSessions(sessions: unknown): OusiaSessionRecord[] {
   if (!Array.isArray(sessions)) {
     return fallback
   }
-  const nextSessions = sessions.flatMap((session) =>
-    isRecord(session) &&
-    typeof session.id === "string" &&
-    typeof session.title === "string" &&
-    typeof session.time === "string"
-      ? [
-          {
-            id: session.id,
-            title: session.title,
-            time: session.time,
-            ...(typeof session.projectId === "string"
-              ? { projectId: session.projectId }
-              : {}),
-          },
-        ]
-      : []
-  )
+  const nextSessions = sessions.flatMap((session): OusiaSessionRecord[] => {
+    if (
+      !isRecord(session) ||
+      typeof session.id !== "string" ||
+      typeof session.title !== "string" ||
+      typeof session.time !== "string"
+    ) {
+      return []
+    }
+
+    const agentProvider: OusiaAgentProvider =
+      session.agentProvider === "codex" ? "codex" : "pi"
+    return [
+      {
+        agentProvider,
+        id: session.id,
+        title: session.title,
+        time: session.time,
+        ...(typeof session.projectId === "string"
+          ? { projectId: session.projectId }
+          : {}),
+        ...(agentProvider === "codex" &&
+        typeof session.agentThreadId === "string" &&
+        session.agentThreadId.trim()
+          ? { agentThreadId: session.agentThreadId }
+          : {}),
+      },
+    ]
+  })
   return nextSessions.length ? nextSessions : fallback
 }
 
@@ -447,11 +462,25 @@ function includeExpandedProjectId(
 
 function createSessionForProject(
   title: string | undefined,
-  projectId: string | undefined
+  projectId: string | undefined,
+  agentProvider: OusiaAgentProvider
 ) {
   const normalizedTitle = title?.trim() || "新会话"
-  const session = createOusiaSession(normalizedTitle)
+  const session = createOusiaSession(normalizedTitle, agentProvider)
   return projectId ? { ...session, projectId } : session
+}
+
+function resolveAgentProvider(
+  agentProvider: OusiaAgentProvider | undefined,
+  fallback: OusiaAgentProvider
+): OusiaAgentProvider {
+  if (agentProvider === undefined) {
+    return fallback
+  }
+  if (agentProvider !== "pi" && agentProvider !== "codex") {
+    throw new Error(`Unknown agent provider: ${String(agentProvider)}`)
+  }
+  return agentProvider
 }
 
 type AppStateTransactionMetadata = Omit<
@@ -615,7 +644,14 @@ export async function createAppStateSession(
       throw new Error(`Unknown project: ${projectId}`)
     }
 
-    const session = createSessionForProject(payload.title, projectId)
+    const session = createSessionForProject(
+      payload.title,
+      projectId,
+      resolveAgentProvider(
+        payload.agentProvider,
+        state.settings.defaultAgentProvider
+      )
+    )
     return {
       metadata: { session },
       state: {
@@ -676,6 +712,56 @@ export async function renameAppStateSession(
         ...state,
         sessions: state.sessions.map((candidate) =>
           candidate.id === payload.sessionId ? renamedSession : candidate
+        ),
+      },
+    }
+  })
+}
+
+export async function bindAppStateSessionAgentThread(
+  payload: OusiaAppStateBindSessionAgentThreadPayload
+): Promise<OusiaAppStateBindSessionAgentThreadResult> {
+  return updateAppState((state) => {
+    const session = state.sessions.find((item) => item.id === payload.sessionId)
+    if (!session) {
+      throw new Error(`Unknown session: ${payload.sessionId}`)
+    }
+    if (session.agentProvider !== "codex") {
+      throw new Error(
+        `Cannot bind a Codex thread to ${session.agentProvider} session: ${payload.sessionId}`
+      )
+    }
+    if (
+      typeof payload.agentThreadId !== "string" ||
+      !payload.agentThreadId.trim()
+    ) {
+      throw new Error("Codex agent thread id cannot be empty.")
+    }
+    if (
+      session.agentThreadId &&
+      session.agentThreadId !== payload.agentThreadId
+    ) {
+      throw new Error(
+        `Session ${payload.sessionId} is already bound to a different Codex thread.`
+      )
+    }
+    if (session.agentThreadId === payload.agentThreadId) {
+      return {
+        metadata: { session },
+        state,
+      }
+    }
+
+    const boundSession = {
+      ...session,
+      agentThreadId: payload.agentThreadId,
+    }
+    return {
+      metadata: { session: boundSession },
+      state: {
+        ...state,
+        sessions: state.sessions.map((candidate) =>
+          candidate.id === payload.sessionId ? boundSession : candidate
         ),
       },
     }
@@ -770,7 +856,11 @@ export async function createAppStateProject(
     const shouldSelectSession = payload.selectOrCreateSession ?? true
     const createdSession =
       shouldSelectSession && !existingSession
-        ? createSessionForProject(payload.sessionTitle, project.id)
+        ? createSessionForProject(
+            payload.sessionTitle,
+            project.id,
+            state.settings.defaultAgentProvider
+          )
         : undefined
     const targetSession = existingSession ?? createdSession
 

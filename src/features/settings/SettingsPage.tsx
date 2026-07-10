@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react"
 import {
+  Ban,
+  Check,
   Eye,
   EyeOff,
   FolderOpen,
@@ -9,7 +11,7 @@ import {
 } from "@/components/icons/huge-icons"
 
 import { getMessages, languageOptions } from "@/app/i18n"
-import { modelsForProvider, providerLabel } from "@/app/model-presets"
+import { getConfiguredModelPresets, providerLabel } from "@/app/model-presets"
 import type { AppSettings } from "@/app/app-state"
 import { useTheme, type Theme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
@@ -33,8 +35,10 @@ import {
 import {
   normalizeOusiaAppSettings,
   type OusiaAgentMode,
+  type OusiaAgentProvider,
   type OusiaAppearanceColorScale,
   type OusiaChatContentWidth,
+  type OusiaCodexEnvironmentStatus,
   type OusiaFontFamily,
   type OusiaLanguage,
   type OusiaModelRegistryResult,
@@ -57,10 +61,14 @@ const appearanceColorScales: Array<{
 ]
 
 type SettingsPageProps = {
+  codexEnvironment: OusiaCodexEnvironmentStatus | undefined
   isSidebarCollapsed: boolean
   isWindowFullscreen: boolean
   modelRegistry: OusiaModelRegistryResult | undefined
   onClose: () => void
+  onRefreshCodexEnvironment: () => Promise<
+    OusiaCodexEnvironmentStatus | undefined
+  >
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSettingsChange: (settings: AppSettings) => void
   settings: AppSettings
@@ -72,7 +80,8 @@ const settingsSectionClass = "grid gap-4"
 const settingsFieldClass = "grid gap-2"
 const settingsLabelClass = "text-xs font-medium text-muted-foreground"
 const settingsHelpClass = "text-xs leading-5 text-muted-foreground"
-const settingsControlClass = "ousia-squircle-corners w-full rounded-xl"
+const settingsControlClass =
+  "ousia-squircle-corners w-full rounded-xl border-[0.5px] border-foreground/10"
 
 type ProviderRow = {
   apiKey: string
@@ -81,13 +90,16 @@ type ProviderRow = {
     OusiaModelRegistryResult["configuredProviders"][number]["authSource"]
   >
   id: string
+  isDisabled: boolean
 }
 
 export function SettingsPage({
+  codexEnvironment,
   isSidebarCollapsed,
   isWindowFullscreen,
   modelRegistry,
   onClose,
+  onRefreshCodexEnvironment,
   onRefreshModelRegistry,
   onSettingsChange,
   settings,
@@ -102,6 +114,10 @@ export function SettingsPage({
   const [savingProviderIds, setSavingProviderIds] = useState<Set<string>>(
     () => new Set()
   )
+  const [codexAction, setCodexAction] = useState<
+    "login" | "logout" | "refresh" | null
+  >(null)
+  const [codexError, setCodexError] = useState("")
   const [providerError, setProviderError] = useState("")
   const { setTheme } = useTheme()
   const t = getMessages(draft.language)
@@ -191,6 +207,55 @@ export function SettingsPage({
     applySettings({ theme: nextTheme })
   }
 
+  async function refreshCodexStatus() {
+    setCodexAction("refresh")
+    setCodexError("")
+    try {
+      const status = await onRefreshCodexEnvironment()
+      if (!status) {
+        setCodexError(t.chat.noElectron)
+      }
+    } catch (error) {
+      setCodexError(
+        error instanceof Error
+          ? error.message
+          : String(error ?? t.settings.codexRefreshFailed)
+      )
+    } finally {
+      setCodexAction(null)
+    }
+  }
+
+  async function runCodexAuthAction(action: "login" | "logout") {
+    if (!window.ousia) {
+      setCodexError(t.chat.noElectron)
+      return
+    }
+    setCodexAction(action)
+    setCodexError("")
+    try {
+      const result =
+        action === "login"
+          ? await window.ousia.loginCodexWithChatGPT()
+          : await window.ousia.logoutCodex()
+      if (!result.ok) {
+        setCodexError(result.error)
+      }
+      const status = await onRefreshCodexEnvironment()
+      if (!status && result.ok) {
+        setCodexError(t.settings.codexRefreshFailed)
+      }
+    } catch (error) {
+      setCodexError(
+        error instanceof Error
+          ? error.message
+          : String(error ?? t.settings.codexAuthActionFailed)
+      )
+    } finally {
+      setCodexAction(null)
+    }
+  }
+
   function commitRequiredTextSetting(key: "defaultWorkDir") {
     const value = draft[key].trim()
     if (!value) {
@@ -222,7 +287,9 @@ export function SettingsPage({
   }
 
   function rememberProviderId(providerId: string) {
-    return settings.modelProviders.some((provider) => provider.id === providerId)
+    return settings.modelProviders.some(
+      (provider) => provider.id === providerId
+    )
       ? settings.modelProviders.map((provider) =>
           provider.id === providerId ? { ...provider, apiKey: "" } : provider
         )
@@ -233,6 +300,32 @@ export function SettingsPage({
             apiKey: "",
           },
         ]
+  }
+
+  function currentModelVisibilityPatch(
+    modelProviders: AppSettings["modelProviders"],
+    disabledModelProviderIds: string[]
+  ): Pick<AppSettings, "modelProvider" | "modelId"> | Record<string, never> {
+    const configuredModelPresets = getConfiguredModelPresets(
+      modelProviders,
+      modelRegistry,
+      disabledModelProviderIds
+    )
+    const currentModel = configuredModelPresets.find(
+      (model) =>
+        model.provider === settings.modelProvider &&
+        model.modelId === settings.modelId
+    )
+    if (currentModel) {
+      return {}
+    }
+    const fallbackModel = configuredModelPresets[0]
+    return fallbackModel
+      ? {
+          modelProvider: fallbackModel.provider,
+          modelId: fallbackModel.modelId,
+        }
+      : {}
   }
 
   async function persistProviderCredential(providerId: string, apiKey: string) {
@@ -301,13 +394,13 @@ export function SettingsPage({
   async function addProvider() {
     const id = newProviderId.trim()
     const provider = modelRegistry?.providers.find((item) => item.id === id)
-    if (
-      !provider ||
-      !newProviderApiKey.trim()
-    ) {
+    if (!provider || !newProviderApiKey.trim()) {
       return
     }
-    const didSave = await persistProviderCredential(id, newProviderApiKey.trim())
+    const didSave = await persistProviderCredential(
+      id,
+      newProviderApiKey.trim()
+    )
     if (!didSave) {
       return
     }
@@ -316,6 +409,9 @@ export function SettingsPage({
       modelProvider: id,
       modelId: nextModelId,
       modelProviders: rememberProviderId(id),
+      disabledModelProviderIds: settings.disabledModelProviderIds.filter(
+        (providerId) => providerId !== id
+      ),
     })
     setNewProviderId("")
     setNewProviderApiKey("")
@@ -409,33 +505,33 @@ export function SettingsPage({
     const nextProviders = settings.modelProviders.filter(
       (provider) => provider.id !== providerId
     )
-    const fallbackProviderId = "deepseek"
-    const nextRegistryProviderId =
-      modelRegistry?.configuredProviderIds.find((id) => id !== providerId) ??
-      fallbackProviderId
-    const nextProviderId =
-      nextProviders.length === 0
-        ? nextRegistryProviderId
-        : settings.modelProvider === providerId
-          ? (nextProviders[0]?.id ?? settings.modelProvider)
-          : settings.modelProvider
-    const nextProviderModel = modelsForProvider(
-      modelRegistry,
-      nextProviderId
-    ).find((model) => model.modelId === settings.modelId)
-    const nextDefaultModel = modelsForProvider(modelRegistry, nextProviderId)[0]
+    const nextDisabledProviderIds = settings.disabledModelProviderIds.filter(
+      (id) => id !== providerId
+    )
     applySettings({
       modelProviders: nextProviders,
-      modelProvider: nextProviderId,
-      modelId:
-        nextProviderModel?.modelId ??
-        nextDefaultModel?.modelId ??
-        (nextProviders.length === 0 ? "deepseek-v4-flash" : settings.modelId),
+      disabledModelProviderIds: nextDisabledProviderIds,
+      ...currentModelVisibilityPatch(nextProviders, nextDisabledProviderIds),
     })
     setVisibleProviderApiKeyIds((current) => {
       const nextIds = new Set(current)
       nextIds.delete(providerId)
       return nextIds
+    })
+  }
+
+  function toggleProviderDisabled(provider: ProviderRow) {
+    const providerId = provider.id
+    const nextDisabledProviderIds = provider.isDisabled
+      ? settings.disabledModelProviderIds.filter((id) => id !== providerId)
+      : [...settings.disabledModelProviderIds, providerId]
+    setProviderError("")
+    applySettings({
+      disabledModelProviderIds: nextDisabledProviderIds,
+      ...currentModelVisibilityPatch(
+        settings.modelProviders,
+        nextDisabledProviderIds
+      ),
     })
   }
 
@@ -453,8 +549,12 @@ export function SettingsPage({
 
   const configuredProviderIds = new Set([
     ...draft.modelProviders.map((provider) => provider.id),
+    ...draft.disabledModelProviderIds,
     ...(modelRegistry?.configuredProviderIds ?? []),
   ])
+  const disabledProviderIdSet = new Set(
+    draft.disabledModelProviderIds.map((id) => id.trim()).filter(Boolean)
+  )
   const configuredProviderById = new Map(
     (modelRegistry?.configuredProviders ?? []).map((provider) => [
       provider.id,
@@ -472,6 +572,7 @@ export function SettingsPage({
             ?.apiKey ?? "",
         authLabel: configuredProvider?.authLabel,
         authSource: configuredProvider?.authSource,
+        isDisabled: disabledProviderIdSet.has(providerId),
       }
     })
     .sort((left, right) =>
@@ -481,12 +582,13 @@ export function SettingsPage({
         { sensitivity: "base" }
       )
     )
-  const configuredProviderIdSet = new Set(providerRows.map((provider) => provider.id))
+  const configuredProviderIdSet = new Set(
+    providerRows.map((provider) => provider.id)
+  )
   const addableProviders =
     modelRegistry?.providers.filter(
       (provider) =>
-        provider.models.length > 0 &&
-        !configuredProviderIdSet.has(provider.id)
+        provider.models.length > 0 && !configuredProviderIdSet.has(provider.id)
     ) ?? []
   const addableProviderSelectItems = addableProviders.map((provider) => ({
     label: provider.name,
@@ -512,9 +614,40 @@ export function SettingsPage({
   const selectedColorScaleDescription = appearanceColorScales.find(
     (scale) => scale.value === draft.appearanceColorScale
   )?.description
+  const codexAccount = codexEnvironment?.account
+  const codexChatGptDetails =
+    codexAccount?.type === "chatgpt"
+      ? [codexAccount.email, codexAccount.planType].filter(Boolean).join(" · ")
+      : ""
+  const codexStatus = !codexEnvironment
+    ? {
+        description: t.settings.codexUncheckedHelp,
+        label: t.settings.codexUnchecked,
+      }
+    : !codexEnvironment.available
+      ? {
+          description:
+            codexEnvironment.error || t.settings.codexUnavailableHelp,
+          label: t.settings.codexUnavailable,
+        }
+      : !codexAccount
+        ? {
+            description: t.settings.codexSignedOutHelp,
+            label: t.settings.codexSignedOut,
+          }
+        : codexAccount.type === "apiKey"
+          ? {
+              description: t.settings.codexApiKeyHelp,
+              label: t.settings.codexApiKeyAccount,
+            }
+          : {
+              description:
+                codexChatGptDetails || t.settings.codexChatGptAccountHelp,
+              label: t.settings.codexChatGptAccount,
+            }
 
   return (
-    <section className="@container/settings ousia-main-panel ousia-squircle-corners flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-none dark:bg-card">
+    <section className="ousia-main-panel ousia-squircle-corners @container/settings flex min-w-0 flex-1 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card">
       <header className="window-drag grid h-[var(--ousia-titlebar-height)] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4">
         <div
           className={cn(
@@ -549,9 +682,7 @@ export function SettingsPage({
           <section className={settingsSectionClass}>
             <h2 className="text-sm font-semibold">{t.settings.general}</h2>
             <div className={settingsFieldClass}>
-              <span className={settingsLabelClass}>
-                {t.settings.language}
-              </span>
+              <span className={settingsLabelClass}>{t.settings.language}</span>
               <Select
                 items={languageOptions}
                 value={draft.language}
@@ -741,8 +872,108 @@ export function SettingsPage({
             <h2 className="text-sm font-semibold">{t.settings.agent}</h2>
             <div className={settingsFieldClass}>
               <span className={settingsLabelClass}>
-                {t.settings.agentMode}
+                {t.settings.defaultAgent}
               </span>
+              <Select
+                items={[
+                  { label: t.settings.piAgent, value: "pi" },
+                  { label: t.settings.codexAgent, value: "codex" },
+                ]}
+                value={draft.defaultAgentProvider}
+                onValueChange={(value) =>
+                  applySettings({
+                    defaultAgentProvider: value as OusiaAgentProvider,
+                  })
+                }
+              >
+                <SelectTrigger
+                  aria-label={t.settings.defaultAgent}
+                  className={settingsControlClass}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="start">
+                  <SelectGroup>
+                    <SelectItem value="pi">{t.settings.piAgent}</SelectItem>
+                    <SelectItem value="codex">
+                      {t.settings.codexAgent}
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <div className={settingsHelpClass}>
+                {t.settings.defaultAgentHelp}
+              </div>
+            </div>
+
+            <div className="ousia-squircle-corners grid gap-3 rounded-xl border-[0.5px] border-foreground/10 bg-white p-4 dark:bg-background">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1" aria-live="polite">
+                  <div className={settingsLabelClass}>
+                    {t.settings.codexAuthentication}
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-foreground/85">
+                    {codexStatus.label}
+                  </div>
+                  <div className={cn("mt-1", settingsHelpClass)}>
+                    {codexStatus.description}
+                  </div>
+                </div>
+                {!codexEnvironment || !codexEnvironment.available ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="ousia-squircle-corners rounded-xl border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
+                    disabled={codexAction !== null}
+                    onClick={() => void refreshCodexStatus()}
+                  >
+                    {codexAction === "refresh"
+                      ? t.settings.checkingCodex
+                      : codexEnvironment
+                        ? t.settings.retryCodexCheck
+                        : t.settings.checkCodex}
+                  </Button>
+                ) : codexAccount ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="ousia-squircle-corners rounded-xl border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
+                    disabled={codexAction !== null}
+                    onClick={() => void runCodexAuthAction("logout")}
+                  >
+                    {codexAction === "logout"
+                      ? t.settings.signingOutCodex
+                      : t.settings.signOutCodex}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="ousia-squircle-corners rounded-xl border-transparent bg-muted/45 hover:bg-muted/60 active:scale-[0.96]"
+                    disabled={codexAction !== null}
+                    onClick={() => void runCodexAuthAction("login")}
+                  >
+                    {codexAction === "login"
+                      ? t.settings.signingInCodex
+                      : t.settings.signInCodex}
+                  </Button>
+                )}
+              </div>
+              {codexError ? (
+                <div
+                  role="alert"
+                  className="text-xs leading-5 text-destructive"
+                >
+                  {codexError}
+                </div>
+              ) : null}
+            </div>
+
+            <div className={settingsFieldClass}>
+              <span className={settingsLabelClass}>{t.settings.agentMode}</span>
               <Select
                 items={agentModeOptions}
                 value={draft.agentMode}
@@ -864,7 +1095,12 @@ export function SettingsPage({
           </section>
 
           <section className={settingsSectionClass}>
-            <h2 className="text-sm font-semibold">{t.settings.model}</h2>
+            <div className="grid gap-1">
+              <h2 className="text-sm font-semibold">{t.settings.model}</h2>
+              <div className={settingsHelpClass}>
+                {t.settings.piModelProvidersHelp}
+              </div>
+            </div>
             <div className="grid gap-3">
               <div className="flex items-center justify-between gap-3">
                 <span className={settingsLabelClass}>
@@ -885,8 +1121,9 @@ export function SettingsPage({
               <div className="-mx-1 grid min-w-0 gap-2 px-1 py-1">
                 {providerRows.map((provider) => {
                   const providerHasApiKey = Boolean(provider.apiKey.trim())
-                  const isProviderApiKeyVisible =
-                    visibleProviderApiKeyIds.has(provider.id)
+                  const isProviderApiKeyVisible = visibleProviderApiKeyIds.has(
+                    provider.id
+                  )
                   const isProviderSaving = savingProviderIds.has(provider.id)
                   const providerAuthPlaceholder =
                     providerAuthDescription(provider)
@@ -894,18 +1131,32 @@ export function SettingsPage({
                   return (
                     <div
                       key={provider.id}
-                      className="grid min-w-0 grid-cols-[minmax(0,1fr)_40px] items-center gap-x-4 gap-y-2 py-1 @min-[560px]:grid-cols-[minmax(0,176px)_minmax(0,1fr)_40px]"
+                      className="grid min-w-0 grid-cols-[minmax(0,1fr)_40px_40px] items-center gap-x-3 gap-y-2 py-1 @min-[560px]:grid-cols-[minmax(0,176px)_minmax(0,1fr)_40px_40px]"
                     >
-                      <div className="flex min-h-10 min-w-0 items-center text-sm font-medium text-foreground/75">
+                      <div
+                        className={cn(
+                          "flex min-h-10 min-w-0 items-center gap-2 text-sm font-medium text-foreground/75",
+                          provider.isDisabled && "text-muted-foreground"
+                        )}
+                      >
                         <span className="block truncate">
                           {providerLabel(modelRegistry, provider.id)}
                         </span>
+                        {provider.isDisabled ? (
+                          <span className="ousia-squircle-corners shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-[10px] leading-4 font-medium text-muted-foreground">
+                            {t.settings.disabled}
+                          </span>
+                        ) : null}
                       </div>
-                      <div className="relative min-w-0 @max-[559px]:col-span-1">
+                      <div className="relative col-span-3 row-start-2 min-w-0 @min-[560px]:col-span-1 @min-[560px]:row-auto">
                         <Input
                           aria-label={`${provider.id} API Key`}
-                          className="ousia-squircle-corners min-w-0 rounded-xl border-[0.5px] border-foreground/10 bg-background/85 pr-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] focus-visible:bg-background disabled:opacity-100 dark:bg-input/45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-visible:bg-input/60"
-                          disabled={isProviderSaving}
+                          className={cn(
+                            "ousia-squircle-corners min-w-0 rounded-xl border-[0.5px] border-foreground/10 bg-background/85 pr-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.24)] focus-visible:bg-background disabled:opacity-100 dark:bg-input/45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.035)] dark:focus-visible:bg-input/60",
+                            provider.isDisabled &&
+                              "bg-muted/35 text-muted-foreground dark:bg-muted/20"
+                          )}
+                          disabled={isProviderSaving || provider.isDisabled}
                           value={provider.apiKey}
                           onChange={(event) =>
                             updateProviderDraft(provider.id, event.target.value)
@@ -920,7 +1171,7 @@ export function SettingsPage({
                           type={
                             providerHasApiKey && isProviderApiKeyVisible
                               ? "text"
-                            : "password"
+                              : "password"
                           }
                         />
                         {providerHasApiKey ? (
@@ -946,6 +1197,33 @@ export function SettingsPage({
                           </Button>
                         ) : null}
                       </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className={cn(
+                          "ousia-squircle-corners justify-self-end rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground active:scale-[0.96]",
+                          provider.isDisabled && "text-foreground/75"
+                        )}
+                        aria-label={`${
+                          provider.isDisabled
+                            ? t.settings.enableProvider
+                            : t.settings.disableProvider
+                        } ${provider.id}`}
+                        disabled={isProviderSaving}
+                        title={
+                          provider.isDisabled
+                            ? t.settings.enableProvider
+                            : t.settings.disableProvider
+                        }
+                        onClick={() => toggleProviderDisabled(provider)}
+                      >
+                        {provider.isDisabled ? (
+                          <Check size={18} />
+                        ) : (
+                          <Ban size={18} />
+                        )}
+                      </Button>
                       <Button
                         type="button"
                         variant="ghost"

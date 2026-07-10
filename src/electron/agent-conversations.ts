@@ -48,8 +48,9 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaAgentMode,
   OusiaModelSettings,
-  OusiaThinkingLevel,
+  OusiaPiThinkingLevel,
 } from "./chat-types.js"
+import { isOusiaPiThinkingLevel } from "./chat-types.js"
 import { normalizeProviderModelId } from "./model-compat.js"
 import {
   createWritablePiAuthStorage,
@@ -68,6 +69,17 @@ type AgentSessionBundle = {
   modelRegistry: ModelRegistry
   runtimeApiKeyProvider?: string
   session: AgentSession
+}
+
+function requirePiThinkingLevel(level: string): OusiaPiThinkingLevel {
+  if (!isOusiaPiThinkingLevel(level)) {
+    writeRuntimeLog("pi.thinking", "error", {
+      message: "Rejected unsupported Pi thinking level",
+      thinkingLevel: level,
+    })
+    throw new Error(`Unsupported Pi thinking level: ${level}`)
+  }
+  return level
 }
 
 type AgentConversationModuleOptions = {
@@ -397,7 +409,7 @@ async function findConfiguredModel(
 async function configureSessionBundle(
   bundle: AgentSessionBundle,
   modelSettings: OusiaModelSettings,
-  thinkingLevel: OusiaThinkingLevel,
+  thinkingLevel: OusiaPiThinkingLevel,
   agentMode?: OusiaAgentMode,
   customAgentTools?: OusiaAgentToolName[],
   autoCompactContext?: boolean,
@@ -1574,7 +1586,7 @@ export function createAgentConversationModule({
     context: OusiaChatContext,
     key: string,
     modelSettings: OusiaModelSettings,
-    thinkingLevel: OusiaThinkingLevel,
+    thinkingLevel: OusiaPiThinkingLevel,
     agentMode?: OusiaAgentMode,
     customAgentTools?: OusiaAgentToolName[],
     autoCompactContext?: boolean
@@ -1650,7 +1662,7 @@ export function createAgentConversationModule({
   async function getAgentSession(
     context: OusiaChatContext,
     model: OusiaModelSettings,
-    thinkingLevel: OusiaThinkingLevel,
+    thinkingLevel: OusiaPiThinkingLevel,
     agentMode?: OusiaAgentMode,
     customAgentTools?: OusiaAgentToolName[],
     autoCompactContext?: boolean
@@ -1800,21 +1812,22 @@ export function createAgentConversationModule({
     if (!text && images.length === 0) {
       return { ok: true }
     }
-    emitChatEvent(
-      {
-        type: "user_message",
-        id: randomId("user"),
-        text: payload.prompt.trim(),
-        attachments: attachmentSummary(attachments),
-        timestamp: now(),
-      },
-      context
-    )
     try {
+      const thinkingLevel = requirePiThinkingLevel(payload.thinkingLevel)
+      emitChatEvent(
+        {
+          type: "user_message",
+          id: randomId("user"),
+          text: payload.prompt.trim(),
+          attachments: attachmentSummary(attachments),
+          timestamp: now(),
+        },
+        context
+      )
       const bundle = await getAgentSession(
         context,
         payload.model,
-        payload.thinkingLevel,
+        thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
         payload.autoCompactContext
@@ -1822,12 +1835,12 @@ export function createAgentConversationModule({
       await configureSessionBundle(
         bundle,
         payload.model,
-        payload.thinkingLevel,
+        thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
         payload.autoCompactContext
       )
-      setStreamThinkingLevel(key, payload.thinkingLevel)
+      setStreamThinkingLevel(key, thinkingLevel)
       const { session } = bundle
       if (images.length && !session.model?.input.includes("image")) {
         throw new Error("当前模型不支持图片输入，请切换到支持识图的模型后重试。")
@@ -2004,10 +2017,11 @@ export function createAgentConversationModule({
       sessionId: payload.sessionId,
     }
     try {
+      const thinkingLevel = requirePiThinkingLevel(payload.thinkingLevel)
       const bundle = await getAgentSession(
         context,
         payload.model,
-        payload.thinkingLevel,
+        thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
         payload.autoCompactContext
@@ -2015,7 +2029,7 @@ export function createAgentConversationModule({
       await configureSessionBundle(
         bundle,
         payload.model,
-        payload.thinkingLevel,
+        thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
         payload.autoCompactContext
@@ -2046,10 +2060,11 @@ export function createAgentConversationModule({
         projectPath: payload.projectPath,
         sessionId: payload.sessionId,
       }
+      const thinkingLevel = requirePiThinkingLevel(payload.thinkingLevel)
       const bundle = await getAgentSession(
         context,
         payload.model,
-        payload.thinkingLevel,
+        thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
         payload.autoCompactContext
@@ -2057,7 +2072,7 @@ export function createAgentConversationModule({
       await configureSessionBundle(
         bundle,
         payload.model,
-        payload.thinkingLevel,
+        thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
         payload.autoCompactContext,

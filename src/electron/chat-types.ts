@@ -3,13 +3,33 @@ export type OusiaChatContext = {
   sessionId: string
 }
 
-export type OusiaThinkingLevel =
-  | "off"
-  | "minimal"
-  | "low"
-  | "medium"
-  | "high"
-  | "xhigh"
+export const OUSIA_PI_THINKING_LEVELS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+] as const
+export type OusiaPiThinkingLevel = (typeof OUSIA_PI_THINKING_LEVELS)[number]
+
+export type OusiaThinkingLevel = OusiaPiThinkingLevel
+export type OusiaCodexReasoningEffort = string
+export type OusiaReasoningEffort = OusiaPiThinkingLevel | string
+
+export function isOusiaPiThinkingLevel(
+  value: unknown
+): value is OusiaPiThinkingLevel {
+  return OUSIA_PI_THINKING_LEVELS.includes(value as OusiaPiThinkingLevel)
+}
+
+export function isOusiaCodexReasoningEffort(
+  value: unknown
+): value is OusiaCodexReasoningEffort {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+export type OusiaAgentProvider = "pi" | "codex"
 
 export const OUSIA_APPEARANCE_COLOR_SCALES = [
   "tea",
@@ -52,6 +72,8 @@ export const OUSIA_FONT_FAMILIES = [
 export type OusiaFontFamily = (typeof OUSIA_FONT_FAMILIES)[number]
 
 export type OusiaSessionRecord = {
+  agentProvider: OusiaAgentProvider
+  agentThreadId?: string
   id: string
   projectId?: string
   title: string
@@ -65,6 +87,9 @@ export type OusiaProjectRecord = {
 }
 
 export type OusiaAppSettings = {
+  defaultAgentProvider: OusiaAgentProvider
+  codexModelId: string
+  codexReasoningEffort: OusiaCodexReasoningEffort | null
   appearanceColorScale: OusiaAppearanceColorScale
   theme: OusiaThemePreference
   appFontFamily: OusiaFontFamily
@@ -79,10 +104,11 @@ export type OusiaAppSettings = {
   autoRetryOnFailure: boolean
   showContextUsage: boolean
   continueQueuedMessagesAfterInterrupt: boolean
-  thinkingLevel: OusiaThinkingLevel
+  thinkingLevel: OusiaPiThinkingLevel
   modelProvider: string
   modelId: string
   modelProviders: OusiaModelProviderConfig[]
+  disabledModelProviderIds: string[]
 }
 
 export type OusiaModelProviderConfig = {
@@ -97,7 +123,9 @@ export type OusiaAvailableModel = {
   name: string
   label: string
   input: ("text" | "image")[]
-  thinkingLevels: OusiaThinkingLevel[]
+  thinkingLevels: OusiaReasoningEffort[]
+  defaultThinkingLevel?: OusiaReasoningEffort
+  thinkingLevelDescriptions?: Record<string, string>
 }
 
 export type OusiaAvailableModelProvider = {
@@ -137,6 +165,40 @@ export type OusiaPiEnvironmentStatus = {
   modelsJsonExists: boolean
   runtime: "bundled"
 }
+
+export type OusiaCodexAccount =
+  | {
+      type: "apiKey"
+    }
+  | {
+      type: "chatgpt"
+      email?: string
+      planType?: string
+    }
+
+export type OusiaCodexEnvironmentStatus = {
+  account: OusiaCodexAccount | null
+  available: boolean
+  binaryPath?: string
+  codexHome?: string
+  defaultModelId?: string
+  error?: string
+  models: OusiaAvailableModel[]
+  requiresOpenaiAuth: boolean
+  runtime: "bundled"
+  version?: string
+}
+
+export type OusiaCodexAuthResult =
+  | {
+      ok: true
+      status: OusiaCodexEnvironmentStatus
+    }
+  | {
+      ok: false
+      error: string
+      status?: OusiaCodexEnvironmentStatus
+    }
 
 export type OusiaPiProviderCredentialPayload = {
   apiKey: string
@@ -227,10 +289,19 @@ export type OusiaAppStateShellLayoutPayload = {
 export type OusiaAppStateSelectionPayload = Partial<OusiaAppSelectionState>
 
 export type OusiaAppStateCreateSessionPayload = {
+  agentProvider?: OusiaAgentProvider
   projectId?: string
   select?: boolean
   title?: string
 }
+
+export type OusiaAppStateBindSessionAgentThreadPayload = {
+  agentThreadId: string
+  sessionId: string
+}
+
+export type OusiaAppStateBindSessionAgentThreadResult =
+  OusiaAppStateTransactionResult
 
 export type OusiaAppStateDeleteSessionPayload = {
   sessionId: string
@@ -278,6 +349,9 @@ export const OUSIA_DEFAULT_WORK_DIR = "~/Documents/Ousia"
 export const OUSIA_LEGACY_DEFAULT_WORK_DIR = "~/.ousia/chat"
 
 export const defaultOusiaAppSettings: OusiaAppSettings = {
+  defaultAgentProvider: "pi",
+  codexModelId: "",
+  codexReasoningEffort: null,
   appearanceColorScale: "paper",
   theme: "light",
   appFontFamily: "system",
@@ -296,6 +370,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   modelProvider: "deepseek",
   modelId: "deepseek-v4-flash",
   modelProviders: [],
+  disabledModelProviderIds: [],
 }
 
 export function normalizeOusiaModelProviders(
@@ -315,6 +390,22 @@ export function normalizeOusiaModelProviders(
   }
 
   return [...providers.values()]
+}
+
+export function normalizeOusiaDisabledModelProviderIds(
+  settings: Partial<OusiaAppSettings>
+): string[] {
+  const providerIds = new Set<string>()
+
+  for (const providerId of settings.disabledModelProviderIds ?? []) {
+    const id = providerId.trim()
+    if (!id || providerIds.has(id)) {
+      continue
+    }
+    providerIds.add(id)
+  }
+
+  return [...providerIds]
 }
 
 function normalizeOusiaFontFamily(
@@ -343,6 +434,18 @@ export function normalizeOusiaAppSettings(
   }
   const modelProvider =
     merged.modelProvider.trim() || defaultOusiaAppSettings.modelProvider
+  const defaultAgentProvider =
+    merged.defaultAgentProvider === "codex" ? "codex" : "pi"
+  const codexModelId =
+    typeof merged.codexModelId === "string" ? merged.codexModelId.trim() : ""
+  const codexReasoningEffort = isOusiaCodexReasoningEffort(
+    merged.codexReasoningEffort
+  )
+    ? merged.codexReasoningEffort.trim()
+    : null
+  const thinkingLevel = isOusiaPiThinkingLevel(merged.thinkingLevel)
+    ? merged.thinkingLevel
+    : defaultOusiaAppSettings.thinkingLevel
   const appearanceColorScale = OUSIA_APPEARANCE_COLOR_SCALES.includes(
     merged.appearanceColorScale
   )
@@ -385,6 +488,9 @@ export function normalizeOusiaAppSettings(
 
   return {
     ...normalizedBaseSettings,
+    defaultAgentProvider,
+    codexModelId,
+    codexReasoningEffort,
     appearanceColorScale,
     appFontFamily,
     chatFontFamily,
@@ -419,12 +525,14 @@ export function normalizeOusiaAppSettings(
       typeof merged.continueQueuedMessagesAfterInterrupt === "boolean"
         ? merged.continueQueuedMessagesAfterInterrupt
         : defaultOusiaAppSettings.continueQueuedMessagesAfterInterrupt,
+    thinkingLevel,
     modelProvider,
     modelId: merged.modelId.trim() || defaultOusiaAppSettings.modelId,
     modelProviders: normalizeOusiaModelProviders({
       ...merged,
       modelProvider,
     }),
+    disabledModelProviderIds: normalizeOusiaDisabledModelProviderIds(merged),
   }
 }
 
@@ -454,8 +562,12 @@ export function createOusiaId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export function createOusiaSession(title = "新会话"): OusiaSessionRecord {
+export function createOusiaSession(
+  title = "新会话",
+  agentProvider: OusiaAgentProvider = "pi"
+): OusiaSessionRecord {
   return {
+    agentProvider,
     id: createOusiaId("session"),
     title,
     time: new Date().toISOString(),
@@ -712,7 +824,10 @@ export type OusiaChatSendResult = {
 }
 
 export type OusiaChatGenerateTitlePayload = {
+  agentProvider: OusiaAgentProvider
   prompt: string
+  projectPath: string
+  sessionId: string
   model: OusiaModelSettings
 }
 
@@ -744,7 +859,7 @@ export type OusiaChatCompactPayload = OusiaChatContext & {
   customAgentTools?: OusiaAgentToolName[]
   autoCompactContext?: boolean
   autoRetryOnFailure?: boolean
-  thinkingLevel: OusiaThinkingLevel
+  thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
 }
 
@@ -761,7 +876,7 @@ export type OusiaChatSendPayload = OusiaChatContext & {
   customAgentTools?: OusiaAgentToolName[]
   autoCompactContext?: boolean
   autoRetryOnFailure?: boolean
-  thinkingLevel: OusiaThinkingLevel
+  thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
 }
 
@@ -812,6 +927,7 @@ export type OusiaChatBranchResult =
 export type OusiaChatMovePayload = {
   sessionId: string
   sourceProjectPath: string
+  targetProjectId?: string
   targetProjectPath: string
 }
 
@@ -834,7 +950,7 @@ export type OusiaChatExportPayload = OusiaChatContext & {
   customAgentTools?: OusiaAgentToolName[]
   autoCompactContext?: boolean
   autoRetryOnFailure?: boolean
-  thinkingLevel: OusiaThinkingLevel
+  thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
 }
 

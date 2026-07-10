@@ -8,6 +8,7 @@ match the task.
 - Product intent and scope: [docs/product-context.md](docs/product-context.md)
 - UI direction and interaction rules: [docs/design-context.md](docs/design-context.md)
 - Technical architecture: [docs/technical-architecture.md](docs/technical-architecture.md)
+- Codex provider architecture: [docs/codex-integration.md](docs/codex-integration.md)
 - Streamdown Markdown rendering: [docs/streamdown.md](docs/streamdown.md)
 - shadcn/ui local reference workflow: [docs/shadcn-reference.md](docs/shadcn-reference.md)
 - Current development state and commands: [docs/development-state.md](docs/development-state.md)
@@ -18,9 +19,15 @@ match the task.
 - The app shell is assembled from React surfaces: sidebar, chat, and settings.
 - There is no Ousia extension/runtime-extension/plugin surface in this branch.
 - The desktop runtime is Electron + Vite + React.
-- The real coding agent is Pi coding agent, hosted in Electron main process.
-- Chat requests include `projectPath` and `sessionId`; Pi sessions are isolated
-  by project/session so tool execution uses the selected project as cwd.
+- The app supports Pi and Codex coding agents, both hosted from Electron main.
+- Agent provider is immutable per session. Pi uses the Ousia session id; Codex
+  uses a separately persisted opaque thread id returned by app-server.
+- Pi thinking level and Codex reasoning effort are separate preferences. Codex
+  options, descriptions, and per-model defaults come from app-server
+  `model/list`; they are not a shared hardcoded enum.
+- Chat requests include `projectPath` and `sessionId`, but Electron main derives
+  and validates cwd from canonical app state before routing; renderer paths are
+  never an agent permission boundary.
 - Default workspace folder is user configurable and defaults to
   `~/Documents/Ousia`.
 - Runtime logs are persisted at `~/.ousia/logs/ousia-desktop.log`; check this
@@ -31,7 +38,9 @@ match the task.
 
 - App shell and current UI state: [src/App.tsx](src/App.tsx)
 - Chat UI: [src/features/chat/ChatArea.tsx](src/features/chat/ChatArea.tsx)
-- Electron main process and Pi session bridge: [src/electron/main.ts](src/electron/main.ts)
+- Electron main process and agent router: [src/electron/main.ts](src/electron/main.ts)
+- Codex app-server client: [src/electron/codex-app-server-client.ts](src/electron/codex-app-server-client.ts)
+- Codex provider adapter: [src/electron/codex-agent-provider.ts](src/electron/codex-agent-provider.ts)
 - Electron preload API: [src/electron/preload.ts](src/electron/preload.ts)
 - Renderer IPC types: [src/electron/chat-types.ts](src/electron/chat-types.ts)
 - Electron Forge config: [forge.config.cjs](forge.config.cjs)
@@ -69,12 +78,28 @@ match the task.
 - Before changing shadcn/ui primitives, compare against a local generated
   reference under ignored `ref/`; see `docs/shadcn-reference.md`.
 - When changing agent behavior, verify whether the change belongs in renderer
-  state, Electron IPC, or Pi session setup.
+  state, Electron IPC, the provider router, Pi session setup, or Codex
+  app-server adaptation.
+- Keep `@openai/codex` pinned to the version documented in
+  `docs/codex-integration.md`. Regenerate/compare app-server protocol types and
+  run packaged native-binary smoke tests before upgrading it.
+- Preserve every non-empty Codex reasoning effort returned by `model/list`,
+  including unknown future values, and validate the selected effort at the
+  provider boundary. Do not filter Codex efforts through Pi's fixed levels.
+- Never derive a Codex thread id from an Ousia session id, parse private Codex
+  rollout files, read/write Codex `auth.json`, auto-approve app-server requests,
+  or enable experimental app-server capabilities by default.
+- Never pass a renderer-supplied project path into an agent sandbox. Resolve the
+  session's canonical project/default workspace in Electron main, reject a
+  mismatched path, and forward only the canonical value.
 - Session/project indexes are owned by Electron main. Renderer must not persist
   full app-state snapshots for session or project changes; use the app-state
   transaction IPCs (`createSession`, `deleteSession`, `renameSession`,
   `moveSession`, `createProject`, etc.) and sync from the returned canonical
   state.
+- Contextual chat events for a session that no longer exists must be logged and
+  dropped; never fall them back into the currently selected chat. Running
+  sessions/projects must not be deleted until their agent turn is terminal.
 - Tool call disclosure state is renderer-local UI memory in `localStorage`
   under `ousia.chat.toolDisclosure.v1`; do not persist it into chat history.
 - Streaming chat performance depends on preserving memo boundaries: compare

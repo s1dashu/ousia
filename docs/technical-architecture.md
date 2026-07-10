@@ -7,7 +7,7 @@ Ousia extension runtime. The renderer hosts the sidebar, chat, and settings.
 
 - Electron Forge + Vite for main, preload, and renderer builds.
 - React renderer with Tailwind/shadcn UI.
-- Pi coding agent hosted in Electron main.
+- Pi coding agent and bundled Codex app-server hosted in Electron main.
 - Streamdown for assistant Markdown rendering.
 
 Removed from this branch:
@@ -47,8 +47,14 @@ Main process entrypoints:
 
 - `src/electron/main.ts`: registers IPC for app state, chat, models, project
   directory selection, window helpers, and logging.
+- `src/electron/agent-provider-router.ts`: routes generic chat IPC by the
+  canonical per-session agent provider.
 - `src/electron/agent-conversations.ts`: owns Pi session creation, model
   selection, chat streaming, history, and interrupt handling.
+- `src/electron/codex-app-server-client.ts`: owns the bundled native Codex
+  process, JSONL RPC, lifecycle, and sanitized diagnostics.
+- `src/electron/codex-agent-provider.ts`: adapts Codex threads, turns, items,
+  authentication, history, and tools to Ousia chat contracts.
 - `src/electron/app-state-store.ts`: persists shell, settings, project, session,
   and window state.
 - `src/electron/window-host.ts`: owns the BrowserWindow and window state.
@@ -69,6 +75,7 @@ Main process entrypoints:
 - `interruptChat(payload)`
 - `listModels()`
 - `checkPiEnvironment()`
+- `checkCodexEnvironment()`, `loginCodexWithChatGPT()`, and `logoutCodex()`
 - `savePiProviderCredential(payload)`
 - `removePiProviderCredential(payload)`
 - `openProjectDirectory()`
@@ -81,11 +88,17 @@ Main process entrypoints:
 
 ## Agent Sessions
 
-Each chat request includes `projectPath` and `sessionId`. Electron main expands
-the project path, and hosts the bundled Pi coding agent runtime in Electron
-main. Ousia always uses the user's local Pi agent directory as resolved by the
-Pi SDK (`~/.pi/agent`, honoring `PI_CODING_AGENT_DIR`) for model config,
-credentials, resources, and session history.
+Each chat request includes `projectPath` and `sessionId`. Electron main resolves
+the canonical session record, derives its project path from the persisted
+project/default-workspace index, rejects a mismatched renderer path, and routes
+the canonical context to the immutable Pi or Codex provider. Both providers
+execute with that canonical project as cwd; renderer input never expands an
+agent sandbox boundary.
+
+Ousia hosts the bundled Pi coding agent runtime in Electron main and uses the
+user's local Pi agent directory as resolved by the Pi SDK (`~/.pi/agent`,
+honoring `PI_CODING_AGENT_DIR`) for model config, credentials, resources, and
+session history.
 
 Ousia maps its sidebar `sessionId` to a Pi session with the same id in Pi's
 default session directory for the project cwd. If the Pi session already exists,
@@ -107,18 +120,37 @@ provider settings.
 The app no longer installs an Ousia usage skill, filters a user `ousia` skill,
 or prepends an `ousia` CLI shim to the agent environment.
 
+Codex uses the pinned bundled `codex app-server` native binary over stdio.
+Ousia persists the opaque thread id returned by Codex instead of deriving it
+from the Ousia session id or parsing private rollout files. Authentication goes
+through app-server account RPCs so Codex remains the credential owner. See
+[codex-integration.md](codex-integration.md).
+
+Codex model discovery also supplies each model's supported reasoning efforts,
+descriptions, and default effort. Those open protocol values are kept separate
+from Pi's fixed thinking levels and are validated again by the Codex provider
+before `turn/start`.
+
 ## App State
 
 App state schema version 2 stores settings, flat project/session indexes,
 expanded project ids, shell layout, selected session, and window state. Settings
 include appearance mode, Radix color scale, default workspace folder,
-send-during-run mode, thinking level, selected model, and per-provider API keys.
+send-during-run mode, default agent for new sessions, Codex model selection,
+Codex reasoning preference, Pi thinking level, selected Pi model, per-provider
+API keys, and locally disabled model provider ids. Session records persist their
+agent provider and optional Codex thread id.
 
 Electron main owns the persisted project/session index. The renderer may keep
 local UI state for responsiveness, but it persists project/session changes by
 sending transaction intents to main and then syncing from the returned canonical
 state. Renderer code must not save full app-state snapshots because stale
 snapshots can overwrite newer session/project index changes.
+
+Chat events carry their session context. The renderer routes contextual events
+only while that canonical session still exists; late events after deletion are
+logged and dropped instead of falling into the selected chat. Session/project
+deletion is disabled while any affected agent turn is running.
 
 `src/electron/app-state-store.ts` accepts the current schema only. Invalid or
 older development-state files fall back to default state because this pre-release

@@ -10,6 +10,10 @@ import { mkdirSync, statSync } from "node:fs"
 import { basename, isAbsolute, resolve } from "node:path"
 
 import { createAgentConversationModule } from "./agent-conversations.js"
+import {
+  createAgentProviderRouter,
+  resolveCanonicalAgentContext,
+} from "./agent-provider-router.js"
 import { configureOusiaAppPaths } from "./app-paths.js"
 import {
   createAppStateProject,
@@ -27,6 +31,7 @@ import {
   touchAppStateSession,
 } from "./app-state-store.js"
 import { generateChatTitleWithUtilityModel } from "./chat-title-generator.js"
+import { createCodexAgentProvider } from "./codex-agent-provider.js"
 import type {
   OusiaAppStateCreateProjectPayload,
   OusiaAppStateCreateSessionPayload,
@@ -96,9 +101,18 @@ function emitChatEvent(event: OusiaChatEvent, context?: OusiaChatContext) {
   )
 }
 
-const agentConversations = createAgentConversationModule({
+const piAgentConversations = createAgentConversationModule({
   enabledTools,
   emitChatEvent,
+})
+const codexAgentProvider = createCodexAgentProvider({
+  clientVersion: app.getVersion(),
+  emitChatEvent,
+  openExternal: (url: string) => shell.openExternal(url),
+})
+const agentConversations = createAgentProviderRouter({
+  codex: codexAgentProvider,
+  pi: piAgentConversations,
 })
 
 const windowHost = createWindowHost({
@@ -114,8 +128,26 @@ ipcMain.handle("ousia:chat:send", (_event, payload: OusiaChatSendPayload) =>
 
 ipcMain.handle(
   "ousia:chat:generate-title",
-  (_event, payload: OusiaChatGenerateTitlePayload) =>
-    generateChatTitleWithUtilityModel(payload)
+  async (_event, payload: OusiaChatGenerateTitlePayload) => {
+    const route = await resolveCanonicalAgentContext(payload)
+    if (payload.agentProvider !== route.agentProvider) {
+      writeRuntimeLog("agent.context", "warn", {
+        message: "Rejected title generation provider mismatch",
+        canonicalAgentProvider: route.agentProvider,
+        requestedAgentProvider: payload.agentProvider,
+        sessionId: payload.sessionId,
+      })
+      throw new Error(`Agent provider mismatch for session: ${payload.sessionId}`)
+    }
+    const canonicalPayload = {
+      ...payload,
+      projectPath: route.context.projectPath,
+    }
+    if (route.agentProvider === "codex") {
+      return codexAgentProvider.generateTitle(canonicalPayload)
+    }
+    return generateChatTitleWithUtilityModel(canonicalPayload)
+  }
 )
 
 ipcMain.handle("ousia:chat:history", (_event, payload: OusiaChatHistoryPayload) =>
@@ -194,6 +226,16 @@ ipcMain.handle("ousia:chat:compact", (_event, payload: OusiaChatCompactPayload) 
 ipcMain.handle("ousia:models:list", () => listPiModels())
 
 ipcMain.handle("ousia:pi:environment", () => checkPiEnvironment())
+
+ipcMain.handle("ousia:codex:environment", () =>
+  codexAgentProvider.checkEnvironment()
+)
+
+ipcMain.handle("ousia:codex:login", () =>
+  codexAgentProvider.loginWithChatGPT()
+)
+
+ipcMain.handle("ousia:codex:logout", () => codexAgentProvider.logout())
 
 ipcMain.handle(
   "ousia:pi:provider-credential",
@@ -449,6 +491,10 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit()
   }
+})
+
+app.on("before-quit", () => {
+  void codexAgentProvider.dispose()
 })
 
 app.on("activate", () => {

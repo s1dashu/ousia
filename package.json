@@ -1,15 +1,15 @@
 {
   "name": "ousia-desktop",
-  "version": "0.1.12",
-  "description": "A simplified Electron desktop client for Pi coding agent sessions.",
+  "version": "0.1.15",
+  "description": "A simplified Electron desktop client for Pi and Codex coding agent sessions.",
   "license": "MIT",
-  "homepage": "https://github.com/s1dashu/ousia-desktop#readme",
+  "homepage": "https://github.com/s1dashu/ousia#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/s1dashu/ousia-desktop.git"
+    "url": "git+https://github.com/s1dashu/ousia.git"
   },
   "bugs": {
-    "url": "https://github.com/s1dashu/ousia-desktop/issues"
+    "url": "https://github.com/s1dashu/ousia/issues"
   },
   "main": ".vite/build/main.js",
   "scripts": {
@@ -45,6 +45,7 @@
     "@earendil-works/pi-coding-agent": "^0.79.7",
     "@hugeicons/core-free-icons": "^4.2.1",
     "@hugeicons/react": "^1.1.7",
+    "@openai/codex": "0.144.0",
     "@pierre/diffs": "^1.2.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -77,6 +78,7 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^16.5.0",
     "prettier": "^3.8.4",
+    "prettier-plugin-tailwindcss": "^0.8.0",
     "shadcn": "^4.11.0",
     "tailwindcss": "^4.3.1",
     "tw-animate-css": "^1.4.0",

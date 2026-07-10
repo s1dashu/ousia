@@ -51,6 +51,7 @@ vi.mock("./runtime-logger.js", () => ({
 }))
 
 import {
+  bindAppStateSessionAgentThread,
   createAppStateProject,
   createAppStateSession,
   deleteAppStateProject,
@@ -102,6 +103,10 @@ describe("app state store", () => {
 
     expect(state.schemaVersion).toBe(2)
     expect(state.sessions).toHaveLength(1)
+    expect(state.sessions[0].agentProvider).toBe("pi")
+    expect(state.settings.defaultAgentProvider).toBe("pi")
+    expect(state.settings.codexModelId).toBe("")
+    expect(state.settings.codexReasoningEffort).toBeNull()
     expect(state.selectedSessionId).toBe(state.sessions[0].id)
     expect(state.settings.autoRetryOnFailure).toBe(true)
     expect(readStoredState().selectedSessionId).toBe(state.selectedSessionId)
@@ -196,6 +201,7 @@ describe("app state store", () => {
     ])
     expect(state.sessions).toEqual([
       {
+        agentProvider: "pi",
         id: "session-valid",
         projectId: "project-valid",
         time: "2026-07-07T00:00:00.000Z",
@@ -257,6 +263,7 @@ describe("app state store", () => {
     expect(state.expandedProjectIds).toEqual([])
     expect(state.sessions).toEqual([
       {
+        agentProvider: "pi",
         id: "session-default",
         time: "2026-07-07T00:00:00.000Z",
         title: "Default workdir session",
@@ -412,6 +419,237 @@ describe("app state store", () => {
     expect(titles).toEqual(
       expect.arrayContaining(["First queued write", "Second queued write"])
     )
+  })
+
+  it("normalizes persisted session providers and opaque Codex thread ids", async () => {
+    writeFileSync(
+      appStateFilePath(),
+      JSON.stringify({
+        expandedProjectIds: [],
+        projects: [],
+        schemaVersion: 2,
+        selectedSessionId: "session-codex",
+        sessions: [
+          {
+            agentProvider: "codex",
+            agentThreadId: "  opaque-thread-id  ",
+            id: "session-codex",
+            time: "2026-07-07T00:00:00.000Z",
+            title: "Codex",
+          },
+          {
+            agentProvider: "pi",
+            agentThreadId: "must-be-removed",
+            id: "session-pi",
+            time: "2026-07-07T00:00:00.000Z",
+            title: "Pi",
+          },
+          {
+            agentProvider: "codex",
+            agentThreadId: "   ",
+            id: "session-empty-thread",
+            time: "2026-07-07T00:00:00.000Z",
+            title: "Codex without thread",
+          },
+        ],
+        settings: {
+          defaultWorkDir: "/tmp/custom-workdir",
+        },
+      }),
+      "utf8"
+    )
+
+    const state = await loadAppState()
+
+    expect(state.sessions).toEqual([
+      {
+        agentProvider: "codex",
+        agentThreadId: "  opaque-thread-id  ",
+        id: "session-codex",
+        time: "2026-07-07T00:00:00.000Z",
+        title: "Codex",
+      },
+      {
+        agentProvider: "pi",
+        id: "session-pi",
+        time: "2026-07-07T00:00:00.000Z",
+        title: "Pi",
+      },
+      {
+        agentProvider: "codex",
+        id: "session-empty-thread",
+        time: "2026-07-07T00:00:00.000Z",
+        title: "Codex without thread",
+      },
+    ])
+  })
+
+  it("uses the canonical default agent provider for new sessions", async () => {
+    const initialState = await loadAppState()
+    const settingsResult = await saveAppStateSettings({
+      settings: {
+        ...initialState.settings,
+        codexModelId: "",
+        codexReasoningEffort: "ultra",
+        defaultAgentProvider: "codex",
+      },
+    })
+    expect(settingsResult.ok).toBe(true)
+    if (!settingsResult.ok) {
+      return
+    }
+    expect(settingsResult.state.settings.codexReasoningEffort).toBe("ultra")
+
+    const defaultProviderSession = await createAppStateSession({
+      title: "Default Codex",
+    })
+    const explicitPiSession = await createAppStateSession({
+      agentProvider: "pi",
+      title: "Explicit Pi",
+    })
+    const projectResult = await createAppStateProject({
+      path: "/tmp/codex-project",
+      sessionTitle: "Project Codex",
+    })
+
+    expect(defaultProviderSession).toMatchObject({
+      ok: true,
+      session: { agentProvider: "codex" },
+    })
+    expect(explicitPiSession).toMatchObject({
+      ok: true,
+      session: { agentProvider: "pi" },
+    })
+    expect(projectResult).toMatchObject({
+      ok: true,
+      session: { agentProvider: "codex" },
+    })
+  })
+
+  it("atomically binds a Codex thread and rejects rebinding", async () => {
+    const created = await createAppStateSession({
+      agentProvider: "codex",
+      title: "Codex",
+    })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      return
+    }
+    const session = expectDefined(created.session)
+
+    const [first, conflicting] = await Promise.all([
+      bindAppStateSessionAgentThread({
+        agentThreadId: "thread-first",
+        sessionId: session.id,
+      }),
+      bindAppStateSessionAgentThread({
+        agentThreadId: "thread-conflicting",
+        sessionId: session.id,
+      }),
+    ])
+
+    expect(first).toMatchObject({
+      ok: true,
+      session: { agentThreadId: "thread-first" },
+    })
+    expect(conflicting).toMatchObject({
+      error: expect.stringContaining("already bound"),
+      ok: false,
+    })
+    await expect(
+      bindAppStateSessionAgentThread({
+        agentThreadId: "thread-first",
+        sessionId: session.id,
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      session: { agentThreadId: "thread-first" },
+    })
+  })
+
+  it("preserves Codex bindings across session transactions", async () => {
+    const projectResult = await createAppStateProject({
+      path: "/tmp/provider-preservation",
+      selectOrCreateSession: false,
+    })
+    expect(projectResult.ok).toBe(true)
+    if (!projectResult.ok) {
+      return
+    }
+    const project = expectDefined(projectResult.project)
+    const created = await createAppStateSession({
+      agentProvider: "codex",
+      projectId: project.id,
+      title: "Bound Codex",
+    })
+    expect(created.ok).toBe(true)
+    if (!created.ok) {
+      return
+    }
+    const session = expectDefined(created.session)
+    const bound = await bindAppStateSessionAgentThread({
+      agentThreadId: "thread-preserved",
+      sessionId: session.id,
+    })
+    expect(bound.ok).toBe(true)
+
+    await renameAppStateSession({
+      sessionId: session.id,
+      title: "Renamed Codex",
+    })
+    await touchAppStateSession({
+      sessionId: session.id,
+      time: "2026-07-08T00:00:00.000Z",
+    })
+    const moved = await moveAppStateSession({ sessionId: session.id })
+    expect(moved.ok).toBe(true)
+    if (!moved.ok) {
+      return
+    }
+    const defaultSession = expectDefined(
+      moved.state.sessions.find(
+        (candidate) => candidate.id !== session.id && !candidate.projectId
+      )
+    )
+    const reordered = await reorderAppStateSessions({
+      sourceSessionId: session.id,
+      targetSessionId: defaultSession.id,
+    })
+    expect(reordered.ok).toBe(true)
+    if (!reordered.ok) {
+      return
+    }
+
+    expect(
+      reordered.state.sessions.find((candidate) => candidate.id === session.id)
+    ).toMatchObject({
+      agentProvider: "codex",
+      agentThreadId: "thread-preserved",
+      time: "2026-07-08T00:00:00.000Z",
+      title: "Renamed Codex",
+    })
+  })
+
+  it("rejects Codex thread bindings for Pi and invalid sessions", async () => {
+    const state = await loadAppState()
+    await expect(
+      bindAppStateSessionAgentThread({
+        agentThreadId: "thread-pi",
+        sessionId: state.selectedSessionId,
+      })
+    ).resolves.toMatchObject({
+      error: expect.stringContaining("pi session"),
+      ok: false,
+    })
+    await expect(
+      bindAppStateSessionAgentThread({
+        agentThreadId: "thread-missing",
+        sessionId: "missing-session",
+      })
+    ).resolves.toMatchObject({
+      error: "Unknown session: missing-session",
+      ok: false,
+    })
   })
 
   it("creates projects with a selected project session", async () => {

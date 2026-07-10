@@ -35,6 +35,8 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaCodexAuthResult,
+  OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
   OusiaModelRegistryResult,
   OusiaOpenDirectoryPayload,
@@ -203,6 +205,15 @@ const api = {
   },
   checkPiEnvironment(): Promise<OusiaPiEnvironmentStatus> {
     return ipcRenderer.invoke("ousia:pi:environment")
+  },
+  checkCodexEnvironment(): Promise<OusiaCodexEnvironmentStatus> {
+    return ipcRenderer.invoke("ousia:codex:environment")
+  },
+  loginCodexWithChatGPT(): Promise<OusiaCodexAuthResult> {
+    return ipcRenderer.invoke("ousia:codex:login")
+  },
+  logoutCodex(): Promise<OusiaCodexAuthResult> {
+    return ipcRenderer.invoke("ousia:codex:logout")
   },
   savePiProviderCredential(
     payload: OusiaPiProviderCredentialPayload

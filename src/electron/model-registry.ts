@@ -3,12 +3,13 @@ import { getSupportedThinkingLevels } from "@earendil-works/pi-ai"
 import { ModelRegistry } from "@earendil-works/pi-coding-agent"
 import { join } from "node:path"
 
-import type {
-  OusiaAvailableModel,
-  OusiaConfiguredModelProvider,
-  OusiaModelRegistryResult,
-  OusiaModelProviderAuthSource,
-  OusiaThinkingLevel,
+import {
+  isOusiaPiThinkingLevel,
+  type OusiaAvailableModel,
+  type OusiaConfiguredModelProvider,
+  type OusiaModelRegistryResult,
+  type OusiaModelProviderAuthSource,
+  type OusiaThinkingLevel,
 } from "./chat-types.js"
 import { isDeprecatedProviderModelId } from "./model-compat.js"
 import {
@@ -18,10 +19,7 @@ import {
 import { getVercelAiGatewayModelIds } from "./vercel-ai-gateway-models.js"
 
 function toOusiaThinkingLevels(levels: string[]): OusiaThinkingLevel[] {
-  const allowed = new Set(["off", "minimal", "low", "medium", "high", "xhigh"])
-  return levels.filter((level): level is OusiaThinkingLevel =>
-    allowed.has(level)
-  )
+  return levels.filter(isOusiaPiThinkingLevel)
 }
 
 function toOusiaAuthSource(

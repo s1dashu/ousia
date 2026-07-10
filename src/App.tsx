@@ -22,16 +22,22 @@ import {
   type SessionRecord,
 } from "@/app/app-state"
 import {
+  chatKey,
+  findWorkingChatSession,
+  resolveChatEventTarget,
+} from "@/app/chat-event-routing"
+import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
   resolveOusiaFontFamilyValue,
   type OusiaAppStateTransactionResult,
   type OusiaChatEvent,
+  type OusiaCodexEnvironmentStatus,
   type OusiaModelRegistryResult,
   type OusiaSidebarSectionId,
 } from "@/electron/chat-types"
 import { getMessages, isDefaultSessionTitle } from "@/app/i18n"
-import { modelsForProvider } from "@/app/model-presets"
+import { getConfiguredModelPresets } from "@/app/model-presets"
 import { ChatArea } from "@/features/chat/ChatArea"
 import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
 import { SettingsPage } from "@/features/settings/SettingsPage"
@@ -79,10 +85,6 @@ type TextDeltaChatEvent = Extract<
 >
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
-}
-
-function chatKey(projectPath: string, sessionId: string) {
-  return `${projectPath}::${sessionId}`
 }
 
 function projectPathForAppStateSession(
@@ -363,6 +365,8 @@ export function App() {
   const t = getMessages(settings.language)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [modelRegistry, setModelRegistry] = useState<OusiaModelRegistryResult>()
+  const [codexEnvironment, setCodexEnvironment] =
+    useState<OusiaCodexEnvironmentStatus>()
   const [projects, setProjects] = useState<ProjectRecord[]>(
     initialState.projects
   )
@@ -372,6 +376,7 @@ export function App() {
   const [sessions, setSessions] = useState<SessionRecord[]>(
     initialState.sessions
   )
+  const sessionsRef = useRef(sessions)
   const [selectedSessionId, setSelectedSessionId] = useState(
     initialState.selectedSessionId
   )
@@ -430,6 +435,7 @@ export function App() {
       }
       setProjects(state.projects)
       setExpandedProjectIds(state.expandedProjectIds)
+      sessionsRef.current = state.sessions
       setSessions(state.sessions)
       setSelectedSessionId(state.selectedSessionId)
     },
@@ -471,6 +477,9 @@ export function App() {
   )
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? sessions[0]
+  const hasCodexSessions = sessions.some(
+    (session) => session.agentProvider === "codex"
+  )
   const selectedSessionIdForHistory = selectedSession?.id
   const selectedProject = selectedSession?.projectId
     ? projects.find((project) => project.id === selectedSession.projectId)
@@ -488,7 +497,6 @@ export function App() {
     currentProject && selectedSession
       ? chatKey(selectedProjectPath, selectedSession.id)
       : ""
-  const sessionsRef = useRef(sessions)
   const selectedChatKeyRef = useRef(selectedChatKey)
   const selectedSessionIdRef = useRef(selectedSessionId)
   const isSettingsOpenRef = useRef(isSettingsOpen)
@@ -597,6 +605,14 @@ export function App() {
     setModelRegistry(registry)
     return registry
   }, [])
+  const refreshCodexEnvironment = useCallback(async () => {
+    if (!window.ousia) {
+      return undefined
+    }
+    const status = await window.ousia.checkCodexEnvironment()
+    setCodexEnvironment(status)
+    return status
+  }, [])
   const flushPendingChatEvents = useCallback(() => {
     pendingChatEventsFrameRef.current = 0
     const pendingEvents = pendingChatEventsRef.current
@@ -673,19 +689,46 @@ export function App() {
   }, [isAppStateLoaded, refreshModelRegistry])
 
   useEffect(() => {
+    if (
+      !isAppStateLoaded ||
+      (settings.defaultAgentProvider !== "codex" && !hasCodexSessions)
+    ) {
+      return
+    }
+    void refreshCodexEnvironment()
+  }, [
+    isAppStateLoaded,
+    refreshCodexEnvironment,
+    hasCodexSessions,
+    settings.defaultAgentProvider,
+  ])
+
+  useEffect(() => {
     if (!modelRegistry) {
       return
     }
-    const providerModels = modelsForProvider(modelRegistry, settings.modelProvider)
-    if (!providerModels.length) {
+    const configuredModelPresets = getConfiguredModelPresets(
+      settings.modelProviders,
+      modelRegistry,
+      settings.disabledModelProviderIds
+    )
+    if (
+      configuredModelPresets.some(
+        (model) =>
+          model.provider === settings.modelProvider &&
+          model.modelId === settings.modelId
+      )
+    ) {
       return
     }
-    if (providerModels.some((model) => model.modelId === settings.modelId)) {
+    const nextModel = configuredModelPresets[0]
+    if (!nextModel) {
       return
     }
     const nextSettings = normalizeOusiaAppSettings({
       ...settings,
-      modelId: providerModels[0].modelId,
+      modelProvider: nextModel.provider,
+      modelId: nextModel.modelId,
     })
     queueMicrotask(() => handleSettingsChange(nextSettings))
   }, [handleSettingsChange, modelRegistry, settings])
@@ -867,6 +910,7 @@ export function App() {
   useEffect(() => {
     if (
       !window.ousia ||
+      !isAppStateLoaded ||
       !selectedSessionIdForHistory ||
       !selectedChatKey
     ) {
@@ -935,6 +979,7 @@ export function App() {
         })
     })
   }, [
+    isAppStateLoaded,
     selectedProjectPath,
     selectedChatKey,
     selectedHistoryPageState?.status,
@@ -944,16 +989,28 @@ export function App() {
 
   useEffect(() => {
     return window.ousia?.onChatEvent((event) => {
-      const targetSession = sessionsRef.current.find(
-        (session) => session.id === event.context?.sessionId
+      const target = resolveChatEventTarget(
+        sessionsRef.current,
+        event.context,
+        selectedChatKeyRef.current
       )
-      const targetKey =
-        targetSession && event.context
-          ? chatKey(event.context.projectPath, targetSession.id)
-          : selectedChatKeyRef.current
-      if (!targetKey) {
+      if (target.kind === "drop") {
+        if (target.reason === "unknown-context-session") {
+          console.warn(
+            `[chat.event] Dropped event for an unknown session: ${JSON.stringify(
+              {
+                eventType: event.type,
+                projectPath: target.context.projectPath,
+                sessionId: target.context.sessionId,
+              }
+            )}`
+          )
+        }
         return
       }
+      const targetKey = target.targetKey
+      const targetSession =
+        target.kind === "context" ? target.session : undefined
       if (event.type === "user_message") {
         draftSessionKeysRef.current.delete(targetKey)
         setHistoryPageStateBySession((current) => {
@@ -1303,6 +1360,7 @@ export function App() {
   async function handleCreateSession() {
     if (window.ousia) {
       const result = await window.ousia.createSession({
+        agentProvider: settings.defaultAgentProvider,
         title: t.app.newSession,
       })
       if (!result.ok) {
@@ -1333,7 +1391,10 @@ export function App() {
       return
     }
 
-    const session = createSession(t.app.newSession)
+    const session = createSession(
+      t.app.newSession,
+      settings.defaultAgentProvider
+    )
     const targetKey = chatKey(settings.defaultWorkDir, session.id)
     draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
@@ -1358,6 +1419,7 @@ export function App() {
   ) {
     if (window.ousia) {
       const result = await window.ousia.createSession({
+        agentProvider: settings.defaultAgentProvider,
         projectId,
         title: t.app.newSession,
       })
@@ -1388,7 +1450,10 @@ export function App() {
       return
     }
 
-    const session = { ...createSession(t.app.newSession), projectId }
+    const session = {
+      ...createSession(t.app.newSession, settings.defaultAgentProvider),
+      projectId,
+    }
     const projectPath =
       explicitProjectPath ??
       projects.find((project) => project.id === projectId)?.path ??
@@ -1430,6 +1495,22 @@ export function App() {
   async function handleDeleteProject(projectId: string) {
     const project = projects.find((item) => item.id === projectId)
     if (!project) {
+      return
+    }
+    const projectSessions = sessionsRef.current.filter(
+      (session) => session.projectId === projectId
+    )
+    const workingSession = findWorkingChatSession(
+      projectSessions,
+      project.path,
+      runStatusBySessionRef.current
+    )
+    if (workingSession) {
+      console.warn(
+        `[app-state.delete] Blocked project deletion because a session is running: ${JSON.stringify(
+          { projectId, sessionId: workingSession.id }
+        )}`
+      )
       return
     }
 
@@ -1482,16 +1563,15 @@ export function App() {
     }
 
     const remaining = projects.filter((item) => item.id !== projectId)
-    const removedSessions = sessions.filter(
-      (session) => session.projectId === projectId
-    )
-    const remainingSessions = sessions.filter(
+    const removedSessions = projectSessions
+    const remainingSessions = sessionsRef.current.filter(
       (session) => session.projectId !== projectId
     )
     setProjects(remaining)
     setExpandedProjectIds((current) =>
       current.filter((item) => item !== projectId)
     )
+    sessionsRef.current = remainingSessions
     setSessions(remainingSessions)
     setItemsBySession((current) => {
       const next = { ...current }
@@ -1542,6 +1622,7 @@ export function App() {
 
   function handleOpenSettings() {
     setIsSettingsOpen(true)
+    void refreshCodexEnvironment()
   }
 
   async function handleRenameSession(sessionId: string, title: string) {
@@ -1624,6 +1705,7 @@ export function App() {
       const result = await window.ousia.moveChatSession({
         sessionId,
         sourceProjectPath,
+        targetProjectId,
         targetProjectPath,
       })
       if (!result.ok) {
@@ -1704,13 +1786,28 @@ export function App() {
     if (!window.ousia || titleGenerationSessionIdsRef.current.has(sessionId)) {
       return
     }
+    const session = sessionsRef.current.find(
+      (candidate) => candidate.id === sessionId
+    )
+    if (!session) {
+      return
+    }
     titleGenerationSessionIdsRef.current.add(sessionId)
     void window.ousia
       .generateChatTitle({
+        agentProvider: session.agentProvider,
         prompt: firstPrompt,
+        projectPath: projectPathForSession(session),
+        sessionId,
         model: {
-          provider: settings.modelProvider,
-          modelId: settings.modelId,
+          provider:
+            session.agentProvider === "codex"
+              ? "openai"
+              : settings.modelProvider,
+          modelId:
+            session.agentProvider === "codex"
+              ? settings.codexModelId
+              : settings.modelId,
         },
       })
       .then((result) => {
@@ -1760,7 +1857,7 @@ export function App() {
     const titleSuffix = settings.language === "zh" ? "分支" : "Fork"
     const branchTitle = `${selectedSession.title} · ${titleSuffix}`
     let branchSession = {
-      ...createSession(branchTitle),
+      ...createSession(branchTitle, selectedSession.agentProvider),
       projectId: selectedSession.projectId,
       time: now,
     }
@@ -1781,6 +1878,7 @@ export function App() {
     let resolvedBranchItems = branchItems
     if (window.ousia) {
       const createResult = await window.ousia.createSession({
+        agentProvider: selectedSession.agentProvider,
         projectId: selectedSession.projectId,
         select: false,
         title: branchTitle,
@@ -1857,11 +1955,19 @@ export function App() {
   }
 
   async function handleDeleteSession(sessionId: string) {
-    const session = sessions.find((item) => item.id === sessionId)
+    const session = sessionsRef.current.find((item) => item.id === sessionId)
     if (!session) {
       return
     }
     const targetKey = chatKey(projectPathForSession(session), sessionId)
+    if (runStatusBySessionRef.current[targetKey] === "working") {
+      console.warn(
+        `[app-state.delete] Blocked running session deletion: ${JSON.stringify({
+          sessionId,
+        })}`
+      )
+      return
+    }
 
     if (window.ousia) {
       const result = await window.ousia.deleteSession({ sessionId })
@@ -1897,7 +2003,10 @@ export function App() {
       return
     }
 
-    const remaining = sessions.filter((item) => item.id !== sessionId)
+    const remaining = sessionsRef.current.filter(
+      (item) => item.id !== sessionId
+    )
+    sessionsRef.current = remaining
     setSessions(remaining)
     setItemsBySession((current) => {
       const next = { ...current }
@@ -2119,16 +2228,19 @@ export function App() {
         <div className="flex h-full min-w-0 overflow-visible">
           {isSettingsOpen ? (
             <SettingsPage
+              codexEnvironment={codexEnvironment}
               isSidebarCollapsed={isSidebarCollapsed}
               isWindowFullscreen={isWindowFullscreen}
               modelRegistry={modelRegistry}
               settings={settings}
               onClose={() => setIsSettingsOpen(false)}
               onRefreshModelRegistry={refreshModelRegistry}
+              onRefreshCodexEnvironment={refreshCodexEnvironment}
               onSettingsChange={handleSettingsChange}
             />
           ) : (
             <ChatArea
+              codexEnvironment={codexEnvironment}
               currentProject={selectedSession ? currentProject : undefined}
               currentSession={selectedSession}
               items={selectedItems}

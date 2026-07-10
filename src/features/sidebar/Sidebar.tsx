@@ -53,12 +53,13 @@ const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
 const sidebarScrollPaddingXClass = "px-0"
 const sidebarFooterPaddingXClass = "px-[7px]"
 const sidebarRowFrameXClass = "-ml-1 w-full"
-const sidebarRowXClass = `${sidebarRowFrameXClass} px-3`
-const sidebarSessionRowXClass = `${sidebarRowFrameXClass} px-3`
+const sidebarRowContentXClass = "pl-3 pr-2"
+const sidebarRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
+const sidebarSessionRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
 const sidebarSessionDragPreviewXClass = "px-3"
-const sidebarProjectRowXClass = `${sidebarRowFrameXClass} px-3`
+const sidebarProjectRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
 const sidebarListGapClass = "flex flex-col gap-0.5"
-const sidebarSectionHeaderXClass = `${sidebarRowFrameXClass} px-3`
+const sidebarSectionHeaderXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
 const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
@@ -145,6 +146,7 @@ type SortableSessionRowProps = {
 
 type SortableProjectSectionProps = {
   children: React.ReactNode
+  hasWorkingSession: boolean
   isExpanded: boolean
   onCreateProjectSession: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
@@ -166,6 +168,25 @@ type SortableSidebarSectionProps = {
 
 function handleTextButtonMouseDown(event: MouseEvent<HTMLButtonElement>) {
   event.preventDefault()
+}
+
+function SidebarRunningIndicator({
+  label,
+  title,
+}: {
+  label: string
+  title: string
+}) {
+  return (
+    <div
+      className="pointer-events-none flex size-6 items-center justify-center justify-self-end"
+      aria-label={label}
+      role="status"
+      title={title}
+    >
+      <span className="size-3.5 animate-spin rounded-full border-2 border-sidebar-accent-foreground/20 border-t-sidebar-accent-foreground motion-reduce:animate-none" />
+    </div>
+  )
 }
 
 function getSortableData(value: unknown): SidebarSortableData | null {
@@ -389,50 +410,50 @@ function SortableSessionRow({
       )}
       <div className="relative size-6 justify-self-end">
         {isSessionWorking ? (
-          <div
-            className={[
-              "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
-              "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
-            ].join(" ")}
-            aria-label={`${session.title} ${t.sidebar.running}`}
+          <SidebarRunningIndicator
+            label={`${session.title} ${t.sidebar.running}`}
             title={t.sidebar.running}
-          >
-            <span className="size-3.5 animate-spin rounded-full border-2 border-sidebar-accent-foreground/20 border-t-sidebar-accent-foreground" />
-          </div>
-        ) : sessionHasUnreadCompletion ? (
-          <div
-            className={[
-              "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
-              "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
-            ].join(" ")}
-            aria-hidden="true"
-          >
-            <span className={`size-2 rounded-full ${sidebarCompletionAccentClass}`} />
-          </div>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={[
-            "absolute inset-0",
-            sidebarActionButtonClass,
-            sidebarGhostActionClass,
-            "opacity-0 transition-opacity group-hover/session:opacity-100 group-focus-within/session:opacity-100",
-          ].join(" ")}
-          aria-label={t.sidebar.deleteSession(session.title)}
-          onClick={(event) => {
-            event.stopPropagation()
-            onDeleteSession(session.id)
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <Trash2
-            className="text-sidebar-accent-foreground"
-            size={sidebarMenuIconSize}
-            strokeWidth={sidebarIconStrokeWidth}
           />
-        </Button>
+        ) : (
+          <>
+            {sessionHasUnreadCompletion ? (
+              <div
+                className={[
+                  "pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity",
+                  "group-hover/session:opacity-0 group-focus-within/session:opacity-0",
+                ].join(" ")}
+                aria-hidden="true"
+              >
+                <span
+                  className={`size-2 rounded-full ${sidebarCompletionAccentClass}`}
+                />
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={[
+                "absolute inset-0",
+                sidebarActionButtonClass,
+                sidebarGhostActionClass,
+                "opacity-0 transition-opacity group-hover/session:opacity-100 group-focus-within/session:opacity-100",
+              ].join(" ")}
+              aria-label={t.sidebar.deleteSession(session.title)}
+              onClick={(event) => {
+                event.stopPropagation()
+                onDeleteSession(session.id)
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <Trash2
+                className="text-sidebar-accent-foreground"
+                size={sidebarMenuIconSize}
+                strokeWidth={sidebarIconStrokeWidth}
+              />
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -440,6 +461,7 @@ function SortableSessionRow({
 
 function SortableProjectSection({
   children,
+  hasWorkingSession,
   isExpanded,
   onCreateProjectSession,
   onDeleteProject,
@@ -502,24 +524,31 @@ function SortableProjectSection({
         >
           <span className="block min-w-0 flex-1 truncate">{project.name}</span>
         </button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
-          aria-label={t.sidebar.removeProject(project.name)}
-          onClick={(event) => {
-            event.stopPropagation()
-            onDeleteProject(project.id)
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <Trash2
-            className="text-sidebar-accent-foreground"
-            size={sidebarMenuIconSize}
-            strokeWidth={sidebarIconStrokeWidth}
+        {hasWorkingSession ? (
+          <SidebarRunningIndicator
+            label={`${project.name} ${t.sidebar.running}`}
+            title={t.sidebar.running}
           />
-        </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
+            aria-label={t.sidebar.removeProject(project.name)}
+            onClick={(event) => {
+              event.stopPropagation()
+              onDeleteProject(project.id)
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <Trash2
+              className="text-sidebar-accent-foreground"
+              size={sidebarMenuIconSize}
+              strokeWidth={sidebarIconStrokeWidth}
+            />
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"
@@ -1003,6 +1032,9 @@ export function Sidebar({
               return (
                 <SortableProjectSection
                   key={project.id}
+                  hasWorkingSession={projectSessions.some(
+                    (session) => sessionRunStatusById[session.id] === "working"
+                  )}
                   isExpanded={isExpanded}
                   onCreateProjectSession={onCreateProjectSession}
                   onDeleteProject={onDeleteProject}

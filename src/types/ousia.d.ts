@@ -35,6 +35,8 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaCodexAuthResult,
+  OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
   OusiaModelRegistryResult,
   OusiaOpenDirectoryPayload,
@@ -125,6 +127,9 @@ declare global {
       ): Promise<OusiaChatCompactResult>
       listModels(): Promise<OusiaModelRegistryResult>
       checkPiEnvironment(): Promise<OusiaPiEnvironmentStatus>
+      checkCodexEnvironment(): Promise<OusiaCodexEnvironmentStatus>
+      loginCodexWithChatGPT(): Promise<OusiaCodexAuthResult>
+      logoutCodex(): Promise<OusiaCodexAuthResult>
       savePiProviderCredential(
         payload: OusiaPiProviderCredentialPayload
       ): Promise<OusiaPiProviderCredentialResult>

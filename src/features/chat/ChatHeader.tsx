@@ -79,10 +79,15 @@ export function ChatHeader({
               : "pl-[var(--ousia-titlebar-sidebar-offset)]")
         )}
       >
-        <div className="window-drag flex min-w-0 flex-1 items-center self-stretch pl-2">
+        <div className="window-drag flex min-w-0 flex-1 items-center gap-2 self-stretch pl-2">
           <h1 className="window-drag truncate text-sm leading-none font-normal">
             {currentSession?.title ?? t.app.newSession}
           </h1>
+          {currentSession ? (
+            <span className="window-drag shrink-0 rounded-md bg-muted/55 px-1.5 py-0.5 text-[10px] leading-4 font-medium text-muted-foreground">
+              {currentSession.agentProvider === "codex" ? "Codex" : "Pi"}
+            </span>
+          ) : null}
         </div>
       </div>
       <div className="window-drag relative z-10 flex shrink-0 items-center justify-end gap-1">

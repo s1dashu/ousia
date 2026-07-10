@@ -1,17 +1,13 @@
-import type {
-  OusiaAvailableModel,
-  OusiaModelProviderConfig,
-  OusiaModelRegistryResult,
-  OusiaThinkingLevel,
+import {
+  OUSIA_PI_THINKING_LEVELS,
+  type OusiaAvailableModel,
+  type OusiaModelProviderConfig,
+  type OusiaModelRegistryResult,
+  type OusiaThinkingLevel,
 } from "@/electron/chat-types"
 
 export const piThinkingLevels: OusiaThinkingLevel[] = [
-  "off",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
+  ...OUSIA_PI_THINKING_LEVELS,
 ]
 
 export function modelPresetValue(provider: string, modelId: string) {
@@ -34,13 +30,19 @@ export function providerLabel(
   )
 }
 
+function disabledProviderIdSet(disabledProviderIds: string[] = []) {
+  return new Set(disabledProviderIds.map((id) => id.trim()).filter(Boolean))
+}
+
 export function getConfiguredModelPresets(
   providers: OusiaModelProviderConfig[],
-  registry: OusiaModelRegistryResult | undefined
+  registry: OusiaModelRegistryResult | undefined,
+  disabledProviderIds: string[] = []
 ) {
   const configuredProviderIds = new Set(
     providers.map((provider) => provider.id.trim()).filter(Boolean)
   )
+  const disabledIds = disabledProviderIdSet(disabledProviderIds)
   for (const providerId of registry?.configuredProviderIds ?? []) {
     const id = providerId.trim()
     if (id) {
@@ -50,7 +52,11 @@ export function getConfiguredModelPresets(
 
   return (
     registry?.providers
-      .filter((provider) => configuredProviderIds.has(provider.id))
+      .filter(
+        (provider) =>
+          configuredProviderIds.has(provider.id) &&
+          !disabledIds.has(provider.id)
+      )
       .flatMap((provider) => provider.models) ?? []
   )
 }
@@ -67,7 +73,11 @@ export function findRegistryModel(
 
 export function modelsForProvider(
   registry: OusiaModelRegistryResult | undefined,
-  provider: string
+  provider: string,
+  disabledProviderIds: string[] = []
 ) {
+  if (disabledProviderIdSet(disabledProviderIds).has(provider)) {
+    return []
+  }
   return registry?.providers.find((item) => item.id === provider)?.models ?? []
 }

@@ -90,6 +90,7 @@ module.exports = {
         "/package.json",
         "/node_modules",
         "/node_modules/@earendil-works",
+        "/node_modules/@openai",
         piCodingAgentPackagePath,
         `${piCodingAgentPackagePath}/CHANGELOG.md`,
         `${piCodingAgentPackagePath}/README.md`,
@@ -97,6 +98,7 @@ module.exports = {
       ]
       const includedSubtrees = [
         "/.vite",
+        "/node_modules/@openai",
         `${piCodingAgentPackagePath}/dist`,
         `${piCodingAgentPackagePath}/docs`,
         `${piCodingAgentPackagePath}/examples`,

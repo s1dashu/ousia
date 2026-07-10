@@ -71,6 +71,16 @@ describe("model preset helpers", () => {
     ).toEqual(["deepseek-v4", "gpt-5"])
   })
 
+  it("filters disabled providers from configured presets", () => {
+    expect(
+      getConfiguredModelPresets(
+        [{ id: " deepseek ", apiKey: "" }],
+        registry,
+        ["openai", "missing"]
+      ).map((model) => model.modelId)
+    ).toEqual(["deepseek-v4"])
+  })
+
   it("finds models by provider and model id", () => {
     expect(findRegistryModel(registry, "openai", "gpt-5")).toBe(
       registry.providers[1].models[0]
@@ -82,6 +92,7 @@ describe("model preset helpers", () => {
     expect(modelsForProvider(registry, "deepseek")).toEqual(
       registry.providers[0].models
     )
+    expect(modelsForProvider(registry, "deepseek", ["deepseek"])).toEqual([])
     expect(modelsForProvider(registry, "missing")).toEqual([])
   })
 })

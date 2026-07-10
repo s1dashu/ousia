@@ -46,6 +46,7 @@ desktop agent client:
 
 - Sidebar for sessions/projects/settings.
 - Chat as the primary agent surface.
+- Per-session Pi or Codex agent runtime; the default only affects new sessions.
 - No right-side workspace panel, workspace tab strip, extension picker, runtime
   extension watcher, browser host, editor/PDF host, or extension state store.
 - No `ousia extension ...` CLI bridge.
@@ -57,8 +58,11 @@ desktop agent client:
 - Chat history rendering with Streamdown.
 - File and image attachments in chat input.
 - Appearance mode and Radix color-scale settings.
-- Model provider API key settings.
-- Model and thinking-level controls in the chat input.
+- Model provider API key settings, including local provider disable/hide state.
+- Model and reasoning controls in the chat input. Pi uses its fixed thinking
+  levels; Codex renders each model's app-server-provided efforts and default.
+- Bundled Codex app-server authentication, model discovery, streaming,
+  history, branch, compact, interrupt, and export adaptation.
 - Settings UI isolated in `src/features/settings/SettingsPage.tsx`.
 - Sortable top-level sidebar sections: `会话` and `项目`.
 

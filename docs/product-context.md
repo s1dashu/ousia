@@ -12,10 +12,12 @@ extension actions have been removed.
 In scope:
 
 - Project and session navigation in the left sidebar.
-- Agent chat backed by Pi coding agent in Electron main.
+- Agent chat backed by a per-session Pi or Codex agent in Electron main.
 - Project/session isolated cwd for agent work.
-- User settings for appearance mode, Radix color scale, model provider API
-  keys, model, thinking level, and default workspace folder.
+- User settings for the default agent for new sessions, Codex authentication,
+  appearance mode, Radix color scale, Pi model provider API keys, model,
+  provider-specific thinking/reasoning preference, and default workspace
+  folder.
 
 Out of scope:
 
@@ -36,6 +38,9 @@ panel.
 ## Glossary
 
 - Sidebar: left project/session/settings navigation.
-- Chat: central conversation surface for the Pi coding agent.
+- Chat: central conversation surface for the session's immutable Pi or Codex
+  Agent provider.
 - Default workspace folder: user-visible directory used by unassigned sessions
   and as the starting point for creating projects, currently `~/Documents/Ousia`.
+- Agent provider: the immutable Pi or Codex runtime selected when a session is
+  created. Changing the default only affects new sessions.

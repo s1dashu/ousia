@@ -8,6 +8,7 @@ import {
   ArrowShrinkIcon,
   ArrowUp02Icon,
   ArrowUpIcon,
+  BanIcon,
   Cancel01Icon,
   ChatAdd01Icon,
   CheckIcon,
@@ -91,6 +92,7 @@ export const ArrowShrink = createHugeIcon(ArrowShrinkIcon)
 export const ArrowUp = createHugeIcon(ArrowUpIcon)
 export const SendArrowDown = createHugeIcon(ArrowDown02Icon)
 export const SendArrowUp = createHugeIcon(ArrowUp02Icon)
+export const Ban = createHugeIcon(BanIcon)
 export const Branch = createHugeIcon(GitBranchIcon)
 export const ChatPlus = createHugeIcon(ChatAdd01Icon)
 export const Check = createHugeIcon(CheckIcon)

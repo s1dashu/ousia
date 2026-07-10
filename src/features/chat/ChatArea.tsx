@@ -35,6 +35,11 @@ import {
   modelLabel,
   modelPresetValue,
 } from "@/app/model-presets"
+import {
+  reasoningEffortLabel,
+  reasoningPreferencePatch,
+  resolveModelReasoningEffort,
+} from "@/app/reasoning-efforts"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -76,10 +81,11 @@ import {
   type OusiaChatExportFormat,
   type OusiaLanguage,
   type OusiaChatAttachment,
+  type OusiaCodexEnvironmentStatus,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
   type OusiaSendDuringRunMode,
-  type OusiaThinkingLevel,
+  type OusiaReasoningEffort,
 } from "@/electron/chat-types"
 import { getMessages } from "@/app/i18n"
 import {
@@ -108,7 +114,6 @@ import { cn } from "@/lib/utils"
 
 const CHAT_INPUT_MAX_HEIGHT = 192
 const CHAT_INPUT_MIN_HEIGHT = 48
-const DEFAULT_CHAT_THINKING_LEVEL: OusiaThinkingLevel = "medium"
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
 const allAgentTools: OusiaAgentToolName[] = [
@@ -121,16 +126,8 @@ const allAgentTools: OusiaAgentToolName[] = [
   "ls",
 ]
 
-const chatThinkingLabels: Record<OusiaThinkingLevel, string> = {
-  off: "Off",
-  minimal: "Minimal",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "Extra High",
-}
-
 type ChatAreaProps = {
+  codexEnvironment: OusiaCodexEnvironmentStatus | undefined
   currentProject: ProjectRecord | undefined
   currentSession: SessionRecord | undefined
   contextUsage:
@@ -202,12 +199,6 @@ function formatContextUsagePercent(percent: number) {
   return percent < 10 ? percent.toFixed(1) : Math.round(percent).toString()
 }
 
-function defaultThinkingLevelFor(levels: OusiaThinkingLevel[]) {
-  return levels.includes(DEFAULT_CHAT_THINKING_LEVEL)
-    ? DEFAULT_CHAT_THINKING_LEVEL
-    : (levels[0] ?? DEFAULT_CHAT_THINKING_LEVEL)
-}
-
 function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
   return (
     item.id.startsWith("provider-api-key-") &&
@@ -216,6 +207,7 @@ function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
 }
 
 export function ChatArea({
+  codexEnvironment,
   currentProject,
   currentSession,
   contextUsage: contextUsageFromEvent,
@@ -310,26 +302,49 @@ export function ChatArea({
   const wasAgentWorkingRef = useRef(isAgentWorking)
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
-  const configuredModelPresets = getConfiguredModelPresets(
+  const isCodexSession = currentSession?.agentProvider === "codex"
+  const effectiveAgentMode: OusiaAgentMode =
+    isCodexSession &&
+    (settings.agentMode === "noTerminal" || settings.agentMode === "custom")
+      ? "standard"
+      : settings.agentMode
+  const piModelPresets = getConfiguredModelPresets(
     settings.modelProviders,
-    modelRegistry
+    modelRegistry,
+    settings.disabledModelProviderIds
   )
+  const configuredModelPresets = isCodexSession
+    ? (codexEnvironment?.models ?? [])
+    : piModelPresets
   const selectedModelPreset = configuredModelPresets.find(
     (model) =>
-      model.provider === settings.modelProvider &&
-      model.modelId === settings.modelId
+      model.modelId ===
+      (isCodexSession
+        ? settings.codexModelId || codexEnvironment?.defaultModelId
+        : settings.modelId) &&
+      (isCodexSession || model.provider === settings.modelProvider)
   )
+  const storedReasoningEffort = isCodexSession
+    ? settings.codexReasoningEffort
+    : settings.thinkingLevel
   const activeThinkingLevels =
-    selectedModelPreset?.thinkingLevels ?? [settings.thinkingLevel]
-  const selectedThinkingLevel = activeThinkingLevels.includes(
-    settings.thinkingLevel
+    selectedModelPreset?.thinkingLevels ?? [storedReasoningEffort ?? "medium"]
+  const selectedThinkingLevel = resolveModelReasoningEffort(
+    selectedModelPreset,
+    storedReasoningEffort
   )
-    ? settings.thinkingLevel
-    : defaultThinkingLevelFor(activeThinkingLevels)
   const selectedModelLabel =
-    selectedModelPreset ? modelLabel(selectedModelPreset) : t.chat.model
+    selectedModelPreset
+      ? modelLabel(selectedModelPreset)
+      : isCodexSession
+        ? "Codex"
+        : t.chat.model
   const providerKeyDialogProviders =
-    modelRegistry?.providers.filter((provider) => provider.models.length > 0) ??
+    modelRegistry?.providers.filter(
+      (provider) =>
+        provider.models.length > 0 &&
+        !settings.disabledModelProviderIds.includes(provider.id)
+    ) ??
     []
   const providerKeyDialogSelectItems = providerKeyDialogProviders.map(
     (provider) => ({
@@ -344,7 +359,8 @@ export function ChatArea({
     Boolean(providerKeyDialogProvider) &&
     Boolean(providerKeyDialogApiKey.trim()) &&
     !isSavingProviderKey
-  const hasSelectedProviderApiKey = !modelRegistry || Boolean(selectedModelPreset)
+  const hasSelectedProviderApiKey =
+    isCodexSession || !modelRegistry || Boolean(selectedModelPreset)
   const visibleChatItems = useMemo(() => {
     if (!hasSelectedProviderApiKey) {
       return items
@@ -797,22 +813,6 @@ export function ChatArea({
     }
   }, [currentSession?.id])
 
-  useEffect(() => {
-    if (
-      !selectedModelPreset ||
-      selectedModelPreset.thinkingLevels.includes(settings.thinkingLevel)
-    ) {
-      return
-    }
-
-    onSettingsChange(
-      normalizeOusiaAppSettings({
-        ...settings,
-        thinkingLevel: defaultThinkingLevelFor(selectedModelPreset.thinkingLevels),
-      })
-    )
-  }, [onSettingsChange, selectedModelPreset, settings])
-
   useLayoutEffect(() => {
     const node = inputRef.current
     if (!node) {
@@ -976,11 +976,14 @@ export function ChatArea({
     }
   }
 
-  function updateThinkingLevel(thinkingLevel: OusiaThinkingLevel) {
+  function updateThinkingLevel(thinkingLevel: OusiaReasoningEffort) {
     onSettingsChange(
       normalizeOusiaAppSettings({
         ...settings,
-        thinkingLevel,
+        ...reasoningPreferencePatch(
+          isCodexSession ? "codex" : "pi",
+          thinkingLevel
+        ),
       })
     )
   }
@@ -1013,23 +1016,23 @@ export function ChatArea({
   }
 
   function updateModel(model: (typeof configuredModelPresets)[number]) {
-    const thinkingLevel = model.thinkingLevels.includes(settings.thinkingLevel)
-      ? settings.thinkingLevel
-      : defaultThinkingLevelFor(model.thinkingLevels)
-
     onSettingsChange(
       normalizeOusiaAppSettings({
         ...settings,
-        modelProvider: model.provider,
-        modelId: model.modelId,
-        thinkingLevel,
+        ...(isCodexSession
+          ? { codexModelId: model.modelId }
+          : { modelProvider: model.provider, modelId: model.modelId }),
       })
     )
   }
 
   const openProviderKeyDialog = useCallback(() => {
     const providerOptions =
-      modelRegistry?.providers.filter((provider) => provider.models.length > 0) ??
+      modelRegistry?.providers.filter(
+        (provider) =>
+          provider.models.length > 0 &&
+          !settings.disabledModelProviderIds.includes(provider.id)
+      ) ??
       []
     const provider =
       providerOptions.find((item) => item.id === "deepseek") ??
@@ -1046,6 +1049,33 @@ export function ChatArea({
   }, [modelRegistry, settings])
 
   const ensureSelectedProviderApiKey = useCallback(() => {
+    if (isCodexSession) {
+      if (!codexEnvironment || codexEnvironment.available === false) {
+        onLocalEvent({
+          type: "error",
+          id: `codex-unavailable-${Date.now()}`,
+          text: codexEnvironment?.error ?? t.chat.codexUnavailable,
+          timestamp: new Date().toISOString(),
+        })
+        return false
+      }
+      if (
+        codexEnvironment &&
+        codexEnvironment.requiresOpenaiAuth &&
+        !codexEnvironment.account
+      ) {
+        onLocalEvent({
+          type: "status_message",
+          id: `codex-login-${Date.now()}`,
+          role: "error",
+          status: "finished",
+          text: t.chat.codexSignInRequired,
+          timestamp: new Date().toISOString(),
+        })
+        return false
+      }
+      return true
+    }
     if (!modelRegistry || selectedModelPreset) {
       return true
     }
@@ -1059,10 +1089,14 @@ export function ChatArea({
     })
     return false
   }, [
+    codexEnvironment,
+    isCodexSession,
     onLocalEvent,
     openProviderKeyDialog,
     modelRegistry,
     selectedModelPreset,
+    t.chat.codexSignInRequired,
+    t.chat.codexUnavailable,
     t.chat.providerApiKeyRequiredInfo,
   ])
 
@@ -1105,19 +1139,22 @@ export function ChatArea({
             apiKey: "",
           },
         ]
-    const thinkingLevel = defaultModel.thinkingLevels.includes(
+    const thinkingLevel = resolveModelReasoningEffort(
+      defaultModel,
       settings.thinkingLevel
     )
-      ? settings.thinkingLevel
-      : defaultThinkingLevelFor(defaultModel.thinkingLevels)
+    const thinkingPatch = reasoningPreferencePatch("pi", thinkingLevel)
 
     onSettingsChange(
       normalizeOusiaAppSettings({
         ...settings,
         modelProvider: provider.id,
         modelId: defaultModel.modelId,
-        thinkingLevel,
+        ...thinkingPatch,
         modelProviders: nextModelProviders,
+        disabledModelProviderIds: settings.disabledModelProviderIds.filter(
+          (providerId) => providerId !== provider.id
+        ),
       })
     )
     setProviderKeyDialogApiKey("")
@@ -1178,7 +1215,7 @@ export function ChatArea({
           prompt: text,
           attachments: outgoingAttachments,
           sendBehavior,
-          agentMode: settings.agentMode,
+          agentMode: effectiveAgentMode,
           customAgentTools: settings.customAgentTools,
           autoCompactContext: settings.autoCompactContext,
           autoRetryOnFailure: settings.autoRetryOnFailure,
@@ -1186,8 +1223,10 @@ export function ChatArea({
           sessionId: currentSession.id,
           thinkingLevel: selectedThinkingLevel,
           model: {
-            provider: settings.modelProvider,
-            modelId: settings.modelId,
+            provider: isCodexSession ? "openai" : settings.modelProvider,
+            modelId: isCodexSession
+              ? (selectedModelPreset?.modelId ?? settings.codexModelId)
+              : settings.modelId,
           },
         })
         if (!result.ok) {
@@ -1212,6 +1251,8 @@ export function ChatArea({
     [
       currentProject,
       currentSession,
+      effectiveAgentMode,
+      isCodexSession,
       isSending,
       items.length,
       onGenerateSessionTitle,
@@ -1487,7 +1528,7 @@ export function ChatArea({
     })
     try {
       const result = await window.ousia.compactChat({
-        agentMode: settings.agentMode,
+        agentMode: effectiveAgentMode,
         customAgentTools: settings.customAgentTools,
         autoCompactContext: settings.autoCompactContext,
         autoRetryOnFailure: settings.autoRetryOnFailure,
@@ -1495,8 +1536,10 @@ export function ChatArea({
         sessionId: currentSession.id,
         thinkingLevel: selectedThinkingLevel,
         model: {
-          provider: settings.modelProvider,
-          modelId: settings.modelId,
+          provider: isCodexSession ? "openai" : settings.modelProvider,
+          modelId: isCodexSession
+            ? (selectedModelPreset?.modelId ?? settings.codexModelId)
+            : settings.modelId,
         },
       })
       if (!result.ok) {
@@ -1624,7 +1667,7 @@ export function ChatArea({
     const result = await window.ousia.exportChat({
       format,
       markdown: format === "jsonl" ? undefined : markdown,
-      agentMode: settings.agentMode,
+      agentMode: effectiveAgentMode,
       customAgentTools: settings.customAgentTools,
       autoCompactContext: settings.autoCompactContext,
       autoRetryOnFailure: settings.autoRetryOnFailure,
@@ -1632,8 +1675,10 @@ export function ChatArea({
       sessionId: currentSession.id,
       thinkingLevel: selectedThinkingLevel,
       model: {
-        provider: settings.modelProvider,
-        modelId: settings.modelId,
+        provider: isCodexSession ? "openai" : settings.modelProvider,
+        modelId: isCodexSession
+          ? (selectedModelPreset?.modelId ?? settings.codexModelId)
+          : settings.modelId,
       },
     })
     if (!result.ok && !result.canceled) {
@@ -1740,7 +1785,7 @@ export function ChatArea({
   return (
     <section
       className={cn(
-        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-none dark:bg-card"
+        "@container/chat ousia-main-panel ousia-squircle-corners relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card"
       )}
       style={style}
       onKeyDownCapture={handleChatKeyDownCapture}
@@ -1938,7 +1983,7 @@ export function ChatArea({
                     <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
                       {t.settings.agentMode}
                     </DropdownMenuLabel>
-                    <DropdownMenuRadioGroup value={settings.agentMode}>
+                    <DropdownMenuRadioGroup value={effectiveAgentMode}>
                       <TooltipProvider>
                         {(
                           [
@@ -1963,7 +2008,14 @@ export function ChatArea({
                               t.settings.customModeDescription,
                             ],
                           ] satisfies Array<[OusiaAgentMode, string, string]>
-                        ).map(([value, label, description]) => (
+                        )
+                          .filter(
+                            ([value]) =>
+                              !isCodexSession ||
+                              value === "standard" ||
+                              value === "readOnly"
+                          )
+                          .map(([value, label, description]) => (
                           <Tooltip key={value}>
                             <TooltipTrigger asChild>
                               <DropdownMenuRadioItem
@@ -1987,7 +2039,7 @@ export function ChatArea({
                               {description}
                             </TooltipContent>
                           </Tooltip>
-                        ))}
+                          ))}
                       </TooltipProvider>
                     </DropdownMenuRadioGroup>
                     <DropdownMenuSeparator className="my-2 bg-neutral-200" />
@@ -2034,7 +2086,7 @@ export function ChatArea({
                     </span>
                     {selectedModelPreset && selectedThinkingLevel !== "off" ? (
                       <span className="shrink-0 text-muted-foreground @max-[520px]:hidden">
-                        {chatThinkingLabels[selectedThinkingLevel]}
+                        {reasoningEffortLabel(selectedThinkingLevel)}
                       </span>
                     ) : null}
                     <ChevronDown
@@ -2058,11 +2110,16 @@ export function ChatArea({
                         <DropdownMenuRadioItem
                           key={level}
                           value={level}
+                          title={
+                            selectedModelPreset?.thinkingLevelDescriptions?.[
+                              level
+                            ]
+                          }
                           className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                           onClick={() => updateThinkingLevel(level)}
                         >
                           <span className="min-w-0 flex-1 truncate">
-                            {chatThinkingLabels[level]}
+                            {reasoningEffortLabel(level)}
                           </span>
                         </DropdownMenuRadioItem>
                       ))}
@@ -2072,13 +2129,19 @@ export function ChatArea({
                       <span className="text-sm text-neutral-500">
                         {t.chat.model}
                       </span>
-                      <button
-                        type="button"
-                        className="text-xs leading-5 font-medium whitespace-nowrap text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline focus-visible:text-neutral-950 focus-visible:underline focus-visible:outline-none"
-                        onClick={() => openProviderKeyDialog()}
-                      >
-                        {t.chat.addModelProvider}
-                      </button>
+                      {isCodexSession ? (
+                        <span className="text-xs leading-5 font-medium text-neutral-500">
+                          Codex
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs leading-5 font-medium whitespace-nowrap text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline focus-visible:text-neutral-950 focus-visible:underline focus-visible:outline-none"
+                          onClick={() => openProviderKeyDialog()}
+                        >
+                          {t.chat.addModelProvider}
+                        </button>
+                      )}
                     </div>
                     <DropdownMenuRadioGroup
                       value={

@@ -1,8 +1,9 @@
 # Testing Plan
 
 This plan covers the simplified Ousia Desktop client: sidebar project/session
-state, Pi-backed chat orchestration boundaries, settings, and file preview
-surfaces. The app is Electron + Vite + React, with Pi running in Electron main.
+state, Pi/Codex chat orchestration boundaries, settings, and file preview
+surfaces. The app is Electron + Vite + React, with both agents hosted from
+Electron main.
 
 ## Test Strategy
 
@@ -14,10 +15,14 @@ Automated tests should cover deterministic product logic first:
 - Chat event reduction, attachment classification, history export, and tool UI
   formatting helpers.
 - Model/provider selection helpers and compatibility aliases.
+- Agent-provider routing, Codex RPC lifecycle, protocol event adaptation, and
+  opaque thread-id persistence.
+- Per-model Codex reasoning option/default mapping and independent Pi/Codex
+  preference persistence.
 
-Electron window behavior and real Pi execution should be smoke-tested separately
-because they depend on native app launch state, local credentials, shell
-environment, and a real filesystem workspace.
+Electron window behavior and real Pi/Codex execution should be smoke-tested
+separately because they depend on native app launch state, local credentials,
+shell environment, native binaries, and a real filesystem workspace.
 
 ## Automated Coverage
 
@@ -49,6 +54,13 @@ P0 automated paths:
   preserving unsafe data.
 - Session/project transaction APIs create, delete, rename, move, reorder, and
   touch records without stale renderer snapshots.
+- New sessions retain an immutable agent provider; Codex thread binding is
+  atomic, idempotent, and rejects conflicting rebinding.
+- Codex RPC parsing correlates responses, routes notifications/server requests,
+  rejects pending work on exit, and never logs secrets.
+- Codex model metadata preserves all non-empty reasoning efforts, applies the
+  model default when no supported preference exists, and rejects inconsistent
+  defaults or unsupported selections before starting a turn.
 - Project-relative file paths cannot resolve outside the selected project.
 - Write/edit tool previews expose meaningful diffs or explicit errors.
 - Chat streaming events reduce into stable user, assistant, thinking, tool,
@@ -68,6 +80,10 @@ P2 / manual smoke paths:
 - A new session can be created, renamed, moved between projects, and deleted.
 - Settings can save provider credentials through Pi and refresh model status.
 - A text-only chat request reaches Pi and streams assistant/tool updates.
+- Codex account status/login works, and a text request streams through the
+  packaged app-server; restart resumes the same opaque thread.
+- Codex tool execution, file diff, branch, compact, and interrupt events map to
+  stable Ousia items without auto-approving escalations.
 - Interrupting a running chat reports the expected state in the UI.
 - Finder actions open project directories and reveal project files.
 - Runtime errors are written to `~/.ousia/logs/ousia-desktop.log`.
@@ -78,5 +94,10 @@ P2 / manual smoke paths:
 - Any change to `src/electron/host-paths.ts` or Finder/file-preview behavior
   needs a path containment test.
 - Any change to Pi event mapping needs a chat reducer test.
+- Any change to Codex protocol/version, RPC handling, or event mapping needs a
+  protocol fixture test plus packaged native-binary smoke test.
+- Any change to model/reasoning selection needs tests for provider-specific
+  persistence, per-model defaults, unknown future Codex values, and provider
+  boundary rejection.
 - Any change to tool preview payload handling needs a write/edit preview test.
 - Any new user-visible settings field needs normalization and persistence tests.
