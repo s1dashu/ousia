@@ -17,6 +17,15 @@ describe("Vega component alignment", () => {
     }
   })
 
+  it("uses the generic compact scrollbar for scrollable popup primitives", () => {
+    for (const relativePath of [
+      "src/components/ui/dropdown-menu.tsx",
+      "src/components/ui/select.tsx",
+    ]) {
+      expect(readSource(relativePath)).toContain("ui-popup-scrollbar")
+    }
+  })
+
   it("does not override Vega menu geometry in chat compositions", () => {
     const chatArea = readSource("src/features/chat/ChatArea.tsx")
     const chatHeader = readSource("src/features/chat/ChatHeader.tsx")

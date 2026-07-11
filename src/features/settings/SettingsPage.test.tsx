@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
@@ -140,6 +142,20 @@ describe("SettingsPage provider isolation", () => {
     expect(html).toContain(t.settings.providerKeys)
     expect(html).toContain(t.settings.autoRetryOnFailure)
     expect(html).not.toContain(t.settings.codexAuthentication)
+  })
+
+  it("uses Vega spacing and destructive semantics in provider dialogs", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), "src/features/settings/SettingsPage.tsx"),
+      "utf8"
+    )
+
+    expect(source.match(/<label className="block">/g)).toHaveLength(2)
+    expect(source).not.toContain('className="mt-4 block"')
+    expect(source).toContain("bg-destructive/10")
+    expect(source).toContain("text-destructive")
+    expect(source).not.toContain("text-red-")
+    expect(source).not.toContain("bg-red-")
   })
 
   it("renders Codex-only settings for the Codex harness", () => {

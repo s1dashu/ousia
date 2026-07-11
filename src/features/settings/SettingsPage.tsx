@@ -1466,7 +1466,7 @@ function SettingsPageComponent({
                 {providerError ? (
                   <div
                     role="alert"
-                    className="bg-red-50 px-4 py-3 text-sm leading-5 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                    className="bg-destructive/10 px-4 py-3 text-sm leading-5 text-destructive"
                   >
                     {providerError}
                   </div>
@@ -1501,7 +1501,7 @@ function SettingsPageComponent({
                     </DialogDescription>
                   </DialogHeader>
 
-                  <label className="mt-4 block">
+                  <label className="block">
                     <span className="text-sm font-medium">
                       {t.settings.provider}
                     </span>
@@ -1531,7 +1531,7 @@ function SettingsPageComponent({
                     </Select>
                   </label>
 
-                  <label className="mt-4 block">
+                  <label className="block">
                     <span className="text-sm font-medium">API Key</span>
                     <Input
                       aria-label="API Key"
@@ -1590,7 +1590,7 @@ function SettingsPageComponent({
                     {codexError ? (
                       <span
                         role="alert"
-                        className="mt-1 block text-red-600 dark:text-red-400"
+                        className="mt-1 block text-destructive"
                       >
                         {codexError}
                       </span>

@@ -36,6 +36,7 @@ describe("settings Vega primitive styling", () => {
     expect(select).toContain("rounded-md border border-input bg-transparent")
     expect(select).toContain("rounded-md bg-popover")
     expect(select).toContain("shadow-md ring-1 ring-foreground/10")
+    expect(select).toContain("ui-popup-scrollbar")
     expect(select).toContain("gap-2 rounded-sm py-1.5 pr-8 pl-2")
     expect(switchSource).toContain("data-checked:bg-primary")
     expect(switchSource).toContain("data-unchecked:bg-input")
