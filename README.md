@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/latest">
+  <a href="https://ousia-analytics.vercel.app/api/download?platform=darwin&amp;arch=arm64&amp;kind=manual">
     <img src="./assets/download-button.svg" alt="Download for macOS" width="280" height="48"/>
   </a>
 </p>
@@ -83,8 +83,9 @@ invocation is visible inline, and everything persists across restarts.
 
 ### Download (macOS)
 
-Get the latest `.dmg` from [Releases](https://github.com/s1dashu/ousia/releases/latest),
-open it, drag **Ousia** into **Applications**, and launch.
+[Download the latest `.dmg`](https://ousia-analytics.vercel.app/api/download?platform=darwin&arch=arm64&kind=manual),
+open it, drag **Ousia** into **Applications**, and launch. Previous versions and
+release notes remain available on the [Releases page](https://github.com/s1dashu/ousia/releases/latest).
 
 > ⚠️ Ousia is pre-release software. You'll hit rough edges. We ship fast and
 > iterate faster.
