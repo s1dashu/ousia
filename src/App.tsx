@@ -26,6 +26,7 @@ import {
   findWorkingChatSession,
   resolveChatEventTarget,
 } from "@/app/chat-event-routing"
+import { nextBranchSessionTitle } from "@/app/branch-session-title"
 import {
   shouldResetEmptyChatHistory,
   shouldRetryChatHistoryAfterSelection,
@@ -1940,6 +1941,7 @@ export function App() {
     void window.ousia
       .generateChatTitle({
         agentProvider: session.agentProvider,
+        language: settings.language,
         prompt: firstPrompt,
         projectPath: projectPathForSession(session),
         sessionId,
@@ -1997,8 +1999,10 @@ export function App() {
     }
 
     const now = new Date().toISOString()
-    const titleSuffix = settings.language === "zh" ? "分支" : "Fork"
-    const branchTitle = `${selectedSession.title} · ${titleSuffix}`
+    const branchTitle = nextBranchSessionTitle(
+      selectedSession,
+      sessionsRef.current
+    )
     let branchSession = {
       ...createSession(branchTitle, selectedSession.agentProvider),
       projectId: selectedSession.projectId,

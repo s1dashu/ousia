@@ -418,18 +418,16 @@ function TooltipContent({
             transformOrigin: getTransformOrigin(position.side),
           }}
           className={cn(
-            "pointer-events-none fixed z-[9999] flex flex-col items-center justify-center rounded-md bg-black px-4 py-2 text-xs text-white shadow-xl",
+            "pointer-events-none fixed z-[9999] inline-flex items-center justify-center rounded-md bg-foreground px-3 py-1.5 text-xs text-background",
             TOOLTIP_CONTENT_LAYOUT_CLASS_NAME,
             getPlacementClassName(position.side),
             className
           )}
           {...props}
         >
-          <span className="absolute inset-x-10 -bottom-px z-30 h-px w-[20%] bg-gradient-to-r from-transparent via-[var(--radix-scale-9)] to-transparent" />
-          <span className="absolute -bottom-px left-10 z-30 h-px w-[40%] bg-gradient-to-r from-transparent via-[var(--ring)] to-transparent" />
           <span
             className={cn(
-              "relative z-30 text-center text-xs leading-tight font-semibold text-white tabular-nums",
+              "relative z-30 text-center text-xs leading-tight text-background tabular-nums",
               TOOLTIP_TEXT_LAYOUT_CLASS_NAME
             )}
           >

@@ -9,6 +9,10 @@ import type {
   OusiaChatGenerateTitleResult,
   OusiaModelSettings,
 } from "./chat-types.js"
+import {
+  buildPlainChatTitleRequest,
+  normalizeGeneratedChatTitle,
+} from "./chat-title-policy.js"
 import { normalizeProviderModelId } from "./model-compat.js"
 import {
   createReadOnlyPiAuthStorage,
@@ -79,22 +83,6 @@ const utilityModelCandidates: UtilityModelCandidate[] = [
     match: /flash/i,
   },
 ]
-
-function normalizeGeneratedChatTitle(value: string) {
-  const title = value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean)
-    ?.replace(/^["'“”‘’「」『』《》\s]+|["'“”‘’「」『』《》\s]+$/g, "")
-    .replace(/^(会话名称|会话标题|标题|名称)\s*[:：]\s*/, "")
-    .trim()
-
-  if (!title) {
-    return ""
-  }
-
-  return Array.from(title).slice(0, 16).join("")
-}
 
 function modelCost(model: Model<Api>) {
   return (model.cost?.input ?? 0) + (model.cost?.output ?? 0)
@@ -241,20 +229,21 @@ export async function generateChatTitleWithUtilityModel(
   }
 
   writeRuntimeLog("chat.title", "info", "Generating session title", {
+    language: payload.language,
     model: `${selected.model.provider}/${selected.model.id}`,
     reason: selected.reason,
   })
 
   try {
+    const titleRequest = buildPlainChatTitleRequest(payload.language, prompt)
     const message = await completeSimple(
       selected.model,
       {
-        systemPrompt:
-          "你负责给桌面智能体会话生成中文短标题。只输出标题本身，不要解释，不要引号，不要标点包装。标题必须在 16 个字符以内，可长可短。",
+        systemPrompt: titleRequest.systemPrompt,
         messages: [
           {
             role: "user",
-            content: `根据这条首轮用户消息生成会话名称：\n${prompt}`,
+            content: titleRequest.userPrompt,
             timestamp: Date.now(),
           },
         ],
@@ -268,20 +257,27 @@ export async function generateChatTitleWithUtilityModel(
         temperature: 0.2,
       }
     )
-    const title = normalizeGeneratedChatTitle(textFromAssistantMessage(message))
+    const title = normalizeGeneratedChatTitle(
+      textFromAssistantMessage(message),
+      payload.language
+    )
     if (!title) {
       writeRuntimeLog("chat.title", "error", "Model returned an empty title", {
+        language: payload.language,
         model: `${selected.model.provider}/${selected.model.id}`,
       })
       return { ok: false, error: "模型未返回可用标题。" }
     }
     writeRuntimeLog("chat.title", "info", "Generated session title", {
+      language: payload.language,
       model: `${selected.model.provider}/${selected.model.id}`,
       title,
     })
     return { ok: true, title }
   } catch (error) {
-    writeRuntimeLog("chat.title", "error", error)
+    writeRuntimeLog("chat.title", "error", error, {
+      language: payload.language,
+    })
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),

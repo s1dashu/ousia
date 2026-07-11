@@ -9,10 +9,22 @@ import {
 } from "@/components/icons/huge-icons"
 
 import type { getMessages } from "@/app/i18n"
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+} from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
 import type { OusiaChatAttachment } from "@/electron/chat-types"
 import { formatBytes } from "@/features/chat/chat-format"
 import { cn } from "@/lib/utils"
+
+export const CHAT_COMPOSER_INPUT_CLASS =
+  "ousia-chat-composer-input ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] resize-none rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 shadow-none placeholder:text-muted-foreground/55 focus-visible:ring-0 dark:bg-transparent"
 
 export type QueuedChatMessage = {
   id: string
@@ -163,44 +175,37 @@ export function AttachmentStrip({
   return (
     <div className="ousia-hover-scrollbar mb-2 flex max-h-28 flex-wrap gap-2 overflow-auto pr-1.5">
       {attachments.map((attachment) => (
-        <div
-          key={attachment.id}
-          className="group flex h-12 max-w-56 items-center gap-2 rounded-md border-[0.5px] border-foreground/8 bg-muted/15 px-2 transition-colors hover:border-foreground/12 hover:bg-muted/25 dark:border-white/10 dark:bg-white/4 dark:hover:border-white/14 dark:hover:bg-white/6"
-        >
-          {attachment.kind === "image" ? (
-            <img
-              alt=""
-              src={`data:${attachment.mediaType};base64,${attachment.dataBase64}`}
-              className="size-8 shrink-0 rounded object-cover"
-            />
-          ) : (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded bg-background text-muted-foreground">
-              {attachment.kind === "text" ? (
-                <FileText size={18} strokeWidth={1.5} />
-              ) : (
-                <Paperclip size={18} strokeWidth={1.5} />
-              )}
-            </span>
-          )}
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs leading-4">
-              {attachment.name}
-            </span>
-            <span className="block truncate text-[11px] leading-4 text-muted-foreground">
-              {formatBytes(attachment.size)}
-            </span>
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="size-6 shrink-0 text-muted-foreground/80 hover:bg-transparent hover:text-foreground"
-            aria-label={t.chat.removeAttachment(attachment.name)}
-            onClick={() => onRemove(attachment.id)}
+        <Attachment key={attachment.id} className="w-64 flex-nowrap">
+          <AttachmentMedia
+            variant={attachment.kind === "image" ? "image" : "icon"}
           >
-            <X size={18} />
-          </Button>
-        </div>
+            {attachment.kind === "image" ? (
+              <img
+                alt=""
+                src={`data:${attachment.mediaType};base64,${attachment.dataBase64}`}
+              />
+            ) : attachment.kind === "text" ? (
+              <FileText />
+            ) : (
+              <Paperclip />
+            )}
+          </AttachmentMedia>
+          <AttachmentContent>
+            <AttachmentTitle>{attachment.name}</AttachmentTitle>
+            <AttachmentDescription>
+              {formatBytes(attachment.size)}
+            </AttachmentDescription>
+          </AttachmentContent>
+          <AttachmentActions>
+            <AttachmentAction
+              type="button"
+              aria-label={t.chat.removeAttachment(attachment.name)}
+              onClick={() => onRemove(attachment.id)}
+            >
+              <X />
+            </AttachmentAction>
+          </AttachmentActions>
+        </Attachment>
       ))}
     </div>
   )

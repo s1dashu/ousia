@@ -88,6 +88,7 @@ import {
 import { getMessages } from "@/app/i18n"
 import {
   AttachmentStrip,
+  CHAT_COMPOSER_INPUT_CLASS,
   QueuedMessageList,
   type QueuedChatMessage,
 } from "@/features/chat/ChatComposerParts"
@@ -1993,7 +1994,7 @@ function ChatAreaComponent({
             ) : null}
             <div
               className={cn(
-                "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-sidebar)] px-4 pt-3 pb-3 shadow-[var(--ousia-chat-composer-shadow)] transition-[border-color,box-shadow] focus-within:border-[color:var(--ousia-chat-composer-border-focus)] focus-within:shadow-[var(--ousia-chat-composer-shadow-focus)] focus-within:ring-0",
+                "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-composer-surface)] px-4 pt-3 pb-3 shadow-[var(--ousia-chat-composer-shadow)] transition-[border-color,box-shadow] focus-within:border-[color:var(--ousia-chat-composer-border-focus)] focus-within:shadow-[var(--ousia-chat-composer-shadow-focus)] focus-within:ring-0",
                 visibleQueuedMessages.length && "-mt-8"
               )}
             >
@@ -2039,7 +2040,7 @@ function ChatAreaComponent({
                     event.currentTarget.form?.requestSubmit()
                   }
                 }}
-                className="ousia-chat-composer-input ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 placeholder:text-muted-foreground/55 focus-visible:ring-0"
+                className={CHAT_COMPOSER_INPUT_CLASS}
                 placeholder={
                   editingQueueId
                     ? t.chat.editQueuedMessage
@@ -2048,7 +2049,7 @@ function ChatAreaComponent({
                       : t.chat.inputPlaceholder
                 }
               />
-              <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-1">
                   <Button
                     type="button"
@@ -2080,10 +2081,10 @@ function ChatAreaComponent({
                       side="top"
                       sideOffset={8}
                       align="start"
-                      className="ousia-hover-scrollbar w-72 rounded-xl p-2"
+                      className="w-72"
                     >
                       <DropdownMenuRadioGroup value={effectiveAgentMode}>
-                        <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                        <DropdownMenuLabel>
                           {t.settings.agentMode}
                         </DropdownMenuLabel>
                         <TooltipProvider>
@@ -2122,7 +2123,6 @@ function ChatAreaComponent({
                                 <TooltipTrigger asChild>
                                   <DropdownMenuRadioItem
                                     value={value}
-                                    className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                                     onClick={() => {
                                       updateComposerSettings({
                                         agentMode: value,
@@ -2146,7 +2146,7 @@ function ChatAreaComponent({
                             ))}
                         </TooltipProvider>
                       </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator className="my-2 bg-neutral-200" />
+                      <DropdownMenuSeparator />
                       <DropdownMenuRadioGroup
                         value={sendDuringRunMode}
                         onValueChange={(value) =>
@@ -2155,19 +2155,13 @@ function ChatAreaComponent({
                           )
                         }
                       >
-                        <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                        <DropdownMenuLabel>
                           {t.chat.appendMessages}
                         </DropdownMenuLabel>
-                        <DropdownMenuRadioItem
-                          value="queue"
-                          className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                        >
+                        <DropdownMenuRadioItem value="queue">
                           {t.settings.queue}
                         </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem
-                          value="steer"
-                          className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
-                        >
+                        <DropdownMenuRadioItem value="steer">
                           {t.settings.steer}
                         </DropdownMenuRadioItem>
                       </DropdownMenuRadioGroup>
@@ -2205,12 +2199,10 @@ function ChatAreaComponent({
                       sideOffset={8}
                       collisionPadding={24}
                       align="start"
-                      className="ousia-hover-scrollbar max-h-[min(var(--available-height),640px)] w-72 rounded-xl p-2"
+                      className="max-h-[min(var(--available-height),640px)] w-72"
                     >
                       <DropdownMenuRadioGroup value={selectedThinkingLevel}>
-                        <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                          Reasoning
-                        </DropdownMenuLabel>
+                        <DropdownMenuLabel>Reasoning</DropdownMenuLabel>
                         {activeThinkingLevels.map((level) => (
                           <DropdownMenuRadioItem
                             key={level}
@@ -2220,7 +2212,6 @@ function ChatAreaComponent({
                                 level
                               ]
                             }
-                            className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                             onClick={() => updateThinkingLevel(level)}
                           >
                             <span className="min-w-0 flex-1 truncate">
@@ -2229,19 +2220,15 @@ function ChatAreaComponent({
                           </DropdownMenuRadioItem>
                         ))}
                       </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator className="my-2 bg-neutral-200" />
-                      <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-1">
-                        <span className="text-sm text-neutral-500">
-                          {t.chat.model}
-                        </span>
+                      <DropdownMenuSeparator />
+                      <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                        <span>{t.chat.model}</span>
                         {isCodexSession ? (
-                          <span className="text-xs leading-5 font-medium text-neutral-500">
-                            Codex
-                          </span>
+                          <span>Codex</span>
                         ) : (
                           <button
                             type="button"
-                            className="text-xs leading-5 font-medium whitespace-nowrap text-neutral-500 underline-offset-4 hover:text-neutral-950 hover:underline focus-visible:text-neutral-950 focus-visible:underline focus-visible:outline-none"
+                            className="whitespace-nowrap underline-offset-4 hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none"
                             onClick={() => openProviderKeyDialog()}
                           >
                             {t.chat.addModelProvider}
@@ -2268,7 +2255,6 @@ function ChatAreaComponent({
                             <DropdownMenuRadioItem
                               key={value}
                               value={value}
-                              className="h-10 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
                               onClick={() => updateModel(preset)}
                             >
                               <span className="min-w-0 flex-1 truncate">
@@ -2355,7 +2341,7 @@ function ChatAreaComponent({
           }
         }}
       >
-        <DialogContent>
+        <DialogContent showCloseButton={false}>
           <div className="flex items-start justify-between gap-4">
             <DialogHeader>
               <DialogTitle>{t.chat.providerApiKeyTitle}</DialogTitle>

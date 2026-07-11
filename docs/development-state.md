@@ -79,20 +79,23 @@ desktop agent client:
 - Settings mode replaces the normal sidebar with categorized navigation and
   separates shared chat behavior from the selected Pi or Codex harness-specific
   configuration. Pi permission mode is Pi-only. Its controls use feature-local
-  copies of the original `bbVKEbY` Maia Base UI primitives. Settings rows use a `720px` container breakpoint
+  copies of the `bIkeymG` Vega Base UI primitives. Settings rows use a `720px` container breakpoint
   and a `52rem` content maximum.
 - General settings are grouped as Agent Harness, Language & Region, and Default
   Creation Paths; the two creation-path settings stay together.
-- Global shadcn semantic tokens now match the neutral `bbVKEbY` Maia preset.
+- Global shadcn semantic tokens match the neutral `bIkeymG` Vega preset.
   Appearance palettes are isolated as `--ousia-app-*` tokens and are mapped
   back only inside the tuned chat and session-sidebar roots. Settings remains
-  outside those product scopes and uses Maia tokens directly.
+  outside those product scopes and uses Vega tokens directly.
 - Sortable top-level sidebar sections: `会话` and `项目`.
 - Packaged macOS builds check the private analytics service for releases. An
   available release adds an Update button to the sidebar footer; download is
-  explicit, while installation is automatic only after five minutes without
-  input, no focused Ousia window, and no running agent turn. Otherwise the
-  button becomes Restart after the update finishes downloading.
+  explicit, while the native app menu also provides **Check for Updates…** with
+  visible success and failure results. Release checks use Electron's Chromium
+  network stack so macOS proxy settings are honored. Installation is automatic
+  only after five minutes without input, no focused Ousia window, and no running
+  agent turn. Otherwise the button becomes Restart after the update finishes
+  downloading.
 
 ## Persistence
 

@@ -988,6 +988,7 @@ export type OusiaChatSendResult = {
 
 export type OusiaChatGenerateTitlePayload = {
   agentProvider: OusiaAgentProvider
+  language: OusiaLanguage
   prompt: string
   projectPath: string
   sessionId: string

@@ -26,7 +26,7 @@ Main renderer entrypoints:
 
 - `src/App.tsx`: shell state, sidebar/chat layout, persistence.
 - `src/components/ui/card.tsx`: the existing product Card primitive; Settings
-  uses its feature-local Maia Card.
+  uses its feature-local Vega Card.
 - `src/features/chat/ChatArea.tsx`: chat history, input, attachments, controls.
 - `src/features/chat/ChatHeader.tsx`: chat title bar actions.
 - `src/features/chat/ChatMessageList.tsx`: assistant/user/system message
@@ -45,8 +45,8 @@ Main renderer entrypoints:
 - `src/features/settings/SettingsSelect.tsx`, `SettingsSwitch.tsx`,
   `SettingsButton.tsx`, `SettingsCard.tsx`, `SettingsInput.tsx`, and
   `SettingsDialog.tsx`: feature-local Base UI controls aligned with the
-  `bbVKEbY` Maia reference, isolated from globally customized primitives.
-- `src/features/settings/settings-local-styles.ts`: settings shell-only Maia
+  `bIkeymG` Vega reference, isolated from globally customized primitives.
+- `src/features/settings/settings-local-styles.ts`: settings shell-only Vega
   sidebar and panel classes; primitive styling lives with each local component.
 - `src/features/shell/main-panel-styles.ts`: shared left-corner geometry for the
   chat and settings panels. Both panels sit on a `bg-sidebar` host so the
@@ -54,7 +54,7 @@ Main renderer entrypoints:
 - `src/features/sidebar/Sidebar.tsx`: project/session/settings navigation.
 
 The renderer theme has two explicit layers. Global shadcn tokens are the exact
-neutral `bbVKEbY` Maia light/dark values and define the default behavior for new
+neutral `bIkeymG` Vega light/dark values and define the default behavior for new
 and uncustomized UI. Chat typography and spacing preferences are persisted in
 app state and applied through Ousia-prefixed chat CSS variables. Existing
 appearance palettes currently live under the
@@ -161,6 +161,11 @@ synchronizes Pi's retry preference, preventing environment/package-path races.
 - `onWindowFullscreenChange(callback)`
 - `onWindowZoomChange(callback)`
 
+Chat-title requests carry the current interface language as a required field.
+Both Pi utility-model titles and Codex ephemeral-thread titles generate and
+normalize output in that language. Changing the language does not rename titles
+that were already persisted.
+
 ## Agent Sessions
 
 Each chat request includes `projectPath` and `sessionId`. Electron main resolves
@@ -221,8 +226,10 @@ Packaged macOS builds query the independently deployed Ousia analytics service
 for the latest GitHub release. Checking and downloading are separate actions:
 the renderer exposes an update button only after a newer signed ZIP is known to
 exist, and Electron's native Squirrel.Mac updater begins downloading only after
-the user clicks it. Update state and errors are emitted over IPC and recorded in
-the runtime log.
+the user clicks it. Startup checks and the native **Check for Updates…** app-menu
+action use Electron `net.fetch` so they share Chromium's system-proxy behavior.
+Manual checks always show a native result dialog; update state and errors are
+emitted over IPC and recorded in the runtime log.
 
 After download, installation waits for either an explicit Restart click or a
 strict idle condition: the window is not focused, no input was observed for five

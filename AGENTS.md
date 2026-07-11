@@ -141,7 +141,7 @@ match the task.
   the relevant architecture docs and package release notes.
 - Do not inject an Ousia extension usage skill or CLI bridge into Pi sessions.
 - Keep global shadcn semantic tokens aligned exactly with the neutral
-  `bbVKEbY` Maia preset. Product-specific color treatments must not mutate that
+  `bIkeymG` Vega preset. Product-specific color treatments must not mutate that
   global token set.
 - Keep primary floating panels, menus, popovers, dialogs, and dropdown surfaces
   pure white. Paper is an auxiliary/background color, not the main panel color.
@@ -151,7 +151,7 @@ match the task.
   Do not add new broad shadcn token remapping; migrate reviewed product surfaces
   toward direct `--ousia-<component>-<role>` tokens as specified in
   `docs/design.md`. Settings and generic shadcn primitives must continue to read
-  global Maia semantics.
+  global Vega semantics.
 - The dark chat panel uses `card` as its background, so user message bubbles
   need a different dark surface such as `muted` to remain visible.
 - Match those floating surfaces to the composer default surface treatment:
@@ -168,18 +168,18 @@ match the task.
 - Base UI dropdown labels must be children of `DropdownMenuGroup` or
   `DropdownMenuRadioGroup`; a bare `DropdownMenuLabel` is a runtime error.
 - Settings uses feature-local Base UI primitives copied from the original
-  `bbVKEbY` Maia source. Keep Button, Card, Input, Select, Switch, and Dialog
-  aligned with that reference; do not replace Maia semantic tokens, radii,
+  `bIkeymG` Vega source. Keep Button, Card, Input, Select, Switch, and Dialog
+  aligned with that reference; do not replace Vega semantic tokens, radii,
   rings, or shadows with fixed values. Settings must remain outside the tuned
   chat/session-sidebar token scopes so its sidebar, controls, menus, dialogs,
-  and panel read the global Maia semantics. The settings sidebar may reuse only
+  and panel read the global Vega semantics. The settings sidebar may reuse only
   `--ousia-sidebar` for background continuity with the session sidebar.
-- The canonical light Card is `src/components/ui/card.tsx` and follows Maia's
+- The canonical light Card is `src/components/ui/card.tsx` and follows Vega's
   pure-white global Card surface. Keep product-specific card treatments inside
   explicit Ousia scopes instead of changing the global Card token.
 - Chat and settings panels share their left-corner geometry through
   `src/features/shell/main-panel-styles.ts`; color ownership remains separate:
-  chat uses the local Ousia scope and Settings uses global Maia tokens.
+  chat uses the local Ousia scope and Settings uses global Vega tokens.
 - When changing agent behavior, verify whether the change belongs in renderer
   state, Electron IPC, the provider router, Pi session setup, or Codex
   app-server adaptation.

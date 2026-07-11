@@ -130,25 +130,21 @@ export function ChatHeader({
               <MoreHorizontal size={18} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-auto rounded-md p-1">
+          <DropdownMenuContent align="end" className="w-auto">
             <DropdownMenuItem
-              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
               disabled={isCompacting || !currentSession}
               onClick={onManualCompact}
             >
-              <ArrowShrink size={18} className="text-neutral-500" />
+              <ArrowShrink className="text-muted-foreground" />
               <span className="flex-1">
                 {isCompacting ? t.chat.compacting : t.chat.manualCompact}
               </span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-              onClick={onCopySessionHistory}
-            >
+            <DropdownMenuItem onClick={onCopySessionHistory}>
               {copyStatus === "copied" ? (
-                <Check size={18} className="text-neutral-500" />
+                <Check className="text-muted-foreground" />
               ) : (
-                <Copy size={18} className="text-neutral-500" />
+                <Copy className="text-muted-foreground" />
               )}
               <span className="flex-1">
                 {copyStatus === "copied"
@@ -158,18 +154,12 @@ export function ChatHeader({
                     : t.chat.copyHistory}
               </span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-              onClick={() => onExportSession("markdown")}
-            >
-              <Copy size={18} className="text-neutral-500" />
+            <DropdownMenuItem onClick={() => onExportSession("markdown")}>
+              <Copy className="text-muted-foreground" />
               <span className="flex-1">{t.chat.exportMarkdown}</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
-              onClick={() => onExportSession("jsonl")}
-            >
-              <Copy size={18} className="text-neutral-500" />
+            <DropdownMenuItem onClick={() => onExportSession("jsonl")}>
+              <Copy className="text-muted-foreground" />
               <span className="flex-1">{t.chat.exportJsonl}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>

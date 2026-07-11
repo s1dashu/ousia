@@ -725,6 +725,7 @@ describe("Codex agent provider", () => {
     await expect(
       provider.generateTitle({
         agentProvider: "codex",
+        language: "en",
         model: { provider: "openai", modelId: "gpt-no-reasoning" },
         projectPath: "/tmp/project",
         prompt: "Build the feature",

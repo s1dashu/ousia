@@ -1,4 +1,12 @@
-import { app, BrowserWindow, Menu, nativeTheme, screen, shell } from "electron"
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  nativeTheme,
+  screen,
+  shell,
+} from "electron"
 import { existsSync } from "node:fs"
 import { platform } from "node:process"
 import { join } from "node:path"
@@ -6,11 +14,13 @@ import { join } from "node:path"
 import type {
   OusiaResolvedTheme,
   OusiaThemePreference,
+  OusiaUpdateStatus,
   OusiaWindowThemePayload,
   OusiaWindowState,
 } from "./chat-types.js"
 import { loadAppState, saveWindowState } from "./app-state-store.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
+import { updateCheckDialogOptions } from "./update-dialog.js"
 import {
   MAIN_WINDOW_MIN_HEIGHT,
   MAIN_WINDOW_MIN_WIDTH,
@@ -18,6 +28,7 @@ import {
 } from "./window-constants.js"
 
 type WindowHostOptions = {
+  onCheckForUpdates: () => Promise<OusiaUpdateStatus>
   onClosed: () => void
   onWindowChanged: (window: BrowserWindow | undefined) => void
 }
@@ -145,7 +156,35 @@ function adjustWindowZoomLevel(
   setWindowZoomLevel(window, window.webContents.getZoomLevel() + delta)
 }
 
-function installApplicationMenu(getWindow: () => BrowserWindow | undefined) {
+function installApplicationMenu(
+  getWindow: () => BrowserWindow | undefined,
+  onCheckForUpdates: () => Promise<OusiaUpdateStatus>
+) {
+  function checkForUpdates() {
+    void onCheckForUpdates()
+      .then((status) => {
+        const window = getWindow()
+        const options = updateCheckDialogOptions(status)
+        return window && !window.isDestroyed()
+          ? dialog.showMessageBox(window, options)
+          : dialog.showMessageBox(options)
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        writeRuntimeLog("update.manual", "error", { message })
+        const options: Electron.MessageBoxOptions = {
+          type: "error",
+          title: "Unable to Check for Updates",
+          message: "Ousia could not check for updates.",
+          detail: message,
+        }
+        const window = getWindow()
+        return window && !window.isDestroyed()
+          ? dialog.showMessageBox(window, options)
+          : dialog.showMessageBox(options)
+      })
+  }
+
   const template: Electron.MenuItemConstructorOptions[] = [
     ...(platform === "darwin"
       ? [
@@ -153,6 +192,10 @@ function installApplicationMenu(getWindow: () => BrowserWindow | undefined) {
             label: app.name,
             submenu: [
               { role: "about" as const },
+              {
+                label: "Check for Updates…",
+                click: checkForUpdates,
+              },
               { type: "separator" as const },
               { role: "services" as const },
               { type: "separator" as const },
@@ -222,6 +265,7 @@ function installApplicationMenu(getWindow: () => BrowserWindow | undefined) {
 }
 
 export function createWindowHost({
+  onCheckForUpdates,
   onClosed,
   onWindowChanged,
 }: WindowHostOptions) {
@@ -318,7 +362,7 @@ export function createWindowHost({
 
   async function createWindow() {
     const startupStartedAt = performance.now()
-    installApplicationMenu(getMainWindow)
+    installApplicationMenu(getMainWindow, onCheckForUpdates)
     const appStateLoadStartedAt = performance.now()
     const appState = await loadAppState({ synchronizePiRetry: false })
     const appStateReadyAt = performance.now()

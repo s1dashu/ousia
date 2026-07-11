@@ -6,18 +6,18 @@ tokens, or modifying existing surfaces.
 
 ## Design System Contract
 
-Ousia uses shadcn/ui Maia as its default design system. Ousia is not a second
+Ousia uses shadcn/ui Vega as its default design system. Ousia is not a second
 global theme layered on top of shadcn/ui. Product-specific styling is added only
-where the product has an explicit visual requirement that Maia does not cover.
+where the product has an explicit visual requirement that Vega does not cover.
 
 The governing rule is:
 
-> New UI is shadcn/ui Maia by default. A component may use Ousia styling only
+> New UI is shadcn/ui Vega by default. A component may use Ousia styling only
 > when it explicitly opts into an Ousia component or an `--ousia-*` token.
 
 This contract gives us both outcomes we need:
 
-- new and generic UI stays source-aligned with the `bbVKEbY` Maia preset;
+- new and generic UI stays source-aligned with the `bIkeymG` Vega preset;
 - tuned product surfaces such as Sidebar, Composer, MessageBubble, Diff, and
   StreamingOutput keep their intentional Ousia appearance.
 
@@ -31,7 +31,7 @@ Base UI
   └── behavior primitives
       focus, keyboard navigation, state, accessibility, positioning
 
-shadcn/ui Maia
+shadcn/ui Vega
   ├── global semantic tokens
   │   background, card, muted, border, input, popover, sidebar...
   └── default component recipes
@@ -54,14 +54,14 @@ Base UI owns primitive behavior. It provides accessible state machines and
 interaction behavior for controls such as Select, Dialog, Menu, and Tooltip.
 It does not define Ousia's product appearance.
 
-Do not reintroduce Radix UI while the project uses the Base UI Maia preset.
+Do not reintroduce Radix UI while the project uses the Base UI Vega preset.
 
-### shadcn/ui Maia is the default system
+### shadcn/ui Vega is the default system
 
 The canonical preset is:
 
 ```bash
-npx shadcn@latest init --preset bbVKEbY --template next --pointer
+npx shadcn@latest init --preset bIkeymG --template next --pointer
 ```
 
 It defines both:
@@ -73,12 +73,12 @@ The local generated reference and comparison workflow are documented in
 `docs/shadcn-reference.md`.
 
 The global light and dark shadcn tokens in `src/index.css` must remain aligned
-with the generated `bbVKEbY` reference. In particular, light-mode
+with the generated `bIkeymG` reference. In particular, light-mode
 `background`, `card`, and `popover` are white; Paper or Tea must not tint them.
 
 ### Ousia semantics are additions, not replacements
 
-Ousia may define product semantics when Maia does not describe the product
+Ousia may define product semantics when Vega does not describe the product
 concept precisely enough. Every such token must:
 
 - start with `--ousia-`;
@@ -115,7 +115,7 @@ Role names survive palette changes. Visual-value names do not.
 
 ### Global shadcn tokens
 
-These are global Maia semantics and must not be changed by Ousia appearance
+These are global Vega semantics and must not be changed by Ousia appearance
 scales or product component scopes:
 
 ```text
@@ -202,7 +202,7 @@ Ousia product token definitions in `src/index.css`.
 
 This directory contains the default shadcn/ui layer.
 
-Components here should stay aligned with Maia structure, state selectors,
+Components here should stay aligned with Vega structure, state selectors,
 geometry, focus treatment, and semantic token usage. They may include changes
 that are valid for every consumer, such as:
 
@@ -229,7 +229,7 @@ Ousia product component instead.
 
 ### shadcn components inside features
 
-Feature code should use `src/components/ui` directly whenever the default Maia
+Feature code should use `src/components/ui` directly whenever the default Vega
 component is correct:
 
 ```tsx
@@ -247,7 +247,7 @@ Small composition-level adjustments are expected:
 ```
 
 Controls in the same group must use a shared size contract. For example, the
-default Maia Input and Button are both `h-9`; do not pair an `h-9` Input with a
+default Vega Input and Button are both `h-9`; do not pair an `h-9` Input with a
 `size="sm"` (`h-8`) Button unless the mismatch is intentional and documented.
 
 ### Feature wrappers
@@ -282,12 +282,12 @@ global shadcn semantics for their descendants.
 
 ## Settings Policy
 
-Settings is the reference surface for default Maia behavior.
+Settings is the reference surface for default Vega behavior.
 
 Settings should use shadcn/ui components wherever they exist: Card, Button,
 Input, Select, Switch, Dialog, DropdownMenu, and related primitives. Settings
 must not enter a broad Chat or Sidebar product theme scope. The current
-feature-local Settings primitives are source-aligned copies of Maia used while
+feature-local Settings primitives are source-aligned copies of Vega used while
 global primitives still carry product customization. They are migration
 adapters; do not introduce another Settings visual system or add more copies
 without a concrete isolation need.
@@ -298,7 +298,7 @@ state alias so switching between the session sidebar and Settings preserves the
 same appearance scale. The target component semantic names are
 `--ousia-sidebar-surface` and `--ousia-sidebar-hover-surface`; rename the aliases
 only as part of the reviewed Sidebar token migration. Settings navigation text,
-focus, border, and control semantics remain Maia.
+focus, border, and control semantics remain Vega.
 
 Settings-specific layout is allowed:
 
@@ -312,7 +312,7 @@ Fixed Settings colors, an alternative Settings theme, or duplicated shadcn
 semantic tokens are not allowed.
 
 Portaled Select, Dialog, DropdownMenu, and Tooltip content naturally reads the
-global Maia tokens. Do not require a Settings-only class on `html` or `body` to
+global Vega tokens. Do not require a Settings-only class on `html` or `body` to
 make portals look correct.
 
 ## Product Surface Rules
@@ -381,13 +381,13 @@ measurement. Use semantic tokens for colors and themed surfaces.
 Good:
 
 ```tsx
-className="rounded-[18px] bg-[var(--ousia-message-user-surface)]"
+className = "rounded-[18px] bg-[var(--ousia-message-user-surface)]"
 ```
 
 Bad:
 
 ```tsx
-className="bg-[#f2ebe7] text-[#241f1b]"
+className = "bg-[#f2ebe7] text-[#241f1b]"
 ```
 
 ### Do not create broad product theme scopes
@@ -419,7 +419,7 @@ The target architecture is direct component semantics:
 ### Respect portal boundaries
 
 Base UI portal content normally inherits from `body`, not from the trigger's
-feature subtree. Default popup styling must therefore work from global Maia
+feature subtree. Default popup styling must therefore work from global Vega
 tokens. If a product-specific popup is genuinely required, pass an explicit
 product class or portal container; do not mutate `html` or `body` while the
 feature is open.
@@ -429,13 +429,13 @@ feature is open.
 Follow this decision sequence:
 
 1. Does shadcn/ui provide the component?
-   - Yes: generate or reuse the Maia component from `src/components/ui`.
+   - Yes: generate or reuse the Vega component from `src/components/ui`.
    - No: continue to step 2.
 2. Is the concept a generic UI primitive or an Ousia product concept?
-   - Generic: add a Maia-aligned component under `src/components/ui`.
+   - Generic: add a Vega-aligned component under `src/components/ui`.
    - Product concept: add an Ousia component under its feature or
      `src/components/ousia`.
-3. Does the component require a color not described by Maia semantics?
+3. Does the component require a color not described by Vega semantics?
    - No: use the existing shadcn token.
    - Yes: add the narrowest possible `--ousia-<component>-<role>` token.
 4. Does an existing shadcn component need a feature-only adjustment?
@@ -445,7 +445,7 @@ Follow this decision sequence:
      differ.
 
 Before finishing, confirm that a newly imported shadcn component with no extra
-classes renders as Maia.
+classes renders as Vega.
 
 ## Enforcement
 
@@ -453,12 +453,12 @@ Architecture should be protected by automation, not memory alone.
 
 Maintain tests or lint rules for these invariants:
 
-- global shadcn tokens match the generated `bbVKEbY` light and dark values;
+- global shadcn tokens match the generated `bIkeymG` light and dark values;
 - appearance selectors do not assign unprefixed shadcn semantic tokens;
 - files under `src/components/ui` do not contain `--ousia-` or import features;
 - Settings does not opt into broad Chat or Sidebar product scopes;
 - same-row controls use compatible size contracts;
-- portal surfaces remain Maia unless explicitly product-specific;
+- portal surfaces remain Vega unless explicitly product-specific;
 - Sidebar, Composer, MessageBubble, StreamingOutput, and Diff retain visual
   regression coverage as they are migrated to direct component tokens.
 
@@ -487,15 +487,15 @@ result and verify each surface before removing its migration scope.
 
 For every UI change, answer:
 
-- Is this default shadcn/ui Maia or an explicit Ousia product component?
+- Is this default shadcn/ui Vega or an explicit Ousia product component?
 - If it is Ousia-specific, is that ownership visible in the component or token
   name?
 - Did the change alter a global shadcn token for a local requirement?
 - Could an unrelated new shadcn component inherit this styling accidentally?
 - Does portal content receive the intended tokens?
 - Are control sizes consistent within the same row or group?
-- Does Settings still render from global Maia semantics?
+- Does Settings still render from global Vega semantics?
 - Did Sidebar, Composer, MessageBubble, StreamingOutput, or Diff regress?
 
-If ownership is unclear, keep the global Maia system unchanged and implement
+If ownership is unclear, keep the global Vega system unchanged and implement
 the requirement locally.

@@ -2,17 +2,14 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
-const css = readFileSync(
-  path.resolve(process.cwd(), "src/index.css"),
-  "utf8"
-)
+const css = readFileSync(path.resolve(process.cwd(), "src/index.css"), "utf8")
 
 function readSource(relativePath: string) {
   return readFileSync(path.resolve(process.cwd(), relativePath), "utf8")
 }
 
 describe("design token boundaries", () => {
-  it("keeps the root shadcn tokens aligned with bbVKEbY Maia", () => {
+  it("keeps the root shadcn tokens aligned with bIkeymG Vega", () => {
     expect(css).toContain("--background: oklch(1 0 0)")
     expect(css).toContain("--card: oklch(1 0 0)")
     expect(css).toContain("--popover: oklch(1 0 0)")
@@ -55,5 +52,18 @@ describe("design token boundaries", () => {
     expect(settingsPage).not.toContain("ousia-chat-theme")
     expect(settingsSidebar).toContain("SETTINGS_SIDEBAR_SURFACE_CLASS")
     expect(css).toContain("--ousia-sidebar:")
+  })
+
+  it("gives the Composer an explicit surface instead of inheriting Sidebar color", () => {
+    const chat = readSource("src/features/chat/ChatArea.tsx")
+
+    expect(css).toContain("--ousia-composer-surface: #fff")
+    expect(css).toContain(
+      "--ousia-composer-surface: color-mix(in srgb, var(--ousia-app-card) 97%, white)"
+    )
+    expect(chat).toContain("bg-[var(--ousia-composer-surface)]")
+    expect(chat).not.toContain(
+      "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-sidebar)]"
+    )
   })
 })

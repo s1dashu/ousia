@@ -276,6 +276,7 @@ async function loadPiTitleGeneratorModule() {
 }
 
 const windowHost = createWindowHost({
+  onCheckForUpdates: () => updateManagerRef.current!.check("manual"),
   onClosed() {},
   onWindowChanged(window) {
     mainWindow = window
@@ -292,6 +293,8 @@ const telemetry = createTelemetry({
 })
 updateManagerRef.current = createUpdateManager({
   currentVersion: app.getVersion(),
+  fetchRelease: (input, init) =>
+    net.fetch(input instanceof URL ? input.toString() : input, init),
   getWindow: () => windowHost.getMainWindow(),
   isPackaged: app.isPackaged,
   onDownloaded: () => telemetry.record("update_downloaded"),
