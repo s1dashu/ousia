@@ -47,8 +47,17 @@ import type {
   OusiaModelSettings,
   OusiaPiThinkingLevel,
 } from "./chat-types.js"
-import { isOusiaPiThinkingLevel } from "./chat-types.js"
+import {
+  createOusiaUserMessageEvent,
+  isOusiaPiThinkingLevel,
+  requireOusiaChatMessageId,
+} from "./chat-types.js"
 import { normalizeProviderModelId } from "./model-compat.js"
+import { chatMessageIdFingerprint } from "./chat-message-replay-guard.js"
+import {
+  PiToolInputTracker,
+  type PiToolInputCompletionSource,
+} from "./pi-tool-input.js"
 import {
   createWritablePiAuthStorage,
   resolvePiAgentDir,
@@ -98,12 +107,12 @@ type AgentConversationModuleOptions = {
 type PiSessionEntry = ReturnType<SessionManager["getEntries"]>[number]
 
 type AgentStreamState = {
+  toolInputTracker: PiToolInputTracker
   textId: string
   thinkingId: string
   showThinking: boolean
   currentAssistantMessageId: string
   lastErrorText: string
-  toolArgumentJsonByContentIndex: Map<number, string>
   toolDisplayIdsByContentIndex: Map<number, string>
   toolDisplayIdsByProviderId: Map<string, string>
   toolFilePreviewsById: Map<string, OusiaChatToolFilePreview>
@@ -164,12 +173,12 @@ function createStreamState(
   thinkingLevel: string | undefined = "off"
 ): AgentStreamState {
   return {
+    toolInputTracker: new PiToolInputTracker(),
     textId: "",
     thinkingId: "",
     showThinking: shouldShowThinkingForLevel(thinkingLevel),
     currentAssistantMessageId: "",
     lastErrorText: "",
-    toolArgumentJsonByContentIndex: new Map(),
     toolDisplayIdsByContentIndex: new Map(),
     toolDisplayIdsByProviderId: new Map(),
     toolFilePreviewsById: new Map(),
@@ -479,22 +488,6 @@ function textFromContent(content: unknown) {
     })
     .filter(Boolean)
     .join("\n")
-}
-
-function attachmentSummary(attachments: OusiaChatAttachment[] | undefined) {
-  if (!attachments?.length) {
-    return []
-  }
-  return attachments.map((attachment) => ({
-    id: attachment.id,
-    kind: attachment.kind,
-    mediaType: attachment.mediaType,
-    name: attachment.name,
-    size: attachment.size,
-    ...(attachment.kind === "image"
-      ? { dataBase64: attachment.dataBase64 }
-      : {}),
-  }))
 }
 
 function imageExtension(mediaType: string) {
@@ -1376,7 +1369,7 @@ export function createAgentConversationModule({
       state.textId = ""
       state.thinkingId = ""
       state.currentAssistantMessageId = ""
-      state.toolArgumentJsonByContentIndex.clear()
+      state.toolInputTracker.reset()
       state.toolDisplayIdsByContentIndex.clear()
       state.toolDisplayIdsByProviderId.clear()
       state.toolFilePreviewsById.clear()
@@ -1394,7 +1387,7 @@ export function createAgentConversationModule({
           typeof source.message.id === "string"
             ? source.message.id
             : randomId("assistant-message")
-        state.toolArgumentJsonByContentIndex.clear()
+        state.toolInputTracker.reset()
         state.toolDisplayIdsByContentIndex.clear()
         state.toolDisplayIdsByProviderId.clear()
         state.toolFilePreviewsById.clear()
@@ -1429,6 +1422,13 @@ export function createAgentConversationModule({
       }
       const displayId =
         displayToolCallId(state, source.toolCallId) ?? randomId("tool")
+      writeRuntimeLog("pi.tool.lifecycle", "debug", {
+        phase: "execution_start",
+        providerToolCallId: source.toolCallId,
+        sessionId: context.sessionId,
+        toolCallId: displayId,
+        toolName: source.toolName,
+      })
       const filePreview = createStreamToolFilePreview({
         args: source.args,
         context,
@@ -1500,6 +1500,14 @@ export function createAgentConversationModule({
         },
         context
       )
+      writeRuntimeLog("pi.tool.lifecycle", "debug", {
+        isError: source.isError ?? false,
+        phase: "execution_end",
+        providerToolCallId: source.toolCallId,
+        sessionId: context.sessionId,
+        toolCallId: displayId,
+        toolName: source.toolName,
+      })
       state.activeToolIds.delete(displayId)
       return
     }
@@ -1542,19 +1550,33 @@ export function createAgentConversationModule({
       messageEvent.type === "toolcall_start" &&
       typeof messageEvent.contentIndex === "number"
     ) {
-      state.toolArgumentJsonByContentIndex.set(messageEvent.contentIndex, "")
+      state.toolInputTracker.start(messageEvent.contentIndex)
     }
     if (
       messageEvent.type === "toolcall_delta" &&
       typeof messageEvent.contentIndex === "number" &&
       typeof messageEvent.delta === "string"
     ) {
-      const current =
-        state.toolArgumentJsonByContentIndex.get(messageEvent.contentIndex) ??
-        ""
-      state.toolArgumentJsonByContentIndex.set(
+      const displayId = state.toolDisplayIdsByContentIndex.get(
+        messageEvent.contentIndex
+      )
+      if (
+        state.toolInputTracker.receivedDataAfterCompletion(
+          displayId,
+          messageEvent.delta
+        )
+      ) {
+        writeRuntimeLog("pi.tool.lifecycle", "error", {
+          contentIndex: messageEvent.contentIndex,
+          message: "Pi tool input received data after JSON completion",
+          phase: "input_delta_after_end",
+          sessionId: context.sessionId,
+          toolCallId: displayId,
+        })
+      }
+      state.toolInputTracker.append(
         messageEvent.contentIndex,
-        current + messageEvent.delta
+        messageEvent.delta
       )
     }
 
@@ -1586,7 +1608,7 @@ export function createAgentConversationModule({
         state.toolDisplayIdsByProviderId.set(providerToolCallId, toolCallId)
       }
       const toolName = typeof part.name === "string" ? part.name : "tool"
-      const rawArguments = state.toolArgumentJsonByContentIndex.get(index)
+      const rawArguments = state.toolInputTracker.rawArguments(index)
       const argsForPreview =
         rawArguments && rawArguments.trim() ? rawArguments : part.arguments
       const filePreview = createStreamToolFilePreview({
@@ -1610,20 +1632,44 @@ export function createAgentConversationModule({
           },
           context
         )
-        return
+      } else {
+        emitChatEvent(
+          {
+            type: "tool_update",
+            id: toolCallId,
+            name: toolName,
+            filePreview,
+            value: argsForPreview,
+            phase: "input",
+            timestamp,
+          },
+          context
+        )
       }
+      return { id: toolCallId, name: toolName }
+    }
+
+    const emitToolInputEnd = (
+      target: { id: string; name: string },
+      index: number,
+      completionSource: PiToolInputCompletionSource
+    ) => {
       emitChatEvent(
         {
-          type: "tool_update",
-          id: toolCallId,
-          name: toolName,
-          filePreview,
-          value: argsForPreview,
-          phase: "input",
+          type: "tool_input_end",
+          id: target.id,
           timestamp,
         },
         context
       )
+      writeRuntimeLog("pi.tool.lifecycle", "debug", {
+        completionSource,
+        contentIndex: index,
+        phase: "input_end",
+        sessionId: context.sessionId,
+        toolCallId: target.id,
+        toolName: target.name,
+      })
     }
 
     if (toolMessage && Array.isArray(toolMessage.content)) {
@@ -1631,22 +1677,59 @@ export function createAgentConversationModule({
         if (!part || typeof part !== "object") {
           return
         }
-        emitToolCallInputUpdate(
+        const target = emitToolCallInputUpdate(
           part as Record<string, unknown>,
           index,
           toolMessage.id || message?.id
         )
+        const completionSource = target
+          ? state.toolInputTracker.finishIfComplete({
+              authoritativeEnd:
+                messageEvent.type === "toolcall_end" &&
+                messageEvent.contentIndex === index,
+              contentIndex: index,
+              toolCallId: target.id,
+            })
+          : undefined
+        if (target && completionSource) {
+          emitToolInputEnd(target, index, completionSource)
+        }
       })
     } else if (
       messageEvent.type === "toolcall_end" &&
       typeof messageEvent.contentIndex === "number" &&
       messageEvent.toolCall
     ) {
-      emitToolCallInputUpdate(
+      const target = emitToolCallInputUpdate(
         { ...messageEvent.toolCall, type: "toolCall" },
         messageEvent.contentIndex,
         message?.id
       )
+      const completionSource = target
+        ? state.toolInputTracker.finishIfComplete({
+            authoritativeEnd: true,
+            contentIndex: messageEvent.contentIndex,
+            toolCallId: target.id,
+          })
+        : undefined
+      if (target && completionSource) {
+        emitToolInputEnd(target, messageEvent.contentIndex, completionSource)
+      }
+    }
+
+    if (
+      messageEvent.type === "toolcall_end" &&
+      typeof messageEvent.contentIndex === "number" &&
+      !state.toolInputTracker.isComplete(
+        state.toolDisplayIdsByContentIndex.get(messageEvent.contentIndex)
+      )
+    ) {
+      writeRuntimeLog("pi.tool.lifecycle", "warn", {
+        contentIndex: messageEvent.contentIndex,
+        message: "Could not correlate completed Pi tool input",
+        phase: "input_end_unmatched",
+        sessionId: context.sessionId,
+      })
     }
 
     if (messageEvent.type === "text_start") {
@@ -1989,18 +2072,14 @@ export function createAgentConversationModule({
     if (!text && images.length === 0) {
       return { ok: true }
     }
+    let messageId: string | undefined
     try {
+      messageId = requireOusiaChatMessageId(payload.messageId)
       const thinkingLevel = requirePiThinkingLevel(payload.thinkingLevel)
-      emitChatEvent(
-        {
-          type: "user_message",
-          id: randomId("user"),
-          text: payload.prompt.trim(),
-          attachments: attachmentSummary(attachments),
-          timestamp: now(),
-        },
-        context
-      )
+      writeRuntimeLog("pi.message", "debug", {
+        messageIdFingerprint: chatMessageIdFingerprint(messageId),
+        sessionId: context.sessionId,
+      })
       const bundle = await getAgentSession(
         context,
         payload.model,
@@ -2042,6 +2121,10 @@ export function createAgentConversationModule({
             const timestamp = now()
             const text = errorTextFromUnknown(error)
             emitChatEvent(
+              createOusiaUserMessageEvent(payload, timestamp, "failed"),
+              context
+            )
+            emitChatEvent(
               {
                 type: "error",
                 id: randomId("error"),
@@ -2060,6 +2143,12 @@ export function createAgentConversationModule({
     } catch (error) {
       const timestamp = now()
       const text = errorTextFromUnknown(error)
+      if (messageId) {
+        emitChatEvent(
+          createOusiaUserMessageEvent(payload, timestamp, "failed"),
+          context
+        )
+      }
       emitChatEvent(
         {
           type: "error",

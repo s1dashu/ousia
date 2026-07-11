@@ -114,6 +114,22 @@ describe("toolFilePreviewFromItem", () => {
     })
   })
 
+  it("keeps streaming write content when path is serialized last", () => {
+    expect(
+      toolFilePreviewFromItem(
+        toolItem({
+          input: '{"content":"first\\nsecond',
+        })
+      )
+    ).toEqual({
+      kind: "diff",
+      newContent: "first\nsecond",
+      oldContent: "",
+      path: "write",
+      source: "input",
+    })
+  })
+
   it("decodes partial JSON escapes while building fallback write previews", () => {
     expect(
       toolFilePreviewFromItem(

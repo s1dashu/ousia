@@ -41,6 +41,7 @@ import { Button } from "@/components/ui/button"
 import type {
   OusiaLanguage,
   OusiaSidebarSectionId,
+  OusiaUpdateStatus,
 } from "@/electron/chat-types"
 
 const sidebarAddIconSize = 18
@@ -58,11 +59,12 @@ const sidebarFooterPaddingXClass = "px-[7px]"
 const sidebarRowFrameXClass = "-ml-1 w-full"
 const sidebarRowContentXClass = "pl-3 pr-2"
 const sidebarRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
-const sidebarSessionRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
+const sidebarSessionRowXClass = "mr-1 pl-2 pr-1"
 const sidebarSessionDragPreviewXClass = "px-3"
-const sidebarProjectRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
+const sidebarRightActionRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1`
+const sidebarProjectRowXClass = sidebarRightActionRowXClass
 const sidebarListGapClass = "flex flex-col gap-0.5"
-const sidebarSectionHeaderXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
+const sidebarSectionHeaderXClass = sidebarRightActionRowXClass
 const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
@@ -107,6 +109,7 @@ type SidebarProps = {
   onMoveSession: (target: SidebarMoveSessionTarget) => void | Promise<void>
   onOpenProject: () => void
   onOpenSettings: () => void
+  onUpdateAction: () => void
   onRenameSession: (sessionId: string, title: string) => void
   onReorderProjects: (sourceProjectId: string, targetProjectId: string) => void
   onReorderSidebarSections: (
@@ -125,6 +128,7 @@ type SidebarProps = {
   unreadCompletedSessionIds: Set<string>
   sessions: SessionRecord[]
   language: OusiaLanguage
+  updateStatus: OusiaUpdateStatus
   style: CSSProperties
 }
 
@@ -530,10 +534,7 @@ function SortableProjectSection({
           <span className="block min-w-0 flex-1 truncate">{project.name}</span>
         </button>
         {hasWorkingSession ? (
-          <SidebarRunningIndicator
-            label={`${project.name} ${t.sidebar.running}`}
-            title={t.sidebar.running}
-          />
+          <div aria-hidden="true" />
         ) : (
           <Button
             type="button"
@@ -683,6 +684,7 @@ function SidebarComponent({
   onMoveSession,
   onOpenProject,
   onOpenSettings,
+  onUpdateAction,
   onRenameSession,
   onReorderProjects,
   onReorderSidebarSections,
@@ -698,6 +700,7 @@ function SidebarComponent({
   unreadCompletedSessionIds,
   sessions,
   language,
+  updateStatus,
   style,
 }: SidebarProps) {
   const t = getMessages(language)
@@ -1137,7 +1140,7 @@ function SidebarComponent({
 
   return (
     <aside
-      className="ousia-sidebar-shell flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
+      className="ousia-sidebar-shell ousia-sidebar-theme flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
       style={style}
     >
       <div className="window-drag h-[var(--ousia-titlebar-height)] shrink-0" />
@@ -1164,16 +1167,44 @@ function SidebarComponent({
         </DndContext>
       </div>
 
-      <div className={`${sidebarFooterPaddingXClass} py-2`}>
+      <div className={`${sidebarFooterPaddingXClass} flex items-center gap-1 py-2`}>
         <Button
           type="button"
           variant="ghost"
-          className={`font-radix-regular h-9 w-full justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
+          className={`font-radix-regular h-9 min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
           <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />
           <span>{t.sidebar.settings}</span>
         </Button>
+        {updateStatus.phase === "available" ||
+        updateStatus.phase === "downloading" ||
+        updateStatus.phase === "downloaded" ||
+        updateStatus.phase === "error" ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={updateStatus.phase === "downloaded" ? "default" : "outline"}
+            className="h-8 shrink-0 rounded-md px-2.5 text-xs"
+            disabled={updateStatus.phase === "downloading"}
+            title={
+              updateStatus.phase === "error"
+                ? `${t.sidebar.updateFailed} ${updateStatus.message}`
+                : updateStatus.phase === "downloaded"
+                  ? t.sidebar.restartToUpdate
+                  : updateStatus.phase === "downloading"
+                    ? t.sidebar.updating
+                    : `${t.sidebar.update} ${updateStatus.version}`
+            }
+            onClick={onUpdateAction}
+          >
+            {updateStatus.phase === "downloaded"
+              ? t.sidebar.restartToUpdate
+              : updateStatus.phase === "downloading"
+                ? t.sidebar.updating
+                : t.sidebar.update}
+          </Button>
+        ) : null}
       </div>
     </aside>
   )

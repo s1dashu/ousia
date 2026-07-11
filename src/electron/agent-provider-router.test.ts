@@ -65,7 +65,7 @@ describe("agent provider router", () => {
       const state = createDefaultOusiaAppState()
       state.settings = {
         ...state.settings,
-        defaultWorkDir: "~/Documents/Ousia",
+        defaultSessionDir: "~/Documents/Ousia",
       }
       const session = withSession(state, { agentProvider })
       mocks.loadAppState.mockResolvedValue(state)
@@ -73,6 +73,7 @@ describe("agent provider router", () => {
       const codex = createProvider()
       const router = createAgentProviderRouter({ codex, pi })
       const payload = {
+        messageId: "user-client-1",
         projectPath: join(homedir(), "Documents", "Ousia"),
         sessionId: session.id,
         prompt: "hello",
@@ -80,7 +81,9 @@ describe("agent provider router", () => {
         thinkingLevel: "medium" as const,
       }
 
-      await expect(router.sendChatMessage(payload)).resolves.toEqual({ ok: true })
+      await expect(router.sendChatMessage(payload)).resolves.toEqual({
+        ok: true,
+      })
 
       expect(
         providersFor(agentProvider, { codex, pi }).sendChatMessage
@@ -105,7 +108,10 @@ describe("agent provider router", () => {
 
   it("rejects a forged cwd instead of passing it to an agent", async () => {
     const state = createDefaultOusiaAppState()
-    state.settings = { ...state.settings, defaultWorkDir: "/trusted/default" }
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
     const session = withSession(state, { agentProvider: "codex" })
     mocks.loadAppState.mockResolvedValue(state)
     const codex = createProvider()
@@ -128,6 +134,158 @@ describe("agent provider router", () => {
         sessionId: session.id,
       })
     )
+  })
+
+  it("rejects an invalid client message id before routing to a provider", async () => {
+    const state = createDefaultOusiaAppState()
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
+    const session = withSession(state, { agentProvider: "codex" })
+    mocks.loadAppState.mockResolvedValue(state)
+    const codex = createProvider()
+    const router = createAgentProviderRouter({ codex, pi: createProvider() })
+
+    await expect(
+      router.sendChatMessage({
+        messageId: "invalid message id",
+        projectPath: "/trusted/default",
+        sessionId: session.id,
+        prompt: "hello",
+        model: { provider: "openai", modelId: "model" },
+        thinkingLevel: "medium",
+      })
+    ).rejects.toThrow("Invalid chat message id")
+
+    expect(codex.sendChatMessage).not.toHaveBeenCalled()
+    expect(mocks.writeRuntimeLog).toHaveBeenCalledWith(
+      "agent.message",
+      "error",
+      expect.objectContaining({
+        messageIdLength: 18,
+        messageIdType: "string",
+        sessionId: session.id,
+      })
+    )
+  })
+
+  it("rejects a same-session message replay before the provider executes twice", async () => {
+    const state = createDefaultOusiaAppState()
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
+    const session = withSession(state, { agentProvider: "codex" })
+    mocks.loadAppState.mockResolvedValue(state)
+    const codex = createProvider()
+    const router = createAgentProviderRouter({ codex, pi: createProvider() })
+    const payload = {
+      messageId: "user-client-replay",
+      projectPath: "/trusted/default",
+      sessionId: session.id,
+      prompt: "hello",
+      model: { provider: "openai", modelId: "model" },
+      thinkingLevel: "medium",
+    }
+
+    await expect(router.sendChatMessage(payload)).resolves.toEqual({ ok: true })
+    await expect(router.sendChatMessage(payload)).rejects.toThrow(
+      "Duplicate chat message id"
+    )
+
+    expect(codex.sendChatMessage).toHaveBeenCalledOnce()
+    expect(mocks.writeRuntimeLog).toHaveBeenCalledWith(
+      "agent.message",
+      "error",
+      expect.objectContaining({
+        message: "Rejected duplicate chat message id",
+        sessionId: session.id,
+      })
+    )
+  })
+
+  it("finishes an in-flight history snapshot before routing a new message", async () => {
+    const state = createDefaultOusiaAppState()
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
+    const session = withSession(state, { agentProvider: "codex" })
+    mocks.loadAppState.mockResolvedValue(state)
+    let resolveHistory!: (value: { items: [] }) => void
+    const pendingHistory = new Promise<{ items: [] }>((resolve) => {
+      resolveHistory = resolve
+    })
+    const codex = createProvider()
+    codex.getChatHistory = vi.fn(() => pendingHistory)
+    const router = createAgentProviderRouter({ codex, pi: createProvider() })
+
+    const historyResult = router.getChatHistory({
+      projectPath: "/trusted/default",
+      sessionId: session.id,
+    })
+    await vi.waitFor(() => expect(codex.getChatHistory).toHaveBeenCalledOnce())
+
+    const sendResult = router.sendChatMessage({
+      messageId: "user-client-after-history",
+      projectPath: "/trusted/default",
+      sessionId: session.id,
+      prompt: "hello",
+      model: { provider: "openai", modelId: "model" },
+      thinkingLevel: "medium",
+    })
+    await Promise.resolve()
+    expect(codex.sendChatMessage).not.toHaveBeenCalled()
+
+    resolveHistory({ items: [] })
+    await expect(historyResult).resolves.toEqual({ items: [] })
+    await expect(sendResult).resolves.toEqual({ ok: true })
+    expect(codex.sendChatMessage).toHaveBeenCalledOnce()
+    expect(mocks.writeRuntimeLog).toHaveBeenCalledWith(
+      "agent.message",
+      "debug",
+      expect.objectContaining({
+        message: "Waited for in-flight chat history before sending",
+        sessionId: session.id,
+      })
+    )
+  })
+
+  it("continues sending after an in-flight history snapshot fails", async () => {
+    const state = createDefaultOusiaAppState()
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
+    const session = withSession(state, { agentProvider: "codex" })
+    mocks.loadAppState.mockResolvedValue(state)
+    let rejectHistory!: (error: Error) => void
+    const pendingHistory = new Promise<{ items: [] }>((_resolve, reject) => {
+      rejectHistory = reject
+    })
+    const codex = createProvider()
+    codex.getChatHistory = vi.fn(() => pendingHistory)
+    const router = createAgentProviderRouter({ codex, pi: createProvider() })
+
+    const historyResult = router.getChatHistory({
+      projectPath: "/trusted/default",
+      sessionId: session.id,
+    })
+    await vi.waitFor(() => expect(codex.getChatHistory).toHaveBeenCalledOnce())
+    const sendResult = router.sendChatMessage({
+      messageId: "user-client-after-history-error",
+      projectPath: "/trusted/default",
+      sessionId: session.id,
+      prompt: "hello",
+      model: { provider: "openai", modelId: "model" },
+      thinkingLevel: "medium",
+    })
+
+    rejectHistory(new Error("history unavailable"))
+    await expect(historyResult).rejects.toThrow("history unavailable")
+    await expect(sendResult).resolves.toEqual({ ok: true })
+    expect(codex.sendChatMessage).toHaveBeenCalledOnce()
   })
 
   it("derives a project session cwd from its canonical project record", async () => {
@@ -210,7 +368,10 @@ describe("agent provider router", () => {
 
   it("fails fast when a move target project is unknown", async () => {
     const state = createDefaultOusiaAppState()
-    state.settings = { ...state.settings, defaultWorkDir: "/trusted/default" }
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
     const session = state.sessions[0]
     mocks.loadAppState.mockResolvedValue(state)
     const router = createAgentProviderRouter({
@@ -239,7 +400,9 @@ describe("agent provider router", () => {
 
     await expect(
       router.getChatHistory({ projectPath: "/tmp", sessionId: session.id })
-    ).rejects.toThrow(`Unknown project: missing-project (session: ${session.id})`)
+    ).rejects.toThrow(
+      `Unknown project: missing-project (session: ${session.id})`
+    )
   })
 
   it("fails fast when the canonical session is missing", async () => {
@@ -256,7 +419,10 @@ describe("agent provider router", () => {
 
   it("validates branch target session against the same canonical project", async () => {
     const state = createDefaultOusiaAppState()
-    state.settings = { ...state.settings, defaultWorkDir: "/trusted/default" }
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
     const source = withSession(state, { agentProvider: "codex" })
     state.sessions.push({
       ...source,
@@ -284,7 +450,10 @@ describe("agent provider router", () => {
 
   it("exposes the same canonical resolver for non-router agent IPC", async () => {
     const state = createDefaultOusiaAppState()
-    state.settings = { ...state.settings, defaultWorkDir: "/trusted/default" }
+    state.settings = {
+      ...state.settings,
+      defaultSessionDir: "/trusted/default",
+    }
     const session = withSession(state, { agentProvider: "codex" })
     mocks.loadAppState.mockResolvedValue(state)
 

@@ -292,6 +292,7 @@ describe("Codex agent provider", () => {
 
     const result = await provider.sendChatMessage({
       agentMode: "standard",
+      messageId: "user-client-start",
       model: { provider: "openai", modelId: "gpt-test" },
       projectPath: "/tmp/project",
       prompt: "hello",
@@ -331,12 +332,14 @@ describe("Codex agent provider", () => {
 
     expect(events.map(({ event }) => event.type)).toEqual(
       expect.arrayContaining([
-        "user_message",
         "assistant_text_start",
         "assistant_text_delta",
         "assistant_text_end",
         "run_status",
       ])
+    )
+    expect(events.filter(({ event }) => event.type === "user_message")).toEqual(
+      []
     )
     expect(
       events.every((entry) => entry.sessionId === state.sessions[0].id)
@@ -410,21 +413,35 @@ describe("Codex agent provider", () => {
     }
 
     await expect(
-      provider.sendChatMessage({ ...commonPayload, prompt: "start" })
+      provider.sendChatMessage({
+        ...commonPayload,
+        messageId: "user-client-start",
+        prompt: "start",
+      })
     ).resolves.toEqual({ ok: true })
     const eventCountBeforeSteer = events.length
 
     await expect(
       provider.sendChatMessage({
         ...commonPayload,
+        messageId: "user-client-steer",
         prompt: "steer",
         sendBehavior: "steer",
       })
     ).resolves.toMatchObject({ ok: false, error: "Steer was rejected" })
 
     const steerEvents = events.slice(eventCountBeforeSteer)
-    expect(steerEvents.some((event) => event.type === "user_message")).toBe(
-      false
+    expect(
+      steerEvents.filter((event) => event.type === "user_message")
+    ).toHaveLength(1)
+    expect(steerEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          delivery: "failed",
+          id: "user-client-steer",
+          type: "user_message",
+        }),
+      ])
     )
     expect(steerEvents).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: "error" })])
@@ -434,6 +451,64 @@ describe("Codex agent provider", () => {
         (event) => event.type === "run_status" && event.status === "error"
       )
     ).toBe(false)
+
+    provider.dispose()
+  })
+
+  it("publishes an atomic failed user state when turn start is rejected", async () => {
+    const state = codexState()
+    mocks.loadAppState.mockImplementation(async () => state)
+    mocks.bindThread.mockImplementation(async ({ agentThreadId }) => {
+      state.sessions[0] = { ...state.sessions[0], agentThreadId }
+      return { ok: true, state, session: state.sessions[0] }
+    })
+    const client = new FakeCodexClient()
+    client.requestHandler = (method) => {
+      if (method === "model/list") {
+        return { data: [codexModelEntry("gpt-test", true)] }
+      }
+      if (method === "thread/start") {
+        return { thread: { id: "thread-1", turns: [] } }
+      }
+      if (method === "turn/start") {
+        throw new Error("Turn start was rejected")
+      }
+      return {}
+    }
+    const events: OusiaChatEvent[] = []
+    const provider = createCodexAgentProvider({
+      client: client as unknown as CodexAppServerClient,
+      emitChatEvent: (event) => events.push(event),
+    })
+
+    await expect(
+      provider.sendChatMessage({
+        agentMode: "standard",
+        messageId: "user-client-rejected-start",
+        model: { provider: "openai", modelId: "gpt-test" },
+        projectPath: "/tmp/project",
+        prompt: "hello",
+        sessionId: state.sessions[0].id,
+        thinkingLevel: "low",
+      })
+    ).resolves.toMatchObject({
+      error: "Turn start was rejected",
+      ok: false,
+    })
+
+    expect(
+      events.flatMap((event) =>
+        event.type === "user_message"
+          ? [{ delivery: event.delivery, id: event.id, text: event.text }]
+          : []
+      )
+    ).toEqual([
+      {
+        delivery: "failed",
+        id: "user-client-rejected-start",
+        text: "hello",
+      },
+    ])
 
     provider.dispose()
   })
@@ -456,6 +531,7 @@ describe("Codex agent provider", () => {
 
     const result = await provider.sendChatMessage({
       agentMode: "custom",
+      messageId: "user-client-custom",
       model: { provider: "openai", modelId: "" },
       projectPath: "/tmp/project",
       prompt: "hello",
@@ -467,6 +543,33 @@ describe("Codex agent provider", () => {
     expect(result.error).toContain("does not support")
     expect(client.requests).toEqual([])
     expect(events.some((event) => event.type === "error")).toBe(true)
+  })
+
+  it("rejects the Pi-only automatic retry setting at the Codex boundary", async () => {
+    const state = codexState()
+    mocks.loadAppState.mockResolvedValue(state)
+    const client = new FakeCodexClient()
+    const provider = createCodexAgentProvider({
+      client: client as unknown as CodexAppServerClient,
+      emitChatEvent: vi.fn(),
+    })
+
+    await expect(
+      provider.sendChatMessage({
+        agentMode: "standard",
+        autoRetryOnFailure: true,
+        messageId: "user-client-pi-retry",
+        model: { provider: "openai", modelId: "gpt-test" },
+        projectPath: "/tmp/project",
+        prompt: "hello",
+        sessionId: state.sessions[0].id,
+        thinkingLevel: "medium",
+      })
+    ).resolves.toMatchObject({
+      error: "Codex received Pi-only autoRetryOnFailure configuration.",
+      ok: false,
+    })
+    expect(client.requests).toEqual([])
   })
 
   it("rejects a reasoning effort that the selected Codex model does not support", async () => {
@@ -500,6 +603,7 @@ describe("Codex agent provider", () => {
     await expect(
       provider.sendChatMessage({
         agentMode: "standard",
+        messageId: "user-client-unsupported",
         model: { provider: "openai", modelId: "gpt-test" },
         projectPath: "/tmp/project",
         prompt: "hello",
@@ -562,6 +666,7 @@ describe("Codex agent provider", () => {
     await expect(
       provider.sendChatMessage({
         agentMode: "standard",
+        messageId: "user-client-future",
         model: { provider: "openai", modelId: "gpt-future" },
         projectPath: "/tmp/project",
         prompt: "hello",

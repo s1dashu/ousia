@@ -67,6 +67,8 @@ import type {
   OusiaShowFileInFinderPayload,
   OusiaShowFileInFinderResult,
   OusiaSessionRecord,
+  OusiaUpdateActionResult,
+  OusiaUpdateStatus,
   OusiaWindowThemePayload,
 } from "./chat-types.js"
 import { expandHomePath, resolveProjectFilePath } from "./host-paths.js"
@@ -76,6 +78,8 @@ import {
   writeRuntimeLog,
 } from "./runtime-logger.js"
 import { hydrateShellEnvironment } from "./shell-environment.js"
+import { createTelemetry } from "./telemetry.js"
+import { createUpdateManager } from "./update-manager.js"
 import { createWindowHost } from "./window-host.js"
 
 configureOusiaAppPaths()
@@ -92,6 +96,9 @@ const shellEnvironmentReady = hasSingleInstanceLock
 const enabledTools = ["read", "write", "edit", "bash", "grep", "find", "ls"]
 
 let mainWindow: BrowserWindow | undefined
+const updateManagerRef: {
+  current?: ReturnType<typeof createUpdateManager>
+} = {}
 
 const chatEventBatcher = createChatEventBatcher<ReturnType<typeof setTimeout>>({
   cancel: (handle) => globalThis.clearTimeout(handle),
@@ -108,6 +115,7 @@ function emitChatEvent(event: OusiaChatEvent, context?: OusiaChatContext) {
   if (event.type === "error") {
     writeRuntimeLog("chat.event", "error", { context, text: event.text })
   }
+  updateManagerRef.current?.observeChatEvent(event, context)
   chatEventBatcher.enqueue(event, context)
 }
 
@@ -187,7 +195,7 @@ function removedSessionProjectPath(
   session: OusiaSessionRecord
 ) {
   if (!session.projectId) {
-    return result.state.settings.defaultWorkDir
+    return result.state.settings.defaultSessionDir
   }
   const retainedProject = result.state.projects.find(
     (project) => project.id === session.projectId
@@ -264,6 +272,22 @@ const windowHost = createWindowHost({
   onWindowChanged(window) {
     mainWindow = window
   },
+})
+
+const serviceBaseUrl =
+  process.env.OUSIA_SERVICE_BASE_URL?.trim() ||
+  "https://ousia-analytics.vercel.app"
+const telemetry = createTelemetry({
+  appVersion: app.getVersion(),
+  serviceBaseUrl: app.isPackaged ? serviceBaseUrl : "",
+  userDataPath: app.getPath("userData"),
+})
+updateManagerRef.current = createUpdateManager({
+  currentVersion: app.getVersion(),
+  getWindow: () => windowHost.getMainWindow(),
+  isPackaged: app.isPackaged,
+  onDownloaded: () => telemetry.record("update_downloaded"),
+  serviceBaseUrl,
 })
 
 let mainWindowCreationPromise: Promise<void> | undefined
@@ -604,6 +628,18 @@ ipcMain.on("ousia:window:theme", (_event, payload: OusiaWindowThemePayload) => {
   windowHost.setWindowTheme(payload)
 })
 
+ipcMain.handle("ousia:update:status", (): OusiaUpdateStatus =>
+  updateManagerRef.current!.getStatus()
+)
+ipcMain.handle(
+  "ousia:update:download",
+  (): Promise<OusiaUpdateActionResult> => updateManagerRef.current!.download()
+)
+ipcMain.handle("ousia:update:install", (): OusiaUpdateActionResult =>
+  updateManagerRef.current!.install()
+)
+ipcMain.on("ousia:update:activity", () => updateManagerRef.current!.noteActivity())
+
 ipcMain.handle("ousia:app-state:load", async () => {
   await shellEnvironmentReady
   return loadAppState({ synchronizePiRetry: true })
@@ -695,6 +731,8 @@ app.whenReady().then(async () => {
     userData: app.getPath("userData"),
   })
   await ensureMainWindow()
+  telemetry.record("app_opened")
+  updateManagerRef.current!.start()
 })
 
 app.on("second-instance", () => {
@@ -734,6 +772,7 @@ function disposeProviderOnExit(
 
 app.on("before-quit", () => {
   chatEventBatcher.dispose()
+  updateManagerRef.current?.dispose()
   disposeProviderOnExit("pi", () => piAgentConversations.dispose?.())
   disposeProviderOnExit("codex", () => codexAgentProvider.dispose())
 })

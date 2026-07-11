@@ -173,7 +173,7 @@ npm run make:dmg:notarized   # Signed DMG + notarization
 | -------------------------------- | ------------------------------------------------------- |
 | `AGENTS.md`                      | Entry point for coding agents contributing to this repo |
 | `docs/product-context.md`        | Scope, product boundaries, glossary                     |
-| `docs/design-context.md`         | UI rules, icon policy, shell constraints                |
+| `docs/design.md`                 | Design system, token ownership, and UI rules            |
 | `docs/technical-architecture.md` | Stack, IPC model, state schema, logging                 |
 | `docs/streamdown.md`             | Markdown rendering config and link handling             |
 | `docs/shadcn-reference.md`       | Local shadcn/ui reference workflow                      |

@@ -51,6 +51,8 @@ import type {
   OusiaSelectDirectoryResult,
   OusiaShowFileInFinderPayload,
   OusiaShowFileInFinderResult,
+  OusiaUpdateActionResult,
+  OusiaUpdateStatus,
   OusiaWindowFullscreenEvent,
   OusiaWindowThemePayload,
   OusiaWindowZoomEvent,
@@ -154,6 +156,10 @@ declare global {
       getWindowFullscreenState(): Promise<OusiaWindowFullscreenEvent>
       getWindowZoomState(): Promise<OusiaWindowZoomEvent>
       setWindowTheme(payload: OusiaWindowThemePayload): void
+      getUpdateStatus(): Promise<OusiaUpdateStatus>
+      downloadUpdate(): Promise<OusiaUpdateActionResult>
+      installUpdate(): Promise<OusiaUpdateActionResult>
+      onUpdateStatus(callback: (status: OusiaUpdateStatus) => void): () => void
       onChatEvent(callback: (event: OusiaChatEvent) => void): () => void
       onWindowFullscreenChange(
         callback: (event: OusiaWindowFullscreenEvent) => void

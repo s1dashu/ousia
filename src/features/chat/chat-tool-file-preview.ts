@@ -46,18 +46,20 @@ function fallbackWriteFilePreview(
   if (normalizedToolName(item.name) !== "write") {
     return undefined
   }
-  const fields = writeFieldsFromInput(item.input) ?? writeFieldsFromInput(item.text)
+  const inputFields = writeFieldsFromInput(item.input)
+  const rawInput = inputFields ? item.input : item.text
+  const fields = inputFields ?? writeFieldsFromInput(item.text)
   if (!fields) {
     return undefined
   }
   const path = fields.path
   const content = fields.content
-  if (!path || content === undefined) {
+  if (content === undefined || (!path && parseToolJson(rawInput))) {
     return undefined
   }
   return {
     kind: "diff",
-    path,
+    path: path ?? "write",
     oldContent: "",
     newContent: content,
     source: "input",

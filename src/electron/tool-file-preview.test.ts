@@ -100,6 +100,30 @@ describe("tool file previews", () => {
     })
   })
 
+  it("streams write content before a trailing path field arrives", () => {
+    expect(
+      createToolFilePreview({
+        args: '{"content":"line one\\nline two',
+        projectPath: projectRoot,
+        toolName: "write",
+      })
+    ).toEqual({
+      kind: "diff",
+      path: "write",
+      oldContent: "",
+      newContent: "line one\nline two",
+      source: "input",
+    })
+
+    expect(
+      createToolFilePreview({
+        args: { content: "complete but invalid" },
+        projectPath: projectRoot,
+        toolName: "write",
+      })
+    ).toBeUndefined()
+  })
+
   it("creates historical write previews", () => {
     expect(
       createHistoricalToolInputFilePreview({

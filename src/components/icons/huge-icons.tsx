@@ -4,10 +4,12 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react"
 import AlertCircleIcon from "@hugeicons/core-free-icons/AlertCircleIcon"
 import ArrowDown01Icon from "@hugeicons/core-free-icons/ArrowDown01Icon"
 import ArrowDown02Icon from "@hugeicons/core-free-icons/ArrowDown02Icon"
+import ArrowLeft02Icon from "@hugeicons/core-free-icons/ArrowLeft02Icon"
 import ArrowShrinkIcon from "@hugeicons/core-free-icons/ArrowShrinkIcon"
 import ArrowUp02Icon from "@hugeicons/core-free-icons/ArrowUp02Icon"
 import ArrowUpIcon from "@hugeicons/core-free-icons/ArrowUp01Icon"
 import BanIcon from "@hugeicons/core-free-icons/BanIcon"
+import BubbleChatIcon from "@hugeicons/core-free-icons/BubbleChatIcon"
 import Cancel01Icon from "@hugeicons/core-free-icons/Cancel01Icon"
 import ChatAdd01Icon from "@hugeicons/core-free-icons/ChatAdd01Icon"
 import CheckIcon from "@hugeicons/core-free-icons/CheckIcon"
@@ -34,6 +36,7 @@ import GripVerticalIcon from "@hugeicons/core-free-icons/GripVerticalIcon"
 import Loading03Icon from "@hugeicons/core-free-icons/Loading03Icon"
 import MoreHorizontalIcon from "@hugeicons/core-free-icons/MoreHorizontalIcon"
 import PanelLeftIcon from "@hugeicons/core-free-icons/PanelLeftIcon"
+import PaintBrush01Icon from "@hugeicons/core-free-icons/PaintBrush01Icon"
 import PencilEdit02Icon from "@hugeicons/core-free-icons/PencilEdit02Icon"
 import PlusSignIcon from "@hugeicons/core-free-icons/PlusSignIcon"
 import Search01Icon from "@hugeicons/core-free-icons/Search01Icon"
@@ -42,6 +45,7 @@ import Settings02Icon from "@hugeicons/core-free-icons/Settings02Icon"
 import SparklesIcon from "@hugeicons/core-free-icons/SparklesIcon"
 import SplitIcon from "@hugeicons/core-free-icons/SplitIcon"
 import Tick02Icon from "@hugeicons/core-free-icons/Tick02Icon"
+import UnfoldMoreIcon from "@hugeicons/core-free-icons/UnfoldMoreIcon"
 import Unlink05Icon from "@hugeicons/core-free-icons/Unlink05Icon"
 
 import { cn } from "@/lib/utils"
@@ -86,12 +90,14 @@ function createHugeIcon(icon: IconSvgElement) {
 }
 
 export const ArrowDown = createHugeIcon(ArrowDown01Icon)
+export const ArrowLeft = createHugeIcon(ArrowLeft02Icon)
 export const ArrowShrink = createHugeIcon(ArrowShrinkIcon)
 export const ArrowUp = createHugeIcon(ArrowUpIcon)
 export const SendArrowDown = createHugeIcon(ArrowDown02Icon)
 export const SendArrowUp = createHugeIcon(ArrowUp02Icon)
 export const Ban = createHugeIcon(BanIcon)
 export const Branch = createHugeIcon(GitBranchIcon)
+export const BubbleChat = createHugeIcon(BubbleChatIcon)
 export const ChatPlus = createHugeIcon(ChatAdd01Icon)
 export const Check = createHugeIcon(CheckIcon)
 export const ChevronDown = createHugeIcon(ChevronDownIcon)
@@ -116,6 +122,7 @@ export const GripVertical = createHugeIcon(GripVerticalIcon)
 export const LoaderCircle = createHugeIcon(Loading03Icon)
 export const MoreHorizontal = createHugeIcon(MoreHorizontalIcon)
 export const PanelLeft = createHugeIcon(PanelLeftIcon)
+export const PaintBrush = createHugeIcon(PaintBrush01Icon)
 export const Paperclip = createHugeIcon(Unlink05Icon)
 export const Pencil = createHugeIcon(PencilEdit02Icon)
 export const Plus = createHugeIcon(PlusSignIcon)
@@ -160,3 +167,4 @@ export const Terminal = SquareTerminal
 export const Trash2 = createHugeIcon(Delete02Icon)
 export const X = createHugeIcon(Cancel01Icon)
 export const Tick = createHugeIcon(Tick02Icon)
+export const UnfoldMore = createHugeIcon(UnfoldMoreIcon)

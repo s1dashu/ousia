@@ -23,6 +23,7 @@ npm run make
 npm run make:dmg:signed
 npm run notarize:dmg
 npm run make:dmg:notarized
+npm run make:release:mac
 ```
 
 - `npm run package` builds only `out/Ousia-darwin-arm64/Ousia.app` for local
@@ -34,6 +35,9 @@ npm run make:dmg:notarized
   `out/make`.
 - `npm run make:dmg:notarized` runs the signed DMG build and then notarizes that
   DMG for release distribution.
+- `npm run make:release:mac` builds the signed/notarized DMG plus the signed,
+  notarized ZIP required by Squirrel.Mac automatic updates. Bump the app version
+  first and attach both artifacts to the matching GitHub release.
 
 Useful log tail:
 
@@ -66,10 +70,27 @@ desktop agent client:
 - Model provider API key settings, including local provider disable/hide state.
 - Model and reasoning controls in the chat input. Pi uses its fixed thinking
   levels; Codex renders each model's app-server-provided efforts and default.
+- Immediate final-style optimistic user-message rendering with provider success
+  echoes removed and explicit same-id failure reporting.
 - Bundled Codex app-server authentication, model discovery, streaming,
   history, branch, compact, interrupt, and export adaptation.
-- Settings UI isolated in `src/features/settings/SettingsPage.tsx`.
+- Settings mode replaces the normal sidebar with categorized navigation and
+  separates shared chat behavior from the selected Pi or Codex harness-specific
+  configuration. Pi permission mode is Pi-only. Its controls use feature-local
+  copies of the original `bbVKEbY` Maia Base UI primitives. Settings rows use a `720px` container breakpoint
+  and a `52rem` content maximum.
+- General settings are grouped as Agent Harness, Language & Region, and Default
+  Creation Paths; the two creation-path settings stay together.
+- Global shadcn semantic tokens now match the neutral `bbVKEbY` Maia preset.
+  Appearance palettes are isolated as `--ousia-app-*` tokens and are mapped
+  back only inside the tuned chat and session-sidebar roots. Settings remains
+  outside those product scopes and uses Maia tokens directly.
 - Sortable top-level sidebar sections: `会话` and `项目`.
+- Packaged macOS builds check the private analytics service for releases. An
+  available release adds an Update button to the sidebar footer; download is
+  explicit, while installation is automatic only after five minutes without
+  input, no focused Ousia window, and no running agent turn. Otherwise the
+  button becomes Restart after the update finishes downloading.
 
 ## Persistence
 
@@ -82,6 +103,7 @@ desktop agent client:
 
 ## Notes
 
-- Default unassigned sessions run in the configured default workspace folder,
-  currently `~/Documents/Ousia`.
+- Default unassigned sessions run in the configured default session folder.
+  The add-project directory picker has a separate configurable starting folder;
+  both initially use `~/Documents/Ousia`.
 - Runtime logs live at `~/.ousia/logs/ousia-desktop.log`.

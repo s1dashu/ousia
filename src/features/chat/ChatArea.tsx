@@ -71,6 +71,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { MAIN_PANEL_LEFT_CORNERS_CLASS } from "@/features/shell/main-panel-styles"
 import {
   normalizeOusiaAppSettings,
   type OusiaAgentMode,
@@ -105,6 +106,11 @@ import {
   shouldShowTurnWaitIndicator,
   useDelayedTurnWaitIndicator,
 } from "@/features/chat/chat-turn-wait"
+import {
+  createOptimisticUserMessage,
+  sendChatMessageOptimistically,
+  shouldEndOptimisticRunAfterBridgeFailure,
+} from "@/features/chat/optimistic-chat-send"
 import {
   CHAT_HORIZONTAL_PADDING_CLASS,
   CHAT_CONTENT_MAX_WIDTH_CLASS,
@@ -1203,11 +1209,12 @@ function ChatAreaComponent({
       if ((!text && outgoingAttachments.length === 0) || isSending) {
         return
       }
-      if (!window.ousia || !currentProject || !currentSession) {
+      const ousia = window.ousia
+      if (!ousia || !currentProject || !currentSession) {
         onLocalEvent({
           type: "error",
           id: `no-electron-${Date.now()}`,
-          text: window.ousia ? t.chat.noSelection : t.chat.noElectron,
+          text: ousia ? t.chat.noSelection : t.chat.noElectron,
           timestamp: new Date().toISOString(),
         })
         return
@@ -1228,38 +1235,62 @@ function ChatAreaComponent({
         })
         return
       }
-      scrollToLatest("auto")
       setIsSending(true)
       const shouldGenerateTitle =
         isDefaultSessionTitle(currentSession.title) && items.length === 0
+      const context = {
+        projectPath: currentProject.path,
+        sessionId: currentSession.id,
+      }
+      const optimisticMessage = createOptimisticUserMessage({
+        attachments: outgoingAttachments,
+        context,
+        text,
+      })
       onLocalEvent({
+        context,
         type: "run_status",
         status: "starting",
         timestamp: new Date().toISOString(),
       })
       try {
-        const result = await window.ousia.sendChatMessage({
-          prompt: text,
-          attachments: outgoingAttachments,
-          sendBehavior,
-          agentMode: effectiveAgentMode,
-          customAgentTools: settings.customAgentTools,
-          autoCompactContext: settings.autoCompactContext,
-          autoRetryOnFailure: settings.autoRetryOnFailure,
-          projectPath: currentProject.path,
-          sessionId: currentSession.id,
-          thinkingLevel: selectedThinkingLevel,
-          model: {
-            provider: isCodexSession ? "openai" : settings.modelProvider,
-            modelId: isCodexSession
-              ? (selectedModelPreset?.modelId ?? settings.codexModelId)
-              : settings.modelId,
-          },
+        const pendingResult = sendChatMessageOptimistically({
+          event: optimisticMessage.event,
+          onLocalEvent,
+          send: () =>
+            ousia.sendChatMessage({
+              messageId: optimisticMessage.messageId,
+              prompt: text,
+              attachments: outgoingAttachments,
+              sendBehavior,
+              agentMode: effectiveAgentMode,
+              customAgentTools: settings.customAgentTools,
+              autoCompactContext: settings.autoCompactContext,
+              ...(isCodexSession
+                ? {}
+                : { autoRetryOnFailure: settings.autoRetryOnFailure }),
+              ...context,
+              thinkingLevel: selectedThinkingLevel,
+              model: {
+                provider: isCodexSession ? "openai" : settings.modelProvider,
+                modelId: isCodexSession
+                  ? (selectedModelPreset?.modelId ?? settings.codexModelId)
+                  : settings.modelId,
+              },
+            }),
         })
+        console.debug("[chat.send] Published optimistic user message", {
+          agentProvider: isCodexSession ? "codex" : "pi",
+          messageId: optimisticMessage.messageId,
+          sessionId: currentSession.id,
+        })
+        scrollToLatest("auto")
+        const result = await pendingResult
         if (!result.ok) {
           onLocalEvent({
-            type: "run_status",
-            status: "error",
+            context,
+            type: "user_message_failed",
+            id: optimisticMessage.messageId,
             timestamp: new Date().toISOString(),
           })
         }
@@ -1271,6 +1302,34 @@ function ChatAreaComponent({
             onGenerateSessionTitle(currentSession.id, titlePrompt)
           }
         }
+      } catch (error) {
+        const text = error instanceof Error ? error.message : t.chat.sendFailed
+        console.error("[chat.send] Send failed", {
+          error: text,
+          messageId: optimisticMessage.messageId,
+          sessionId: currentSession.id,
+        })
+        onLocalEvent({
+          context,
+          type: "error",
+          id: `send-error-${optimisticMessage.messageId}`,
+          text,
+          timestamp: new Date().toISOString(),
+        })
+        onLocalEvent({
+          context,
+          type: "user_message_failed",
+          id: optimisticMessage.messageId,
+          timestamp: new Date().toISOString(),
+        })
+        if (shouldEndOptimisticRunAfterBridgeFailure(isAgentWorking)) {
+          onLocalEvent({
+            context,
+            type: "run_status",
+            status: "error",
+            timestamp: new Date().toISOString(),
+          })
+        }
       } finally {
         setIsSending(false)
       }
@@ -1279,6 +1338,7 @@ function ChatAreaComponent({
       currentProject,
       currentSession,
       effectiveAgentMode,
+      isAgentWorking,
       isCodexSession,
       isSending,
       items.length,
@@ -1292,6 +1352,7 @@ function ChatAreaComponent({
       t.chat.imageUnsupported,
       t.chat.noElectron,
       t.chat.noSelection,
+      t.chat.sendFailed,
     ]
   )
 
@@ -1561,7 +1622,9 @@ function ChatAreaComponent({
         agentMode: effectiveAgentMode,
         customAgentTools: settings.customAgentTools,
         autoCompactContext: settings.autoCompactContext,
-        autoRetryOnFailure: settings.autoRetryOnFailure,
+        ...(isCodexSession
+          ? {}
+          : { autoRetryOnFailure: settings.autoRetryOnFailure }),
         projectPath: currentProject.path,
         sessionId: currentSession.id,
         thinkingLevel: selectedThinkingLevel,
@@ -1700,7 +1763,9 @@ function ChatAreaComponent({
       agentMode: effectiveAgentMode,
       customAgentTools: settings.customAgentTools,
       autoCompactContext: settings.autoCompactContext,
-      autoRetryOnFailure: settings.autoRetryOnFailure,
+      ...(isCodexSession
+        ? {}
+        : { autoRetryOnFailure: settings.autoRetryOnFailure }),
       projectPath: currentProject.path,
       sessionId: currentSession.id,
       thinkingLevel: selectedThinkingLevel,
@@ -1818,7 +1883,8 @@ function ChatAreaComponent({
   return (
     <section
       className={cn(
-        "ousia-main-panel ousia-squircle-corners @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-l-none rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card"
+        "ousia-main-panel ousia-chat-theme @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card",
+        MAIN_PANEL_LEFT_CORNERS_CLASS
       )}
       style={style}
       onKeyDownCapture={handleChatKeyDownCapture}
@@ -2016,10 +2082,10 @@ function ChatAreaComponent({
                       align="start"
                       className="ousia-hover-scrollbar w-72 rounded-xl p-2"
                     >
-                      <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                        {t.settings.agentMode}
-                      </DropdownMenuLabel>
                       <DropdownMenuRadioGroup value={effectiveAgentMode}>
+                        <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                          {t.settings.agentMode}
+                        </DropdownMenuLabel>
                         <TooltipProvider>
                           {(
                             [
@@ -2081,9 +2147,6 @@ function ChatAreaComponent({
                         </TooltipProvider>
                       </DropdownMenuRadioGroup>
                       <DropdownMenuSeparator className="my-2 bg-neutral-200" />
-                      <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                        {t.chat.appendMessages}
-                      </DropdownMenuLabel>
                       <DropdownMenuRadioGroup
                         value={sendDuringRunMode}
                         onValueChange={(value) =>
@@ -2092,6 +2155,9 @@ function ChatAreaComponent({
                           )
                         }
                       >
+                        <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                          {t.chat.appendMessages}
+                        </DropdownMenuLabel>
                         <DropdownMenuRadioItem
                           value="queue"
                           className="h-9 rounded-md px-2 hover:bg-neutral-100 focus:bg-neutral-100"
@@ -2139,12 +2205,12 @@ function ChatAreaComponent({
                       sideOffset={8}
                       collisionPadding={24}
                       align="start"
-                      className="ousia-hover-scrollbar max-h-[min(var(--radix-dropdown-menu-content-available-height),640px)] w-72 rounded-xl p-2"
+                      className="ousia-hover-scrollbar max-h-[min(var(--available-height),640px)] w-72 rounded-xl p-2"
                     >
-                      <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
-                        Reasoning
-                      </DropdownMenuLabel>
                       <DropdownMenuRadioGroup value={selectedThinkingLevel}>
+                        <DropdownMenuLabel className="px-2 pt-1 pb-1 text-sm text-neutral-500">
+                          Reasoning
+                        </DropdownMenuLabel>
                         {activeThinkingLevels.map((level) => (
                           <DropdownMenuRadioItem
                             key={level}

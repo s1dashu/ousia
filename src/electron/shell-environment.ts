@@ -1,8 +1,9 @@
-import { execFile, type ExecFileException } from "node:child_process"
+import { spawn } from "node:child_process"
 
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 const SHELL_ENV_TIMEOUT_MS = 5_000
+const SHELL_ENV_MAX_BUFFER_BYTES = 1024 * 1024
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 const SENSITIVE_ENV_NAME_PATTERN =
   /(API|AUTH|CREDENTIAL|KEY|PASSWORD|SECRET|TOKEN)/i
@@ -25,34 +26,96 @@ function parseNullSeparatedEnv(stdout: Buffer) {
 
 function readShellEnvironment(shell: string, args: string[]) {
   return new Promise<Map<string, string> | undefined>((resolve) => {
-    execFile(
-      shell,
-      args,
-      {
-        encoding: "buffer",
-        env: {
-          ...process.env,
-          TERM: process.env.TERM || "xterm-256color",
-        },
-        maxBuffer: 1024 * 1024,
-        timeout: SHELL_ENV_TIMEOUT_MS,
-        windowsHide: true,
+    // An interactive login shell may enable job control and claim its
+    // controlling terminal. A detached process starts a separate session, so
+    // Electron dev startup cannot leave npm's foreground process group stale.
+    const child = spawn(shell, args, {
+      detached: true,
+      env: {
+        ...process.env,
+        TERM: process.env.TERM || "xterm-256color",
       },
-      (error: ExecFileException | null, stdout: Buffer, stderr: Buffer) => {
-        if (error) {
-          writeRuntimeLog("shell-env", "warn", {
-            code: error.code,
-            error: error.message,
-            killed: error.killed,
-            signal: error.signal,
-            stderr: stderr.toString("utf8").trim().slice(0, 500),
-          })
-          resolve(undefined)
-          return
-        }
-        resolve(parseNullSeparatedEnv(stdout))
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    })
+    const stdoutChunks: Buffer[] = []
+    const stderrChunks: Buffer[] = []
+    let stderrBytes = 0
+    let stdoutBytes = 0
+    let settled = false
+
+    const finish = (result: Map<string, string> | undefined) => {
+      if (settled) {
+        return
       }
-    )
+      settled = true
+      clearTimeout(timeout)
+      resolve(result)
+    }
+    const fail = (details: Record<string, unknown>) => {
+      if (settled) {
+        return
+      }
+      writeRuntimeLog("shell-env", "warn", {
+        ...details,
+        stderr: Buffer.concat(stderrChunks)
+          .toString("utf8")
+          .trim()
+          .slice(0, 500),
+      })
+      child.kill("SIGTERM")
+      finish(undefined)
+    }
+    const timeout = setTimeout(() => {
+      fail({
+        error: `Shell environment process timed out after ${SHELL_ENV_TIMEOUT_MS}ms`,
+        killed: true,
+        signal: "SIGTERM",
+      })
+    }, SHELL_ENV_TIMEOUT_MS)
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdoutBytes += chunk.length
+      if (stdoutBytes > SHELL_ENV_MAX_BUFFER_BYTES) {
+        fail({
+          error: `Shell environment output exceeded ${SHELL_ENV_MAX_BUFFER_BYTES} bytes`,
+          killed: true,
+          signal: "SIGTERM",
+        })
+        return
+      }
+      stdoutChunks.push(chunk)
+    })
+    child.stderr.on("data", (chunk: Buffer) => {
+      const remainingBytes = 500 - stderrBytes
+      if (remainingBytes > 0) {
+        const retainedChunk = chunk.subarray(0, remainingBytes)
+        stderrChunks.push(retainedChunk)
+        stderrBytes += retainedChunk.length
+      }
+    })
+    child.once("error", (error: NodeJS.ErrnoException) => {
+      fail({
+        code: error.code,
+        error: error.message,
+        killed: false,
+      })
+    })
+    child.once("close", (code, signal) => {
+      if (settled) {
+        return
+      }
+      if (code !== 0) {
+        fail({
+          code,
+          error: `Shell environment process exited with code ${String(code)}`,
+          killed: signal !== null,
+          signal,
+        })
+        return
+      }
+      finish(parseNullSeparatedEnv(Buffer.concat(stdoutChunks)))
+    })
   })
 }
 
@@ -91,6 +154,7 @@ async function hydrateShellEnvironmentOnce() {
   }
 
   writeRuntimeLog("shell-env", "info", {
+    detachedSession: true,
     durationMs: Math.round(performance.now() - startedAt),
     importedCount: importedNames.length,
     sensitiveEnvNames: importedNames

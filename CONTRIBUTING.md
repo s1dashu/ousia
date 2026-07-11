@@ -38,7 +38,7 @@ with the current product boundary:
 - Use HugeIcons through `src/components/icons/huge-icons.tsx` for interface
   icons.
 - Keep floating panels, popovers, dialogs, and dropdowns consistent with the
-  shared design direction in `docs/design-context.md`.
+  shared design direction in `docs/design.md`.
 - Update the relevant docs when changing product behavior or architecture.
 
 ## Pull Requests

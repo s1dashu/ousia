@@ -6,7 +6,7 @@ match the task.
 ## Start Here
 
 - Product intent and scope: [docs/product-context.md](docs/product-context.md)
-- UI direction and interaction rules: [docs/design-context.md](docs/design-context.md)
+- Design system and UI rules: [docs/design.md](docs/design.md)
 - Technical architecture: [docs/technical-architecture.md](docs/technical-architecture.md)
 - Codex provider architecture: [docs/codex-integration.md](docs/codex-integration.md)
 - Streamdown Markdown rendering: [docs/streamdown.md](docs/streamdown.md)
@@ -32,6 +32,10 @@ match the task.
   long-term goal is one source of truth for framework mechanisms, consumed
   through versioned packages, while each product keeps its own policy and UI.
 - The app shell is assembled from React surfaces: sidebar, chat, and settings.
+- Opening Settings replaces the project/session sidebar with General,
+  Appearance, Chat Settings, and one dynamic Pi-or-Codex settings destination.
+  Pi permission mode belongs under Pi Settings. The Harness choice remains a
+  default for new sessions; existing session providers stay immutable.
 - There is no Ousia extension/runtime-extension/plugin surface in this branch.
 - The desktop runtime is Electron + Vite + React.
 - The app supports Pi and Codex coding agents, both hosted from Electron main.
@@ -43,17 +47,27 @@ match the task.
 - Chat requests include `projectPath` and `sessionId`, but Electron main derives
   and validates cwd from canonical app state before routing; renderer paths are
   never an agent permission boundary.
-- Default workspace folder is user configurable and defaults to
+- The default folder for unassigned sessions and the starting folder for adding
+  projects are independently configurable; both initially use
   `~/Documents/Ousia`.
 - Runtime logs are persisted at `~/.ousia/logs/ousia-desktop.log`; check this
   file first for Electron main errors, renderer console messages, renderer
   uncaught errors, and chat/title-generation failures.
+- Packaged macOS updates use the independent analytics/update service and
+  Squirrel.Mac. Releases must include a signed/notarized ZIP in addition to the
+  DMG; checks do not download until the user clicks Update.
 - The first BrowserWindow must not wait for shell-environment hydration or Pi
   runtime parsing. Provider-heavy modules are loaded only at capability
   boundaries; see `docs/performance.md` before changing startup imports.
 - Streaming text deltas are coalesced in Electron main for at most 16 ms. Any
   non-delta event flushes pending text first so visible event ordering remains
   unchanged.
+- User messages are published optimistically in the renderer with a stable
+  `messageId` and immediately use the normal successful visual style. Pi and
+  Codex must not echo successful user messages; renderer optimism is the single
+  live write source. Provider failures carry the full canonical user event with
+  the same id so a remounted renderer can reconstruct it, and a send must wait
+  for any in-flight initial history snapshot before provider execution.
 - Ousia is single-instance because Electron main owns a canonical in-memory app
   state snapshot. A second launch must focus the existing window instead of
   creating a competing writer for `app-state.json`.
@@ -122,13 +136,18 @@ match the task.
   the Ousia application wholesale. Record material host behavior changes in
   the relevant architecture docs and package release notes.
 - Do not inject an Ousia extension usage skill or CLI bridge into Pi sessions.
-- Preserve the shadcn preset theme direction unless the user explicitly changes
-  it.
+- Keep global shadcn semantic tokens aligned exactly with the neutral
+  `bbVKEbY` Maia preset. Product-specific color treatments must not mutate that
+  global token set.
 - Keep primary floating panels, menus, popovers, dialogs, and dropdown surfaces
   pure white. Paper is an auxiliary/background color, not the main panel color.
-- Neutral appearance scales such as paper, sand, gray, slate, mauve, sage, and
-  olive do not define `--radix-scale-*`; theme-dependent component surfaces
-  should use app-level CSS variables defined in `src/index.css`.
+- Appearance scales currently live under the migration palette
+  `--ousia-app-*` in `src/index.css`. Existing `ousia-chat-theme` and
+  `ousia-sidebar-theme` scopes are migration adapters, not the target system.
+  Do not add new broad shadcn token remapping; migrate reviewed product surfaces
+  toward direct `--ousia-<component>-<role>` tokens as specified in
+  `docs/design.md`. Settings and generic shadcn primitives must continue to read
+  global Maia semantics.
 - The dark chat panel uses `card` as its background, so user message bubbles
   need a different dark surface such as `muted` to remain visible.
 - Match those floating surfaces to the composer default surface treatment:
@@ -138,10 +157,25 @@ match the task.
 - Before building a fresh app package, check whether there are code changes. If
   code has changed since the previous package, bump the app version first so the
   new package has a new version number.
-- Follow the project icon policy in `docs/design-context.md`: use HugeIcons for
+- Follow the project icon policy in `docs/design.md`: use HugeIcons for
   interface icons and route imports through `src/components/icons/huge-icons.tsx`.
 - Before changing shadcn/ui primitives, compare against a local generated
   reference under ignored `ref/`; see `docs/shadcn-reference.md`.
+- Base UI dropdown labels must be children of `DropdownMenuGroup` or
+  `DropdownMenuRadioGroup`; a bare `DropdownMenuLabel` is a runtime error.
+- Settings uses feature-local Base UI primitives copied from the original
+  `bbVKEbY` Maia source. Keep Button, Card, Input, Select, Switch, and Dialog
+  aligned with that reference; do not replace Maia semantic tokens, radii,
+  rings, or shadows with fixed values. Settings must remain outside the tuned
+  chat/session-sidebar token scopes so its sidebar, controls, menus, dialogs,
+  and panel read the global Maia semantics. The settings sidebar may reuse only
+  `--ousia-sidebar` for background continuity with the session sidebar.
+- The canonical light Card is `src/components/ui/card.tsx` and follows Maia's
+  pure-white global Card surface. Keep product-specific card treatments inside
+  explicit Ousia scopes instead of changing the global Card token.
+- Chat and settings panels share their left-corner geometry through
+  `src/features/shell/main-panel-styles.ts`; color ownership remains separate:
+  chat uses the local Ousia scope and Settings uses global Maia tokens.
 - When changing agent behavior, verify whether the change belongs in renderer
   state, Electron IPC, the provider router, Pi session setup, or Codex
   app-server adaptation.
@@ -155,7 +189,7 @@ match the task.
   rollout files, read/write Codex `auth.json`, auto-approve app-server requests,
   or enable experimental app-server capabilities by default.
 - Never pass a renderer-supplied project path into an agent sandbox. Resolve the
-  session's canonical project/default workspace in Electron main, reject a
+  session's canonical project/default session folder in Electron main, reject a
   mismatched path, and forward only the canonical value.
 - Session/project indexes are owned by Electron main. Renderer must not persist
   full app-state snapshots for session or project changes; use the app-state
@@ -165,8 +199,23 @@ match the task.
 - Contextual chat events for a session that no longer exists must be logged and
   dropped; never fall them back into the currently selected chat. Running
   sessions/projects must not be deleted until their agent turn is terminal.
+- Preserve renderer-generated chat `messageId` values across IPC and provider
+  failure events. Never emit a second provider success item, replace the id with
+  a provider-local random id, or dedupe user messages by text/time heuristics.
+  Electron main must reject a repeated id for the same live session before
+  routing it to either provider.
+- `autoRetryOnFailure` is Pi-only. Renderer payloads for Codex must omit it, and
+  the Codex provider boundary must reject it if it appears.
 - Tool call disclosure state is renderer-local UI memory in `localStorage`
   under `ousia.chat.toolDisclosure.v1`; do not persist it into chat history.
+- Pi write/edit disclosures distinguish streamed input completion from actual
+  tool execution completion. Derive per-file input completion from the first
+  strictly complete raw argument JSON for that content index; some
+  OpenAI-compatible providers delay every `toolcall_end` until the whole model
+  response finishes. Only collapse at input completion after the renderer has
+  already observed the item as an active write/edit preview; late tool-name
+  identification must still reveal the preview until execution ends. Keep the
+  tool running until `tool_execution_end`.
 - Streaming chat performance depends on preserving memo boundaries: compare
   render wrapper objects by their underlying `ChatItem` references. Do not
   defer actively streaming write/edit diff previews; live code output is a core

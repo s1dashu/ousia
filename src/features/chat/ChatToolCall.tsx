@@ -23,10 +23,11 @@ import {
 
 import type { getMessages } from "@/app/i18n"
 import type { ChatItem } from "@/features/chat/chat-events"
+import { formatToolName } from "@/features/chat/chat-tool-format"
 import {
-  formatToolName,
-  shouldAutoExpandTool,
-} from "@/features/chat/chat-tool-format"
+  shouldAutoCollapseToolDisclosure,
+  shouldAutoExpandToolDisclosure,
+} from "@/features/chat/chat-tool-disclosure"
 import { toolFilePreviewFromItem } from "@/features/chat/chat-tool-file-preview"
 import { ToolFilePreviewView } from "@/features/chat/ChatToolFilePreview"
 import { cn } from "@/lib/utils"
@@ -34,7 +35,8 @@ import { cn } from "@/lib/utils"
 export type ToolChatItem = Extract<ChatItem, { role: "tool" }>
 
 const toolFailureTextClass = "text-[var(--ousia-tool-warning)]"
-const toolFailureHoverTextClass = "hover:text-[var(--ousia-tool-warning-strong)]"
+const toolFailureHoverTextClass =
+  "hover:text-[var(--ousia-tool-warning-strong)]"
 const toolDisclosureStorageKey = "ousia.chat.toolDisclosure.v1"
 const maxStoredToolDisclosureEntries = 1000
 const runningToolSpinnerStyle = {
@@ -136,8 +138,7 @@ export const ToolCallView = memo(function ToolCallView({
   sessionId?: string
   t: ReturnType<typeof getMessages>
 }) {
-  const shouldAutoToggleTool = shouldAutoExpandTool(item.name)
-  const shouldAutoExpand = item.status === "running" && shouldAutoToggleTool
+  const shouldAutoExpand = shouldAutoExpandToolDisclosure(item)
   const disclosureKey = toolDisclosureKey({
     itemId: item.id,
     projectPath,
@@ -162,14 +163,18 @@ export const ToolCallView = memo(function ToolCallView({
   } | null>(null)
   const [isLoadingPayload, setIsLoadingPayload] = useState(false)
   const [hasMountedFilePreview, setHasMountedFilePreview] = useState(false)
-  const hasManualOpenStateRef = useRef(initialDisclosure.storedOpen !== undefined)
+  const hasManualOpenStateRef = useRef(
+    initialDisclosure.storedOpen !== undefined
+  )
   const inFlightPayloadKeyRef = useRef<string | null>(null)
   const hasInitializedDisclosurePersistenceRef = useRef(false)
   const isResettingDisclosureRef = useRef(false)
   const payloadRequestKey = `${projectPath ?? ""}\u0000${sessionId ?? ""}\u0000${item.id}`
   const previousPayloadRequestKeyRef = useRef(payloadRequestKey)
-  const previousStatusRef = useRef({
+  const previousDisclosureItemRef = useRef({
+    inputComplete: item.inputComplete,
     key: payloadRequestKey,
+    name: item.name,
     status: item.status,
   })
   const displayItem = useMemo(
@@ -183,7 +188,8 @@ export const ToolCallView = memo(function ToolCallView({
     [item, loadedPayload, payloadRequestKey]
   )
   const input =
-    displayItem.input ?? (displayItem.status === "running" ? displayItem.text : "")
+    displayItem.input ??
+    (displayItem.status === "running" ? displayItem.text : "")
   const output =
     displayItem.output ??
     (displayItem.status === "finished" && !displayItem.payloadOmitted
@@ -243,29 +249,31 @@ export const ToolCallView = memo(function ToolCallView({
 
   useLayoutEffect(() => {
     let timer: number | undefined
-    const previousStatus =
-      previousStatusRef.current.key === payloadRequestKey
-        ? previousStatusRef.current.status
-        : item.status
-    previousStatusRef.current = {
-      key: payloadRequestKey,
+    const currentDisclosureItem = {
+      inputComplete: item.inputComplete,
+      name: item.name,
       status: item.status,
     }
-
-    if (item.status !== "running") {
-      if (shouldAutoToggleTool && previousStatus === "running") {
-        timer = window.setTimeout(() => {
-          hasManualOpenStateRef.current = false
-          setIsOpen(false)
-        }, 0)
-      }
-      return () => {
-        if (timer !== undefined) {
-          window.clearTimeout(timer)
-        }
-      }
+    const previousDisclosureItem =
+      previousDisclosureItemRef.current.key === payloadRequestKey
+        ? previousDisclosureItemRef.current
+        : currentDisclosureItem
+    previousDisclosureItemRef.current = {
+      ...currentDisclosureItem,
+      key: payloadRequestKey,
     }
-    if (shouldAutoExpand && !hasManualOpenStateRef.current) {
+
+    if (
+      shouldAutoCollapseToolDisclosure(
+        previousDisclosureItem,
+        currentDisclosureItem
+      )
+    ) {
+      timer = window.setTimeout(() => {
+        hasManualOpenStateRef.current = false
+        setIsOpen(false)
+      }, 0)
+    } else if (shouldAutoExpand && !hasManualOpenStateRef.current) {
       timer = window.setTimeout(() => setIsOpen(true), 0)
     }
     return () => {
@@ -273,7 +281,13 @@ export const ToolCallView = memo(function ToolCallView({
         window.clearTimeout(timer)
       }
     }
-  }, [item.status, payloadRequestKey, shouldAutoExpand, shouldAutoToggleTool])
+  }, [
+    item.inputComplete,
+    item.name,
+    item.status,
+    payloadRequestKey,
+    shouldAutoExpand,
+  ])
 
   useEffect(() => {
     if (
@@ -367,7 +381,7 @@ export const ToolCallView = memo(function ToolCallView({
         type="button"
         aria-expanded={isOpen}
         className={cn(
-          "group flex min-h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground",
+          "group flex min-h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left transition-colors outline-none hover:text-foreground focus-visible:text-foreground",
           displayItem.status === "failed" &&
             `${toolFailureTextClass} ${toolFailureHoverTextClass}`
         )}
@@ -397,9 +411,7 @@ export const ToolCallView = memo(function ToolCallView({
         >
           {summary}
         </span>
-        {displayItem.status === "running" ? (
-          <RunningToolSpinner />
-        ) : null}
+        {displayItem.status === "running" ? <RunningToolSpinner /> : null}
         <ChevronDown
           size={15}
           strokeWidth={1.5}
@@ -421,15 +433,15 @@ export const ToolCallView = memo(function ToolCallView({
       ) : null}
 
       {isOpen && !filePreview ? (
-        <div className="mt-1.5 rounded-md bg-muted/35 px-3 py-2.5">
+        <div className="ousia-squircle-corners mt-1.5 rounded-2xl bg-muted/35 px-3 py-2.5">
           <ToolPayloadSection
             title={t.chat.toolArgs}
             value={
               payloadError?.key === payloadRequestKey
                 ? payloadError.message
                 : isLoadingPayload
-                ? t.chat.toolPayloadLoading
-                : input || "{}"
+                  ? t.chat.toolPayloadLoading
+                  : input || "{}"
             }
             tone={
               payloadError?.key === payloadRequestKey ? "warning" : undefined
@@ -448,7 +460,7 @@ export const ToolCallView = memo(function ToolCallView({
       ) : null}
 
       {isOpen && filePreview && errorText ? (
-        <div className="mt-1.5 rounded-md bg-muted/35 px-3 py-2.5">
+        <div className="ousia-squircle-corners mt-1.5 rounded-2xl bg-muted/35 px-3 py-2.5">
           <ToolPayloadSection
             title={t.chat.toolError}
             value={errorText}
@@ -521,7 +533,7 @@ export const ToolCallGroupView = memo(function ToolCallGroupView({
       <button
         type="button"
         aria-expanded={isOpen}
-        className="flex h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
+        className="flex h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left transition-colors outline-none hover:text-foreground focus-visible:text-foreground"
         onClick={(event) => {
           onPreserveScrollAnchor(event.currentTarget)
           setIsOpen((current) => !current)
@@ -533,9 +545,7 @@ export const ToolCallGroupView = memo(function ToolCallGroupView({
         <span className="min-w-0 truncate text-sm font-normal text-muted-foreground/85">
           {formatToolGroupSummary(items, t)}
         </span>
-        {hasRunningItem ? (
-          <RunningToolSpinner />
-        ) : null}
+        {hasRunningItem ? <RunningToolSpinner /> : null}
         <ChevronDown
           size={15}
           strokeWidth={1.5}
@@ -606,7 +616,7 @@ function ToolPayloadSection({
           )
         }}
         className={cn(
-          "ousia-hover-scrollbar max-h-48 overflow-auto rounded-md bg-background/75 px-2.5 py-1.5 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground",
+          "ousia-hover-scrollbar ousia-squircle-corners max-h-48 overflow-auto rounded-[4px] bg-background/75 px-2.5 py-1.5 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground",
           tone === "warning" &&
             "bg-[var(--ousia-tool-warning-bg)] text-[var(--ousia-tool-warning-strong)]"
         )}
@@ -702,7 +712,9 @@ function formatSearchSummary(item: ToolChatItem, verb: string) {
     const query = record.pattern ?? record.query ?? record.search
     const path = record.path ?? record.filePath ?? record.file_path
     const parts = [query, path]
-      .filter((part): part is string => typeof part === "string" && !!part.trim())
+      .filter(
+        (part): part is string => typeof part === "string" && !!part.trim()
+      )
       .map((part) => part.trim())
     return parts.length ? `${verb} ${parts.join(" ")}` : verb
   }
@@ -745,7 +757,9 @@ function commandFromInput(input: string | undefined) {
   if (trimmed.startsWith("$ ")) {
     return trimmed.slice(2).split("\n", 1)[0]?.trim() ?? ""
   }
-  return trimmed.includes("\n") ? trimmed.split("\n", 1)[0]?.trim() ?? "" : trimmed
+  return trimmed.includes("\n")
+    ? (trimmed.split("\n", 1)[0]?.trim() ?? "")
+    : trimmed
 }
 
 function parseToolInput(input: string | undefined) {
@@ -764,9 +778,7 @@ function renderToolGroupIcon(items: ToolChatItem[]) {
     return <Terminal size={15} strokeWidth={1.5} />
   }
   if (
-    items.some((item) =>
-      ["grep", "find"].includes(item.name.toLowerCase())
-    )
+    items.some((item) => ["grep", "find"].includes(item.name.toLowerCase()))
   ) {
     return <Search size={15} strokeWidth={1.5} />
   }
@@ -774,9 +786,7 @@ function renderToolGroupIcon(items: ToolChatItem[]) {
     return <FolderOpen size={15} strokeWidth={1.5} />
   }
   if (
-    items.some((item) =>
-      ["edit", "write"].includes(item.name.toLowerCase())
-    )
+    items.some((item) => ["edit", "write"].includes(item.name.toLowerCase()))
   ) {
     return <Pencil size={15} strokeWidth={1.5} />
   }
@@ -791,12 +801,13 @@ function renderToolIcon(name: string) {
   if (normalizedName.includes("edit") || normalizedName.includes("write")) {
     return <Pencil size={15} strokeWidth={1.5} />
   }
-  if (
-    normalizedName.includes("code")
-  ) {
+  if (normalizedName.includes("code")) {
     return <Code size={15} strokeWidth={1.5} />
   }
-  if (normalizedName.includes("read") || normalizedName.includes("file")) {
+  if (normalizedName.includes("read")) {
+    return <File className="-translate-x-px" size={15} strokeWidth={1.5} />
+  }
+  if (normalizedName.includes("file")) {
     return <File size={15} strokeWidth={1.5} />
   }
   if (normalizedName === "ls" || normalizedName.includes("list")) {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages } from "@/app/i18n"
+import type { OusiaUpdateStatus } from "@/electron/chat-types"
 import { Sidebar } from "@/features/sidebar/Sidebar"
 
 vi.mock("react-dom", async (importOriginal) => {
@@ -35,10 +36,12 @@ function renderSidebar({
   projects = [],
   sessions = [session],
   sessionRunStatusById = {},
+  updateStatus = { phase: "idle", currentVersion: "0.1.21" },
 }: {
   projects?: ProjectRecord[]
   sessions?: SessionRecord[]
   sessionRunStatusById?: Record<string, "idle" | "working">
+  updateStatus?: OusiaUpdateStatus
 } = {}) {
   vi.stubGlobal("document", { body: {} })
 
@@ -54,6 +57,7 @@ function renderSidebar({
       onMoveSession={vi.fn()}
       onOpenProject={vi.fn()}
       onOpenSettings={vi.fn()}
+      onUpdateAction={vi.fn()}
       onRenameSession={vi.fn()}
       onReorderProjects={vi.fn()}
       onReorderSessions={vi.fn()}
@@ -67,12 +71,39 @@ function renderSidebar({
       sessions={sessions}
       sidebarSectionOrder={["sessions", "projects"]}
       style={{ width: 256 }}
+      updateStatus={updateStatus}
       unreadCompletedSessionIds={new Set()}
     />
   )
 }
 
 describe("Sidebar running actions", () => {
+  it("shows the update action only when a release is available", () => {
+    expect(renderSidebar()).not.toContain(">Update</button>")
+    expect(
+      renderSidebar({
+        updateStatus: {
+          phase: "available",
+          currentVersion: "0.1.21",
+          version: "0.1.22",
+          releaseName: "Ousia 0.1.22",
+        },
+      })
+    ).toContain(">Update</button>")
+  })
+
+  it("insets session surfaces while keeping actions close to the right edge", () => {
+    const html = renderSidebar()
+
+    expect(html).toContain("mr-1 pl-2 pr-1")
+  })
+
+  it("aligns section and project actions on the same right-hand axis", () => {
+    const html = renderSidebar({ projects: [project] })
+
+    expect(html.match(/-ml-1 w-full pl-3 pr-1/g)).toHaveLength(3)
+  })
+
   it("renders only the running indicator for a working session", () => {
     const html = renderSidebar({
       sessionRunStatusById: { [session.id]: "working" },
@@ -97,7 +128,7 @@ describe("Sidebar running actions", () => {
     )
   })
 
-  it("replaces project deletion with a running indicator", () => {
+  it("keeps project actions free of session running indicators", () => {
     const projectSession: SessionRecord = {
       ...session,
       projectId: project.id,
@@ -108,7 +139,7 @@ describe("Sidebar running actions", () => {
       sessionRunStatusById: { [projectSession.id]: "working" },
     })
 
-    expect(html).toContain(
+    expect(html).not.toContain(
       `aria-label="${project.name} ${t.sidebar.running}"`
     )
     expect(html).not.toContain(

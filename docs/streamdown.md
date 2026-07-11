@@ -19,6 +19,15 @@ Current renderer configuration:
 </Streamdown>
 ```
 
+Ousia preserves Streamdown's per-word animation so slower providers still have
+a natural streaming cadence. A fast provider can emit words faster than that
+animation can play, however, leaving animation queued in an earlier paragraph
+after later paragraphs are already visible. When a later Markdown block
+appears, CSS completes any remaining animation in preceding blocks immediately.
+This prevents animation work from crossing a paragraph/block boundary without
+throttling provider output, delaying newer content, or flattening the active
+block's word-by-word animation.
+
 ## Link Safety
 
 Streamdown enables its link safety modal by default. The modal asks the user to confirm before opening a link, then calls the browser API `window.open(url, "_blank", "noreferrer")`.

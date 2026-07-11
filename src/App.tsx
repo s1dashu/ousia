@@ -40,12 +40,15 @@ import {
   type OusiaCodexEnvironmentStatus,
   type OusiaModelRegistryResult,
   type OusiaSidebarSectionId,
+  type OusiaUpdateStatus,
 } from "@/electron/chat-types"
 import { getMessages, isDefaultSessionTitle } from "@/app/i18n"
 import { getConfiguredModelPresets } from "@/app/model-presets"
 import { ChatArea } from "@/features/chat/ChatArea"
 import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
+import type { SettingsSectionId } from "@/features/settings/settings-navigation"
 import { SettingsPage } from "@/features/settings/SettingsPage"
+import { SettingsSidebar } from "@/features/settings/SettingsSidebar"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
 import { Sidebar } from "@/features/sidebar/Sidebar"
 import { useStableEvent } from "@/lib/use-stable-event"
@@ -95,11 +98,11 @@ function projectPathForAppStateSession(
   session: SessionRecord
 ) {
   if (!session.projectId) {
-    return state.settings.defaultWorkDir
+    return state.settings.defaultSessionDir
   }
   return (
     state.projects.find((project) => project.id === session.projectId)?.path ??
-    state.settings.defaultWorkDir
+    state.settings.defaultSessionDir
   )
 }
 
@@ -350,6 +353,10 @@ export function App() {
     createDefaultAppState()
   )
   const [isAppStateLoaded, setIsAppStateLoaded] = useState(!window.ousia)
+  const [updateStatus, setUpdateStatus] = useState<OusiaUpdateStatus>({
+    phase: "disabled",
+    reason: "Updates are unavailable in the browser preview.",
+  })
   const shellRef = useRef<HTMLElement>(null)
   const sidebarShellRef = useRef<HTMLDivElement>(null)
   const [sidebarWidth, setSidebarWidth] = useState(
@@ -374,6 +381,8 @@ export function App() {
   const [settings, setSettings] = useState<AppSettings>(initialState.settings)
   const t = getMessages(settings.language)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [activeSettingsSection, setActiveSettingsSection] =
+    useState<SettingsSectionId>("general")
   const [modelRegistry, setModelRegistry] = useState<OusiaModelRegistryResult>()
   const [codexEnvironment, setCodexEnvironment] =
     useState<OusiaCodexEnvironmentStatus>()
@@ -478,32 +487,35 @@ export function App() {
   const projectPathForSession = useCallback(
     (session: SessionRecord) => {
       if (!session.projectId) {
-        return settings.defaultWorkDir
+        return settings.defaultSessionDir
       }
       return (
         projects.find((project) => project.id === session.projectId)?.path ??
-        settings.defaultWorkDir
+        settings.defaultSessionDir
       )
     },
-    [projects, settings.defaultWorkDir]
+    [projects, settings.defaultSessionDir]
   )
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ?? sessions[0]
+  const visibleSurfaceAgentProvider = isSettingsOpen
+    ? settings.defaultAgentProvider
+    : selectedSession?.agentProvider
   const selectedSessionIdForHistory = selectedSession?.id
   const selectedProject = selectedSession?.projectId
     ? projects.find((project) => project.id === selectedSession.projectId)
     : undefined
   const selectedProjectPath = selectedSession
     ? projectPathForSession(selectedSession)
-    : settings.defaultWorkDir
+    : settings.defaultSessionDir
   const currentProject = useMemo<ProjectRecord>(
     () =>
       selectedProject ?? {
         id: "default-workdir",
-        name: projectNameFromPath(settings.defaultWorkDir),
+        name: projectNameFromPath(settings.defaultSessionDir),
         path: selectedProjectPath,
       },
-    [selectedProject, selectedProjectPath, settings.defaultWorkDir]
+    [selectedProject, selectedProjectPath, settings.defaultSessionDir]
   )
   const selectedChatKey =
     currentProject && selectedSession
@@ -681,6 +693,21 @@ export function App() {
   )
 
   useEffect(() => {
+    if (!window.ousia) return
+    void window.ousia.getUpdateStatus().then(setUpdateStatus)
+    return window.ousia.onUpdateStatus(setUpdateStatus)
+  }, [])
+
+  const handleUpdateAction = useCallback(() => {
+    if (!window.ousia) return
+    if (updateStatus.phase === "downloaded") {
+      void window.ousia.installUpdate()
+      return
+    }
+    void window.ousia.downloadUpdate()
+  }, [updateStatus.phase])
+
+  useEffect(() => {
     let isCancelled = false
     void loadInitialAppState().then((state) => {
       if (isCancelled) {
@@ -695,34 +722,18 @@ export function App() {
   }, [applyPersistentAppState])
 
   useEffect(() => {
-    if (
-      !isAppStateLoaded ||
-      (selectedSession?.agentProvider !== "pi" && !isSettingsOpen)
-    ) {
+    if (!isAppStateLoaded || visibleSurfaceAgentProvider !== "pi") {
       return
     }
     void refreshModelRegistry()
-  }, [
-    isAppStateLoaded,
-    isSettingsOpen,
-    refreshModelRegistry,
-    selectedSession?.agentProvider,
-  ])
+  }, [isAppStateLoaded, refreshModelRegistry, visibleSurfaceAgentProvider])
 
   useEffect(() => {
-    if (
-      !isAppStateLoaded ||
-      (selectedSession?.agentProvider !== "codex" && !isSettingsOpen)
-    ) {
+    if (!isAppStateLoaded || visibleSurfaceAgentProvider !== "codex") {
       return
     }
     void refreshCodexEnvironment()
-  }, [
-    isAppStateLoaded,
-    isSettingsOpen,
-    refreshCodexEnvironment,
-    selectedSession?.agentProvider,
-  ])
+  }, [isAppStateLoaded, refreshCodexEnvironment, visibleSurfaceAgentProvider])
 
   useEffect(() => {
     if (!modelRegistry) {
@@ -1095,14 +1106,6 @@ export function App() {
         target.kind === "context" ? target.session : undefined
       if (event.type === "user_message") {
         draftSessionKeysRef.current.delete(targetKey)
-        setHistoryPageStateBySession((current) => {
-          if (!current[targetKey]) {
-            return current
-          }
-          const next = { ...current }
-          delete next[targetKey]
-          return next
-        })
       }
       if (event.type === "run_status") {
         const nextStatus =
@@ -1238,19 +1241,40 @@ export function App() {
   }, [showZoomIndicator])
 
   function appendLocalEvent(event: OusiaChatEvent) {
-    if (!selectedChatKey) {
+    const target = resolveChatEventTarget(
+      sessionsRef.current,
+      event.context,
+      selectedChatKeyRef.current
+    )
+    if (target.kind === "drop") {
+      console.error("[chat.local-event] Dropped event", {
+        eventType: event.type,
+        reason: target.reason,
+        ...(target.kind === "drop" && "context" in target
+          ? { context: target.context }
+          : {}),
+      })
       return
     }
+    const targetKey = target.targetKey
+    const targetSession = target.kind === "context" ? target.session : undefined
     if (event.type === "user_message") {
-      draftSessionKeysRef.current.delete(selectedChatKey)
-      setHistoryPageStateBySession((current) => {
-        if (!current[selectedChatKey]) {
-          return current
-        }
-        const next = { ...current }
-        delete next[selectedChatKey]
-        return next
-      })
+      draftSessionKeysRef.current.delete(targetKey)
+      if (targetSession) {
+        setSessions((current) =>
+          moveSessionToGroupFront(current, targetSession.id, event.timestamp)
+        )
+        void window.ousia
+          ?.touchSession({
+            sessionId: targetSession.id,
+            time: event.timestamp,
+          })
+          .then((result) => {
+            if (!result.ok) {
+              console.warn(result.error)
+            }
+          })
+      }
     }
     if (event.type === "run_status") {
       const nextStatus =
@@ -1259,17 +1283,17 @@ export function App() {
           : "idle"
       setRunStatusBySession((current) => ({
         ...current,
-        [selectedChatKey]: nextStatus,
+        [targetKey]: nextStatus,
       }))
       runStatusBySessionRef.current = {
         ...runStatusBySessionRef.current,
-        [selectedChatKey]: nextStatus,
+        [targetKey]: nextStatus,
       }
     }
     if (event.type === "queue_update") {
       setQueuedChatStateBySession((current) => ({
         ...current,
-        [selectedChatKey]: {
+        [targetKey]: {
           steering: event.steering,
           followUp: event.followUp,
         },
@@ -1279,7 +1303,7 @@ export function App() {
     if (event.type === "context_usage") {
       setContextUsageBySession((current) => ({
         ...current,
-        [selectedChatKey]: {
+        [targetKey]: {
           tokens: event.tokens,
           contextWindow: event.contextWindow,
           percent: event.percent,
@@ -1289,7 +1313,7 @@ export function App() {
     }
     setItemsBySession((current) => ({
       ...current,
-      [selectedChatKey]: applyChatEvent(current[selectedChatKey] ?? [], event),
+      [targetKey]: applyChatEvent(current[targetKey] ?? [], event),
     }))
   }
 
@@ -1379,7 +1403,7 @@ export function App() {
       return
     }
     const result = await window.ousia.openProjectDirectory({
-      defaultPath: settings.defaultWorkDir,
+      defaultPath: settings.defaultProjectCreationDir,
     })
     if (result.canceled) {
       return
@@ -1478,7 +1502,7 @@ export function App() {
       t.app.newSession,
       settings.defaultAgentProvider
     )
-    const targetKey = chatKey(settings.defaultWorkDir, session.id)
+    const targetKey = chatKey(settings.defaultSessionDir, session.id)
     draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
     setItemsBySession((current) => {
@@ -1540,7 +1564,7 @@ export function App() {
     const projectPath =
       explicitProjectPath ??
       projects.find((project) => project.id === projectId)?.path ??
-      settings.defaultWorkDir
+      settings.defaultSessionDir
     const targetKey = chatKey(projectPath, session.id)
     draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
@@ -1704,8 +1728,8 @@ export function App() {
   }
 
   function handleOpenSettings() {
+    setActiveSettingsSection("general")
     setIsSettingsOpen(true)
-    void refreshCodexEnvironment()
   }
 
   async function handleRenameSession(sessionId: string, title: string) {
@@ -1778,7 +1802,7 @@ export function App() {
     }
 
     const sourceProjectPath = projectPathForSession(sourceSession)
-    const targetProjectPath = targetProject?.path ?? settings.defaultWorkDir
+    const targetProjectPath = targetProject?.path ?? settings.defaultSessionDir
     const sourceKey = chatKey(sourceProjectPath, sessionId)
     const targetKey = chatKey(targetProjectPath, sessionId)
 
@@ -2306,32 +2330,46 @@ export function App() {
             } as CSSProperties
           }
         >
-          <Sidebar
-            onCreateProjectSession={stableCreateProjectSession}
-            onCreateSession={stableCreateSession}
-            onDeleteProject={stableDeleteProject}
-            onDeleteSession={stableDeleteSession}
-            onMoveSession={stableMoveSession}
-            onOpenProject={stableOpenProject}
-            onOpenSettings={stableOpenSettings}
-            onRenameSession={stableRenameSession}
-            onReorderProjects={stableReorderProjects}
-            onReorderSidebarSections={stableReorderSidebarSections}
-            onReorderSessions={stableReorderSessions}
-            onSelectSession={stableSelectSession}
-            onScrollTargetHandled={handleSidebarScrollTargetHandled}
-            expandedProjectIds={expandedProjectIds}
-            onExpandedProjectIdsChange={setExpandedProjectIds}
-            projects={projects}
-            selectedSessionId={selectedSession?.id ?? ""}
-            sidebarSectionOrder={sidebarSectionOrder}
-            scrollTargetSessionId={sidebarScrollTargetSessionId}
-            sessionRunStatusById={sidebarRunStatusBySessionId}
-            unreadCompletedSessionIds={unreadCompletedSessionIdSet}
-            sessions={sessions}
-            language={settings.language}
-            style={SIDEBAR_STYLE}
-          />
+          <div className={isSettingsOpen ? "hidden" : "flex min-h-0"}>
+            <Sidebar
+              onCreateProjectSession={stableCreateProjectSession}
+              onCreateSession={stableCreateSession}
+              onDeleteProject={stableDeleteProject}
+              onDeleteSession={stableDeleteSession}
+              onMoveSession={stableMoveSession}
+              onOpenProject={stableOpenProject}
+              onOpenSettings={stableOpenSettings}
+              onUpdateAction={handleUpdateAction}
+              onRenameSession={stableRenameSession}
+              onReorderProjects={stableReorderProjects}
+              onReorderSidebarSections={stableReorderSidebarSections}
+              onReorderSessions={stableReorderSessions}
+              onSelectSession={stableSelectSession}
+              onScrollTargetHandled={handleSidebarScrollTargetHandled}
+              expandedProjectIds={expandedProjectIds}
+              onExpandedProjectIdsChange={setExpandedProjectIds}
+              projects={projects}
+              selectedSessionId={selectedSession?.id ?? ""}
+              sidebarSectionOrder={sidebarSectionOrder}
+              scrollTargetSessionId={sidebarScrollTargetSessionId}
+              sessionRunStatusById={sidebarRunStatusBySessionId}
+              unreadCompletedSessionIds={unreadCompletedSessionIdSet}
+              sessions={sessions}
+              language={settings.language}
+              updateStatus={updateStatus}
+              style={SIDEBAR_STYLE}
+            />
+          </div>
+          {isSettingsOpen ? (
+            <SettingsSidebar
+              activeSection={activeSettingsSection}
+              agentProvider={settings.defaultAgentProvider}
+              language={settings.language}
+              onBack={handleCloseSettings}
+              onSectionChange={setActiveSettingsSection}
+              style={SIDEBAR_STYLE}
+            />
+          ) : null}
           <ResizeHandle
             isActive={activeShellResizeHandle === "sidebar"}
             label={t.shell.resizeSidebar}
@@ -2343,12 +2381,10 @@ export function App() {
         <div className="flex h-full min-w-0 overflow-visible">
           {isSettingsOpen ? (
             <SettingsPage
+              activeSection={activeSettingsSection}
               codexEnvironment={codexEnvironment}
-              isSidebarCollapsed={isSidebarCollapsed}
-              isWindowFullscreen={isWindowFullscreen}
               modelRegistry={modelRegistry}
               settings={settings}
-              onClose={handleCloseSettings}
               onRefreshModelRegistry={refreshModelRegistry}
               onRefreshCodexEnvironment={refreshCodexEnvironment}
               onSettingsChange={handleSettingsChange}

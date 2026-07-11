@@ -1,4 +1,5 @@
 import type {
+  OusiaChatAttachmentSummary,
   OusiaChatEvent,
   OusiaChatHistoryItem,
   OusiaTextChatItem,
@@ -37,6 +38,46 @@ function textItemChanged(previous: TextChatItem, next: TextChatItem) {
   )
 }
 
+function attachmentSummariesEqual(
+  left: OusiaChatAttachmentSummary[] | undefined,
+  right: OusiaChatAttachmentSummary[] | undefined
+) {
+  const leftItems = left ?? []
+  const rightItems = right ?? []
+  return (
+    leftItems.length === rightItems.length &&
+    leftItems.every((attachment, index) => {
+      const candidate = rightItems[index]
+      return (
+        candidate !== undefined &&
+        attachment.id === candidate.id &&
+        attachment.kind === candidate.kind &&
+        attachment.mediaType === candidate.mediaType &&
+        attachment.name === candidate.name &&
+        attachment.size === candidate.size &&
+        attachment.dataBase64 === candidate.dataBase64
+      )
+    })
+  )
+}
+
+function earliestTimestamp(left: string | undefined, right: string) {
+  return left && left <= right ? left : right
+}
+
+function userMessageStatus(
+  current: OusiaTextChatItem["status"] | undefined,
+  delivery: Extract<OusiaChatEvent, { type: "user_message" }>["delivery"]
+) {
+  if (current === "failed" || delivery === "failed") {
+    return "failed" as const
+  }
+  if (delivery === "optimistic") {
+    return "finished" as const
+  }
+  return current
+}
+
 function upsertTextItem(
   items: ChatItem[],
   id: string,
@@ -71,6 +112,25 @@ export function applyChatEvent(
   event: OusiaChatEvent
 ): ChatItem[] {
   if (event.type === "user_message") {
+    const index = findItemIndexFromEnd(items, event.id)
+    if (index >= 0) {
+      const item = items[index]
+      if (item.role !== "user") {
+        throw new Error(`Chat event id collision for user message: ${event.id}`)
+      }
+      if (
+        item.text !== event.text ||
+        !attachmentSummariesEqual(item.attachments, event.attachments)
+      ) {
+        throw new Error(`Conflicting user message confirmation: ${event.id}`)
+      }
+      const timestamp = earliestTimestamp(item.timestamp, event.timestamp)
+      const status = userMessageStatus(item.status, event.delivery)
+      return timestamp === item.timestamp && status === item.status
+        ? items
+        : replaceItem(items, index, { ...item, status, timestamp })
+    }
+    const status = userMessageStatus(undefined, event.delivery)
     return [
       ...items,
       {
@@ -78,9 +138,22 @@ export function applyChatEvent(
         role: "user",
         text: event.text,
         attachments: event.attachments,
+        ...(status ? { status } : {}),
         timestamp: event.timestamp,
       },
     ]
+  } else if (event.type === "user_message_failed") {
+    const index = findItemIndexFromEnd(items, event.id)
+    if (index < 0) {
+      throw new Error(`Failed user message is missing: ${event.id}`)
+    }
+    const item = items[index]
+    if (item.role !== "user") {
+      throw new Error(`Chat event id collision for user failure: ${event.id}`)
+    }
+    return item.status === "failed"
+      ? items
+      : replaceItem(items, index, { ...item, status: "failed" })
   } else if (event.type === "assistant_text_start") {
     return upsertTextItem(items, event.id, "assistant", (item) => {
       item.status = "streaming"
@@ -192,6 +265,16 @@ export function applyChatEvent(
       return replaceItem(items, index, updated)
     }
     return items
+  } else if (event.type === "tool_input_end") {
+    const index = findItemIndexFromEnd(items, event.id)
+    const existingItem = index >= 0 ? items[index] : undefined
+    if (existingItem?.role !== "tool" || existingItem.inputComplete === true) {
+      return items
+    }
+    return replaceItem(items, index, {
+      ...existingItem,
+      inputComplete: true,
+    })
   } else if (event.type === "tool_end") {
     const index = findItemIndexFromEnd(items, event.id)
     const existingItem = index >= 0 ? items[index] : undefined

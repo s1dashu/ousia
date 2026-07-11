@@ -96,7 +96,8 @@ export type OusiaAppSettings = {
   chatFontFamily: OusiaFontFamily
   chatContentWidth: OusiaChatContentWidth
   language: OusiaLanguage
-  defaultWorkDir: string
+  defaultSessionDir: string
+  defaultProjectCreationDir: string
   sendDuringRunMode: OusiaSendDuringRunMode
   agentMode: OusiaAgentMode
   customAgentTools: OusiaAgentToolName[]
@@ -251,6 +252,36 @@ export type OusiaWindowThemePayload = {
   resolvedTheme: OusiaResolvedTheme
 }
 
+export type OusiaUpdateStatus =
+  | { phase: "disabled"; reason: string }
+  | { phase: "idle"; currentVersion: string }
+  | {
+      phase: "available"
+      currentVersion: string
+      version: string
+      releaseName: string
+    }
+  | {
+      phase: "downloading"
+      currentVersion: string
+      version: string
+    }
+  | {
+      phase: "downloaded"
+      currentVersion: string
+      version: string
+    }
+  | {
+      phase: "error"
+      currentVersion: string
+      message: string
+      version?: string
+    }
+
+export type OusiaUpdateActionResult =
+  | { ok: true }
+  | { ok: false; error: string }
+
 export type OusiaAppState = {
   schemaVersion: OusiaAppStateSchemaVersion
   settings: OusiaAppSettings
@@ -358,7 +389,8 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   chatFontFamily: "system",
   chatContentWidth: "standard",
   language: "zh",
-  defaultWorkDir: OUSIA_DEFAULT_WORK_DIR,
+  defaultSessionDir: OUSIA_DEFAULT_WORK_DIR,
+  defaultProjectCreationDir: OUSIA_DEFAULT_WORK_DIR,
   sendDuringRunMode: "steer",
   agentMode: "standard",
   customAgentTools: ["read", "write", "edit", "bash", "grep", "find", "ls"],
@@ -426,8 +458,12 @@ function normalizeOusiaChatContentWidth(
 }
 
 export function normalizeOusiaAppSettings(
-  settings: Partial<OusiaAppSettings> = {}
+  settings: Partial<OusiaAppSettings> & { defaultWorkDir?: string } = {}
 ): OusiaAppSettings {
+  const legacyDefaultWorkDir =
+    typeof settings.defaultWorkDir === "string"
+      ? settings.defaultWorkDir
+      : undefined
   const merged = {
     ...defaultOusiaAppSettings,
     ...settings,
@@ -462,9 +498,11 @@ export function normalizeOusiaAppSettings(
     defaultOusiaAppSettings.chatContentWidth
   const {
     showContextUsage: _showContextUsage,
+    defaultWorkDir: _legacyDefaultWorkDir,
     ...normalizedBaseSettings
   } = merged
   void _showContextUsage
+  void _legacyDefaultWorkDir
 
   const allowedAgentTools = new Set<OusiaAgentToolName>([
     "read",
@@ -476,15 +514,25 @@ export function normalizeOusiaAppSettings(
     "ls",
   ])
   const customAgentTools = Array.isArray(merged.customAgentTools)
-    ? merged.customAgentTools.filter(
-        (tool): tool is OusiaAgentToolName => allowedAgentTools.has(tool)
+    ? merged.customAgentTools.filter((tool): tool is OusiaAgentToolName =>
+        allowedAgentTools.has(tool)
       )
     : defaultOusiaAppSettings.customAgentTools
 
-  const normalizedDefaultWorkDir =
-    merged.defaultWorkDir.trim() === OUSIA_LEGACY_DEFAULT_WORK_DIR
+  const normalizeDefaultDirectory = (value: string) =>
+    value.trim() === OUSIA_LEGACY_DEFAULT_WORK_DIR
       ? OUSIA_DEFAULT_WORK_DIR
-      : merged.defaultWorkDir.trim()
+      : value.trim()
+  const normalizedDefaultSessionDir = normalizeDefaultDirectory(
+    settings.defaultSessionDir ??
+      legacyDefaultWorkDir ??
+      defaultOusiaAppSettings.defaultSessionDir
+  )
+  const normalizedDefaultProjectCreationDir = normalizeDefaultDirectory(
+    settings.defaultProjectCreationDir ??
+      legacyDefaultWorkDir ??
+      defaultOusiaAppSettings.defaultProjectCreationDir
+  )
 
   return {
     ...normalizedBaseSettings,
@@ -496,10 +544,12 @@ export function normalizeOusiaAppSettings(
     chatFontFamily,
     chatContentWidth,
     language: merged.language === "en" ? "en" : "zh",
-    defaultWorkDir:
-      normalizedDefaultWorkDir || defaultOusiaAppSettings.defaultWorkDir,
-    sendDuringRunMode:
-      merged.sendDuringRunMode === "queue" ? "queue" : "steer",
+    defaultSessionDir:
+      normalizedDefaultSessionDir || defaultOusiaAppSettings.defaultSessionDir,
+    defaultProjectCreationDir:
+      normalizedDefaultProjectCreationDir ||
+      defaultOusiaAppSettings.defaultProjectCreationDir,
+    sendDuringRunMode: merged.sendDuringRunMode === "queue" ? "queue" : "steer",
     agentMode:
       merged.agentMode === "readOnly" ||
       merged.agentMode === "noTerminal" ||
@@ -562,6 +612,19 @@ export function createOusiaId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+const OUSIA_CHAT_MESSAGE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/
+
+export function isOusiaChatMessageId(value: unknown): value is string {
+  return typeof value === "string" && OUSIA_CHAT_MESSAGE_ID_PATTERN.test(value)
+}
+
+export function requireOusiaChatMessageId(value: unknown) {
+  if (!isOusiaChatMessageId(value)) {
+    throw new Error("Invalid chat message id.")
+  }
+  return value
+}
+
 export function createOusiaSession(
   title = "新会话",
   agentProvider: OusiaAgentProvider = "pi"
@@ -610,8 +673,8 @@ export function createDefaultOusiaProject(
 ): OusiaProjectRecord {
   return {
     id: "default-workdir",
-    name: ousiaProjectNameFromPath(settings.defaultWorkDir),
-    path: settings.defaultWorkDir,
+    name: ousiaProjectNameFromPath(settings.defaultSessionDir),
+    path: settings.defaultSessionDir,
   }
 }
 
@@ -668,7 +731,7 @@ export type OusiaTextChatItem = {
   text: string
   timestamp?: string
   attachments?: OusiaChatAttachmentSummary[]
-  status?: "streaming" | "finished"
+  status?: "streaming" | "finished" | "failed"
 }
 
 export type OusiaChatToolFilePreview =
@@ -709,6 +772,7 @@ export type OusiaChatHistoryItem =
       output?: string
       errorText?: string
       filePreview?: OusiaChatToolFilePreview
+      inputComplete?: boolean
       payloadOmitted?: boolean
       status: "running" | "finished" | "failed"
     }
@@ -721,6 +785,12 @@ export type OusiaChatEvent = {
       id: string
       text: string
       attachments?: OusiaChatAttachmentSummary[]
+      delivery: "optimistic" | "failed"
+      timestamp: string
+    }
+  | {
+      type: "user_message_failed"
+      id: string
       timestamp: string
     }
   | {
@@ -772,6 +842,11 @@ export type OusiaChatEvent = {
       filePreview?: OusiaChatToolFilePreview
       value?: unknown
       phase?: "input" | "output"
+      timestamp: string
+    }
+  | {
+      type: "tool_input_end"
+      id: string
       timestamp: string
     }
   | {
@@ -869,6 +944,7 @@ export type OusiaChatCompactResult = {
 }
 
 export type OusiaChatSendPayload = OusiaChatContext & {
+  messageId: string
   prompt: string
   attachments?: OusiaChatAttachment[]
   sendBehavior?: "normal" | "steer" | "followUp"
@@ -878,6 +954,44 @@ export type OusiaChatSendPayload = OusiaChatContext & {
   autoRetryOnFailure?: boolean
   thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
+}
+
+export function summarizeOusiaChatAttachments(
+  attachments: OusiaChatAttachment[] | undefined
+): OusiaChatAttachmentSummary[] {
+  return (attachments ?? []).map((attachment) => ({
+    id: attachment.id,
+    kind: attachment.kind,
+    mediaType: attachment.mediaType,
+    name: attachment.name,
+    size: attachment.size,
+    ...(attachment.kind === "image"
+      ? { dataBase64: attachment.dataBase64 }
+      : {}),
+  }))
+}
+
+export function createOusiaUserMessageEvent(
+  payload: Pick<
+    OusiaChatSendPayload,
+    "attachments" | "messageId" | "projectPath" | "prompt" | "sessionId"
+  >,
+  timestamp: string,
+  delivery: "optimistic" | "failed"
+): Extract<OusiaChatEvent, { type: "user_message" }> {
+  const attachments = summarizeOusiaChatAttachments(payload.attachments)
+  return {
+    context: {
+      projectPath: payload.projectPath,
+      sessionId: payload.sessionId,
+    },
+    type: "user_message",
+    id: requireOusiaChatMessageId(payload.messageId),
+    text: payload.prompt,
+    delivery,
+    ...(attachments.length ? { attachments } : {}),
+    timestamp,
+  }
 }
 
 export type OusiaChatHistoryPayload = OusiaChatContext & {

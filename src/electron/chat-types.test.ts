@@ -5,6 +5,7 @@ import {
   createDefaultOusiaAppState,
   createDefaultOusiaProject,
   defaultOusiaAppSettings,
+  isOusiaChatMessageId,
   isOusiaCodexReasoningEffort,
   isOusiaPiThinkingLevel,
   normalizeOusiaAppSettings,
@@ -15,6 +16,7 @@ import {
   ousiaProjectNameFromPath,
   resolveOusiaChatContentWidthValue,
   resolveOusiaFontFamilyValue,
+  requireOusiaChatMessageId,
   type OusiaAppSettings,
 } from "./chat-types"
 
@@ -84,7 +86,9 @@ describe("normalizeOusiaAppSettings", () => {
       codexModelId: "",
       codexReasoningEffort: null,
       defaultAgentProvider: "pi",
-      defaultWorkDir: defaultOusiaAppSettings.defaultWorkDir,
+      defaultSessionDir: defaultOusiaAppSettings.defaultSessionDir,
+      defaultProjectCreationDir:
+        defaultOusiaAppSettings.defaultProjectCreationDir,
       language: "zh",
       modelId: defaultOusiaAppSettings.modelId,
       modelProvider: defaultOusiaAppSettings.modelProvider,
@@ -96,12 +100,38 @@ describe("normalizeOusiaAppSettings", () => {
     expect(settings.customAgentTools).toEqual(["read"])
   })
 
-  it("maps the old development default work dir to the current default", () => {
+  it("maps the old work dir to both independent directory settings", () => {
+    expect(
+      normalizeOusiaAppSettings({
+        defaultWorkDir: "/tmp/previous-default",
+      })
+    ).toMatchObject({
+      defaultSessionDir: "/tmp/previous-default",
+      defaultProjectCreationDir: "/tmp/previous-default",
+    })
+  })
+
+  it("normalizes the legacy development directory for both settings", () => {
     expect(
       normalizeOusiaAppSettings({
         defaultWorkDir: OUSIA_LEGACY_DEFAULT_WORK_DIR,
-      }).defaultWorkDir
-    ).toBe(OUSIA_DEFAULT_WORK_DIR)
+      })
+    ).toMatchObject({
+      defaultSessionDir: OUSIA_DEFAULT_WORK_DIR,
+      defaultProjectCreationDir: OUSIA_DEFAULT_WORK_DIR,
+    })
+  })
+
+  it("keeps the session and project creation directories independent", () => {
+    expect(
+      normalizeOusiaAppSettings({
+        defaultSessionDir: "/tmp/sessions",
+        defaultProjectCreationDir: "/tmp/projects",
+      })
+    ).toMatchObject({
+      defaultSessionDir: "/tmp/sessions",
+      defaultProjectCreationDir: "/tmp/projects",
+    })
   })
 
   it("keeps custom mode only with supported custom tools", () => {
@@ -148,6 +178,18 @@ describe("agent reasoning types", () => {
   })
 })
 
+describe("chat message identity", () => {
+  it("accepts generated-style ids and rejects ambiguous values", () => {
+    expect(isOusiaChatMessageId("user-123-abc456")).toBe(true)
+    expect(isOusiaChatMessageId(" user-123 ")).toBe(false)
+    expect(isOusiaChatMessageId("user id")).toBe(false)
+    expect(isOusiaChatMessageId(123)).toBe(false)
+    expect(() => requireOusiaChatMessageId("bad id")).toThrow(
+      "Invalid chat message id"
+    )
+  })
+})
+
 describe("default state helpers", () => {
   it("creates a valid default app state with a selected session", () => {
     const state = createDefaultOusiaAppState()
@@ -177,7 +219,7 @@ describe("default state helpers", () => {
     expect(
       createDefaultOusiaProject({
         ...defaultOusiaAppSettings,
-        defaultWorkDir: "~/Documents/Ousia",
+        defaultSessionDir: "~/Documents/Ousia",
       })
     ).toMatchObject({
       id: "default-workdir",

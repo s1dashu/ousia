@@ -85,19 +85,37 @@ export function createToolResultFilePreview({
 }
 
 function createWritePreview(args: unknown): OusiaChatToolFilePreview | undefined {
+  const record = objectRecord(args)
+  if (record) {
+    const path = stringField(record, "path", "file_path", "filePath")
+    const content = stringField(record, "content")
+    if (!path || content === undefined) {
+      return undefined
+    }
+    return {
+      kind: "diff",
+      path,
+      oldContent: "",
+      newContent: content,
+      source: "input",
+    }
+  }
+  if (typeof args !== "string") {
+    return undefined
+  }
+
   const fields = writeFieldsFromArgs(args)
   if (!fields) {
     return undefined
   }
-  const path = fields.path
   const content = fields.content
-  if (!path || content === undefined) {
+  if (content === undefined) {
     return undefined
   }
 
   return {
     kind: "diff",
-    path,
+    path: fields.path ?? "write",
     oldContent: "",
     newContent: content,
     source: "input",

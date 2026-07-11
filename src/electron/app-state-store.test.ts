@@ -286,6 +286,10 @@ describe("app state store", () => {
     ])
     expect(state.expandedProjectIds).toEqual(["project-valid"])
     expect(state.selectedSessionId).toBe("session-valid")
+    expect(state.settings).toMatchObject({
+      defaultSessionDir: "/tmp/custom-workdir",
+      defaultProjectCreationDir: "/tmp/custom-workdir",
+    })
     expect(state.shellLayout).toEqual({
       isSidebarCollapsed: false,
       sidebarSectionOrder: ["projects", "sessions"],
@@ -346,6 +350,10 @@ describe("app state store", () => {
       },
     ])
     expect(state.selectedSessionId).toBe("session-default")
+    expect(state.settings).toMatchObject({
+      defaultSessionDir: OUSIA_DEFAULT_WORK_DIR,
+      defaultProjectCreationDir: OUSIA_DEFAULT_WORK_DIR,
+    })
   })
 
   it("migrates legacy default work dir items and reports conflicts", async () => {

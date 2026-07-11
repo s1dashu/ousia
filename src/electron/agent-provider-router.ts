@@ -24,7 +24,12 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaSessionRecord,
 } from "./chat-types.js"
+import { requireOusiaChatMessageId } from "./chat-types.js"
 import { loadAppState } from "./app-state-store.js"
+import {
+  chatMessageIdFingerprint,
+  ChatMessageReplayGuard,
+} from "./chat-message-replay-guard.js"
 import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
@@ -76,7 +81,7 @@ function canonicalProjectPathForSession(
   session: OusiaSessionRecord
 ) {
   if (!session.projectId) {
-    return state.settings.defaultWorkDir
+    return state.settings.defaultSessionDir
   }
   const project = state.projects.find(
     (candidate) => candidate.id === session.projectId
@@ -166,6 +171,50 @@ export function createAgentProviderRouter({
     codex,
     pi,
   }
+  const messageReplayGuard = new ChatMessageReplayGuard()
+  const historyReadsBySession = new Map<string, Set<Promise<void>>>()
+
+  function trackHistoryRead<T>(sessionId: string, operation: Promise<T>) {
+    const barrier = operation.then(
+      () => undefined,
+      () => undefined
+    )
+    const activeReads = historyReadsBySession.get(sessionId) ?? new Set()
+    activeReads.add(barrier)
+    historyReadsBySession.set(sessionId, activeReads)
+    void barrier.finally(() => {
+      activeReads.delete(barrier)
+      if (
+        !activeReads.size &&
+        historyReadsBySession.get(sessionId) === activeReads
+      ) {
+        historyReadsBySession.delete(sessionId)
+      }
+    })
+    return operation
+  }
+
+  async function waitForHistoryReads(sessionId: string) {
+    const startedAt = performance.now()
+    let readCount = 0
+    while (true) {
+      const activeReads = historyReadsBySession.get(sessionId)
+      if (!activeReads?.size) {
+        break
+      }
+      const reads = [...activeReads]
+      readCount += reads.length
+      await Promise.all(reads)
+    }
+    if (readCount) {
+      writeRuntimeLog("agent.message", "debug", {
+        elapsedMs: Math.round((performance.now() - startedAt) * 10) / 10,
+        message: "Waited for in-flight chat history before sending",
+        readCount,
+        sessionId,
+      })
+    }
+  }
 
   function providerForRoute(route: CanonicalAgentContext) {
     const provider = providers[route.agentProvider]
@@ -221,9 +270,16 @@ export function createAgentProviderRouter({
       const { provider, route } = await routeForContext(context)
       return provider.getContextUsage(route.context)
     },
-    async getChatHistory(payload) {
-      const { provider, route } = await routeForContext(payload)
-      return provider.getChatHistory(canonicalPayload(payload, route.context))
+    getChatHistory(payload) {
+      return trackHistoryRead(
+        payload.sessionId,
+        (async () => {
+          const { provider, route } = await routeForContext(payload)
+          return provider.getChatHistory(
+            canonicalPayload(payload, route.context)
+          )
+        })()
+      )
     },
     async getChatToolPayload(payload) {
       const { provider, route } = await routeForContext(payload)
@@ -246,7 +302,7 @@ export function createAgentProviderRouter({
           ? state.projects.find(
               (candidate) => candidate.id === payload.targetProjectId
             )?.path
-          : state.settings.defaultWorkDir
+          : state.settings.defaultSessionDir
       if (!targetProjectPath) {
         writeRuntimeLog("agent.context", "error", {
           message: "Rejected move to unknown canonical project",
@@ -279,7 +335,41 @@ export function createAgentProviderRouter({
       })
     },
     async sendChatMessage(payload) {
+      let messageId: string
+      try {
+        messageId = requireOusiaChatMessageId(payload.messageId)
+      } catch (error) {
+        writeRuntimeLog("agent.message", "error", {
+          message: "Rejected invalid chat message id",
+          messageIdLength:
+            typeof payload.messageId === "string"
+              ? payload.messageId.length
+              : undefined,
+          messageIdType: typeof payload.messageId,
+          sessionId: payload.sessionId,
+        })
+        throw error
+      }
+      await waitForHistoryReads(payload.sessionId)
       const { provider, route } = await routeForContext(payload)
+      const messageIdFingerprint = chatMessageIdFingerprint(messageId)
+      try {
+        messageReplayGuard.claim(route.context.sessionId, messageId)
+      } catch (error) {
+        writeRuntimeLog("agent.message", "error", {
+          agentProvider: route.agentProvider,
+          messageIdFingerprint,
+          message: "Rejected duplicate chat message id",
+          sessionId: route.context.sessionId,
+        })
+        throw error
+      }
+      writeRuntimeLog("agent.message", "debug", {
+        agentProvider: route.agentProvider,
+        messageIdFingerprint,
+        phase: "routed",
+        sessionId: route.context.sessionId,
+      })
       return provider.sendChatMessage(canonicalPayload(payload, route.context))
     },
   }

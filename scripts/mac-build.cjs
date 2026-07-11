@@ -41,6 +41,7 @@ const electronVersion = require(join(
   "electron",
   "package.json"
 )).version
+const appVersion = require(join(rootDir, "package.json")).version
 const electronCacheRoot = join(homedir(), "Library", "Caches", "electron")
 const appleEnvKeys = [
   "APPLE_SIGN_IDENTITY",
@@ -515,6 +516,7 @@ async function buildMac(options = {}) {
   const {
     arch = "arm64",
     makeDmg = false,
+    makeZip = false,
     notarize = false,
     platform = "darwin",
     sign = notarize,
@@ -594,6 +596,7 @@ async function buildMac(options = {}) {
   }
 
   let newestDmg
+  let updateZip
 
   if (makeDmg) {
     await withHiddenAppleSigningEnv(() => {
@@ -629,6 +632,23 @@ async function buildMac(options = {}) {
     verifyDmgDistribution(newestDmg, { notarized: notarize, signed: sign })
   }
 
+  if (makeZip) {
+    const zipDir = join(makeDir, "zip", platform, arch)
+    mkdirSync(zipDir, { recursive: true })
+    updateZip = join(zipDir, `Ousia-${appVersion}-${arch}.zip`)
+    rmSync(updateZip, { force: true })
+    run("ditto", [
+      "-c",
+      "-k",
+      "--sequesterRsrc",
+      "--keepParent",
+      packagedAppPath,
+      updateZip,
+    ])
+    assert(existsSync(updateZip), `Failed to create update ZIP: ${updateZip}`)
+    console.log(`Automatic update ZIP: ${updateZip}`)
+  }
+
   if (newestDmg) {
     console.log(`Fresh DMG: ${newestDmg}`)
   } else {
@@ -638,6 +658,7 @@ async function buildMac(options = {}) {
   return {
     appPath: packagedAppPath,
     dmgPath: newestDmg,
+    updateZip,
   }
 }
 

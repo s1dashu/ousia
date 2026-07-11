@@ -25,6 +25,8 @@ Removed from this branch:
 Main renderer entrypoints:
 
 - `src/App.tsx`: shell state, sidebar/chat layout, persistence.
+- `src/components/ui/card.tsx`: the existing product Card primitive; Settings
+  uses its feature-local Maia Card.
 - `src/features/chat/ChatArea.tsx`: chat history, input, attachments, controls.
 - `src/features/chat/ChatHeader.tsx`: chat title bar actions.
 - `src/features/chat/ChatMessageList.tsx`: assistant/user/system message
@@ -33,14 +35,67 @@ Main renderer entrypoints:
   composer subcomponents.
 - `src/features/chat/ChatToolCall.tsx`: tool call rendering and payload
   expansion.
-- `src/features/settings/SettingsPage.tsx`: settings form and provider key
-  management.
+- `src/features/settings/SettingsPage.tsx`: categorized settings content and
+  provider-specific configuration. Shared chat behavior has its own section;
+  Pi permission mode is rendered only inside Pi settings.
+- `src/features/settings/SettingsSidebar.tsx`: settings-mode navigation with a
+  dynamic Pi or Codex destination.
+- `src/features/settings/settings-navigation.ts`: settings section ids and the
+  provider-aware navigation model shared by the shell and settings sidebar.
+- `src/features/settings/SettingsSelect.tsx`, `SettingsSwitch.tsx`,
+  `SettingsButton.tsx`, `SettingsCard.tsx`, `SettingsInput.tsx`, and
+  `SettingsDialog.tsx`: feature-local Base UI controls aligned with the
+  `bbVKEbY` Maia reference, isolated from globally customized primitives.
+- `src/features/settings/settings-local-styles.ts`: settings shell-only Maia
+  sidebar and panel classes; primitive styling lives with each local component.
+- `src/features/shell/main-panel-styles.ts`: shared left-corner geometry for the
+  chat and settings panels. Both panels sit on a `bg-sidebar` host so the
+  revealed corner surface matches the side panel.
 - `src/features/sidebar/Sidebar.tsx`: project/session/settings navigation.
+
+The renderer theme has two explicit layers. Global shadcn tokens are the exact
+neutral `bbVKEbY` Maia light/dark values and define the default behavior for new
+and uncustomized UI. Existing appearance palettes currently live under the
+`--ousia-app-*` migration palette. The tuned chat and session-sidebar roots map
+those values through `ousia-chat-theme` and `ousia-sidebar-theme` as a temporary
+compatibility boundary. The target architecture in `docs/design.md` replaces
+those broad mappings with direct component semantics such as
+`--ousia-composer-*`, `--ousia-message-*`, and `--ousia-sidebar-*`.
 
 The shell surfaces are memoized and receive stable event callbacks. Chat event
 reduction preserves object references for no-op events and copies only the
 changed item path, so active streaming does not invalidate unrelated shell or
 history subtrees.
+
+Live Pi tool items track streamed input completion separately from execution
+completion. For write/edit calls, Electron main emits a per-item
+`tool_input_end` when that content index's raw argument stream first becomes a
+strictly complete JSON object; the renderer then collapses that file preview
+while leaving its execution status running, but only if the renderer previously
+observed that item as an active write/edit preview. If a provider delivers the
+tool name and complete arguments in one renderer batch, the newly identified
+preview must still open and remain visible until execution finishes. This
+cannot rely only on Pi's
+`toolcall_end`, because some OpenAI-compatible providers delay all such events
+until the complete model response has finished. Final success or failure still
+comes exclusively from `tool_execution_end`.
+
+Streaming write previews must not depend on JSON field order. When `content`
+arrives before `path`, the preview uses the neutral `write` target temporarily
+and renders the partial content immediately; the same tool item adopts the real
+path when that field arrives. A complete write payload without a path remains
+invalid and does not receive this streaming-only treatment.
+
+Submitting a chat message creates a stable client message id and publishes the
+user item to its contextual session before invoking Electron IPC. That item
+immediately uses the normal successful style and is the only live success write;
+Pi and Codex do not echo successful user messages. Provider failures emit the
+same content and client id atomically with `delivery: "failed"`, allowing a
+remounted renderer to reconstruct the failed item. The main-process router
+rejects duplicate ids in the same session before they can execute twice, and
+waits for an already in-flight initial history snapshot before routing a send so
+provider-local history ids cannot create a duplicate bubble. `autoRetryOnFailure`
+is sent only to Pi and is rejected at the Codex provider boundary.
 
 The old workspace abstraction and right-side terminal panel are gone. Shell
 layout state only persists the sidebar width/collapse state and sidebar section
@@ -105,7 +160,8 @@ synchronizes Pi's retry preference, preventing environment/package-path races.
 
 Each chat request includes `projectPath` and `sessionId`. Electron main resolves
 the canonical session record, derives its project path from the persisted
-project/default-workspace index, rejects a mismatched renderer path, and routes
+project/default-session-folder index, rejects a mismatched renderer path, and
+routes
 the canonical context to the immutable Pi or Codex provider. Both providers
 execute with that canonical project as cwd; renderer input never expands an
 agent sandbox boundary.
@@ -152,11 +208,32 @@ descriptions, and default effort. Those open protocol values are kept separate
 from Pi's fixed thinking levels and are validated again by the Codex provider
 before `turn/start`.
 
+## Updates And Anonymous Metrics
+
+Packaged macOS builds query the independently deployed Ousia analytics service
+for the latest GitHub release. Checking and downloading are separate actions:
+the renderer exposes an update button only after a newer signed ZIP is known to
+exist, and Electron's native Squirrel.Mac updater begins downloading only after
+the user clicks it. Update state and errors are emitted over IPC and recorded in
+the runtime log.
+
+After download, installation waits for either an explicit Restart click or a
+strict idle condition: the window is not focused, no input was observed for five
+minutes, and no agent session is running. A downloaded update is also applied on
+the next normal app launch by Squirrel.Mac.
+
+The service receives `app_opened` and `update_downloaded` events containing only
+a random installation UUID, app version, platform, and CPU architecture. It
+HMAC-hashes the UUID before persistence. Download counts come from the same
+service's validated redirect endpoint, which must be used by both the updater
+and public download links.
+
 ## App State
 
 App state schema version 2 stores settings, flat project/session indexes,
 expanded project ids, shell layout, selected session, and window state. Settings
-include appearance mode, Radix color scale, default workspace folder,
+include appearance mode, Radix color scale, independently configurable default
+session and project-creation starting folders,
 send-during-run mode, default agent for new sessions, Codex model selection,
 Codex reasoning preference, Pi thinking level, selected Pi model, per-provider
 API keys, and locally disabled model provider ids. Session records persist their

@@ -35,15 +35,15 @@ Measurements were taken on 2026-07-10 with the same local production toolchain.
 Sizes are uncompressed filesystem sizes and are intentionally approximate where
 the build emits content-hashed filenames.
 
-| Metric | Before | After | Change |
-| --- | ---: | ---: | ---: |
-| HugeIcons/Vite transformed modules | 6,919 | 1,490 | -78.5% |
-| Renderer build wall time | 5.28 s | 4.19 s | -20.6% |
-| Renderer build peak RSS | 1.313 GB | 0.950 GB | -27.7% |
-| Main entry chunk | ~5.1 MB | 74,141 B | -98.5% |
-| Complete main build | ~8.23 MB | ~6.4 MB | ~-22% |
-| Renderer initial JavaScript | 1,163,776 B | 1,166,873 B | +0.3% |
-| Packaged `.app` | ~653 MB | ~650 MB | ~-0.5% |
+| Metric                             |      Before |       After | Change |
+| ---------------------------------- | ----------: | ----------: | -----: |
+| HugeIcons/Vite transformed modules |       6,919 |       1,490 | -78.5% |
+| Renderer build wall time           |      5.28 s |      4.19 s | -20.6% |
+| Renderer build peak RSS            |    1.313 GB |    0.950 GB | -27.7% |
+| Main entry chunk                   |     ~5.1 MB |    74,141 B | -98.5% |
+| Complete main build                |    ~8.23 MB |     ~6.4 MB |  ~-22% |
+| Renderer initial JavaScript        | 1,163,776 B | 1,166,873 B |  +0.3% |
+| Packaged `.app`                    |     ~653 MB |     ~650 MB | ~-0.5% |
 
 The renderer entry size is effectively unchanged; the icon change improves the
 module graph, build time, and build memory rather than hiding code in another
@@ -66,6 +66,12 @@ returns unless those product dependencies change.
 - Chat-history failures receive one bounded delayed retry instead of creating
   an unbounded IPC loop. After that, selecting another chat and returning, or
   reloading the app, explicitly starts a fresh retry budget.
+- User messages are inserted locally in their final visual style before chat
+  IPC. Providers do not echo successful user messages, removing both Codex
+  model/thread RPC latency from perceived send latency and the second live write
+  source. If initial history is already in flight, Electron main finishes that
+  snapshot before starting the provider send; the bubble remains immediate
+  while the snapshot fence prevents provider-local history ids from racing it.
 - Tooltip pointer positioning snapshots DOM state before animation-frame work
   and cancels stale frames, eliminating the recurring detached-element error.
 
@@ -129,6 +135,9 @@ A warm window recreation after closing the macOS window took 148.4 ms.
   overflow is allowed until a session becomes idle.
 - Renderer memoization must use stable callbacks that see the latest committed
   state; stale closures are not an acceptable optimization.
+- Optimistic user messages and provider failure events must share one validated
+  message id. Content conflicts for the same id are protocol errors; text/time
+  heuristics are not a valid deduplication strategy.
 - Performance work must not change CSS tokens, layout, interaction semantics,
   provider selection, sandbox/cwd validation, or persistence ownership.
 

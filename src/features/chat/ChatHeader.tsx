@@ -63,7 +63,7 @@ export function ChatHeader({
   return (
     <header
       className={cn(
-        "window-drag relative z-30 grid h-[var(--ousia-titlebar-height)] shrink-0 select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter]",
+        "window-drag relative z-30 grid h-[var(--ousia-titlebar-height)] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter] select-none",
         isScrolled
           ? "bg-white shadow-none dark:bg-card"
           : "bg-white shadow-none dark:bg-card"
@@ -83,9 +83,12 @@ export function ChatHeader({
           <h1 className="window-drag truncate text-sm leading-none font-normal">
             {currentSession?.title ?? t.app.newSession}
           </h1>
-          {currentSession ? (
-            <span className="window-drag shrink-0 rounded-md bg-muted/55 px-1.5 py-0.5 text-[10px] leading-4 font-medium text-muted-foreground">
-              {currentSession.agentProvider === "codex" ? "Codex" : "Pi"}
+          {currentSession?.agentProvider === "codex" ? (
+            <span
+              data-slot="agent-provider-badge"
+              className="window-drag shrink-0 rounded-md bg-muted/55 px-1.5 py-0.5 text-[10px] leading-4 font-medium text-muted-foreground"
+            >
+              Codex
             </span>
           ) : null}
         </div>
@@ -127,10 +130,7 @@ export function ChatHeader({
               <MoreHorizontal size={18} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="end"
-            className="w-auto rounded-md p-1"
-          >
+          <DropdownMenuContent align="end" className="w-auto rounded-md p-1">
             <DropdownMenuItem
               className="gap-2 rounded-sm px-2 py-1.5 hover:bg-neutral-100 focus:bg-neutral-100"
               disabled={isCompacting || !currentSession}

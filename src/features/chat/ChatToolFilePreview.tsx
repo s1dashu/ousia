@@ -121,7 +121,7 @@ const previewCardBackground = "var(--ousia-diff-card-bg)"
 
 const previewFrameStyle = {
   backgroundColor: previewCardBackground,
-  borderRadius: "8px",
+  borderRadius: "14px",
   display: "block",
   maxHeight: "48dvh",
   overflowX: "hidden",
@@ -508,7 +508,7 @@ export function ToolFilePreviewView({
     <div className="relative mt-1.5">
       <div
         ref={frameRef}
-        className="ousia-diff-preview-frame"
+        className="ousia-diff-preview-frame ousia-squircle-corners"
         onScroll={(event) => {
           syncFollowState(event.currentTarget)
         }}

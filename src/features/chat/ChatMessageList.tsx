@@ -356,6 +356,11 @@ const ChatItemView = memo(function ChatItemView({
               {chatItem.text}
             </p>
           ) : null}
+          {chatItem.status === "failed" ? (
+            <span className="mt-1 flex items-center gap-1 text-[11px] leading-4 text-destructive">
+              {t.chat.sendFailed}
+            </span>
+          ) : null}
         </>
       )}
       {showAssistantFooter ? (

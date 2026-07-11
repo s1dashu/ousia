@@ -1,6 +1,6 @@
 {
   "name": "ousia-desktop",
-  "version": "0.1.17",
+  "version": "0.1.21",
   "description": "A simplified Electron desktop client for Pi and Codex coding agent sessions.",
   "license": "MIT",
   "homepage": "https://github.com/s1dashu/ousia#readme",
@@ -24,6 +24,7 @@
     "make:dmg:signed": "node scripts/make-dmg-signed.cjs",
     "notarize:dmg": "node scripts/notarize-dmg.cjs",
     "make:dmg:notarized": "node scripts/make-dmg-notarized.cjs",
+    "make:release:mac": "node scripts/make-mac-release.cjs",
     "make:forge": "electron-forge make",
     "publish": "electron-forge publish",
     "build": "tsc -b && NODE_OPTIONS=--max-old-space-size=8192 electron-forge package",
@@ -38,6 +39,7 @@
     "preview": "vite preview --config vite.renderer.config.ts"
   },
   "dependencies": {
+    "@base-ui/react": "1.6.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -50,7 +52,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",
-    "radix-ui": "^1.6.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "streamdown": "^2.5.0",

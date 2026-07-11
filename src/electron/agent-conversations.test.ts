@@ -51,6 +51,7 @@ describe("Pi agent conversation boundaries", () => {
     await expect(
       conversations.sendChatMessage({
         agentMode: "standard",
+        messageId: "user-client-1",
         model: { provider: "openai", modelId: "gpt-test" },
         projectPath: "/tmp/project",
         prompt: "hello",
@@ -62,9 +63,15 @@ describe("Pi agent conversation boundaries", () => {
       error: "Unsupported Pi thinking level: ultra",
     })
     expect(emitChatEvent.mock.calls.map(([event]) => event.type)).toEqual([
+      "user_message",
       "error",
       "run_status",
     ])
+    expect(emitChatEvent.mock.calls[0]?.[0]).toMatchObject({
+      delivery: "failed",
+      id: "user-client-1",
+      text: "hello",
+    })
     expect(mocks.writeRuntimeLog).toHaveBeenCalledWith(
       "pi.thinking",
       "error",

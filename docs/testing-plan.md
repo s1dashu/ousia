@@ -66,8 +66,15 @@ P0 automated paths:
   defaults or unsupported selections before starting a turn.
 - Project-relative file paths cannot resolve outside the selected project.
 - Write/edit tool previews expose meaningful diffs or explicit errors.
+- Interleaved Pi write/edit inputs complete and collapse independently without
+  being mistaken for finished tool execution.
 - Chat streaming events reduce into stable user, assistant, thinking, tool,
   system, and error history items.
+- Renderer chat submission publishes a contextual user message before IPC;
+  it immediately has the normal success style and providers do not echo a
+  successful duplicate. Provider failures carry enough canonical same-id data
+  to reconstruct a failed item after renderer state loss, and an in-flight
+  initial history snapshot completes before the provider send starts.
 - A failed app-state rename cannot poison the in-memory snapshot; transient Pi
   retry reads remain retryable; public state/metadata clones cannot mutate the
   canonical cache.
@@ -107,7 +114,13 @@ P2 / manual smoke paths:
 - Any change to model/reasoning selection needs tests for provider-specific
   persistence, per-model defaults, unknown future Codex values, and provider
   boundary rejection.
+- Any change to chat submission or user-message events needs optimistic-before-
+  IPC ordering, no success echo, stable failure ids, duplicate suppression,
+  history/send race coverage, atomic reconstruction, and failure-path tests.
 - Any change to tool preview payload handling needs a write/edit preview test.
+- Any change to Pi tool-input lifecycle mapping needs strict JSON-boundary,
+  interleaved multi-tool, duplicate-completion, and authoritative-end fallback
+  tests.
 - Any new user-visible settings field needs normalization and persistence tests.
 - Any cache or batching change needs a bound/invalidation test and an ordering
   or reference-identity regression test, as appropriate.

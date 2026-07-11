@@ -16,8 +16,8 @@ In scope:
 - Project/session isolated cwd for agent work.
 - User settings for the default agent for new sessions, Codex authentication,
   appearance mode, Radix color scale, Pi model provider API keys, model,
-  provider-specific thinking/reasoning preference, and default workspace
-  folder.
+  provider-specific thinking/reasoning preference, default session folder, and
+  default project creation starting folder.
 
 Out of scope:
 
@@ -40,7 +40,9 @@ panel.
 - Sidebar: left project/session/settings navigation.
 - Chat: central conversation surface for the session's immutable Pi or Codex
   Agent provider.
-- Default workspace folder: user-visible directory used by unassigned sessions
-  and as the starting point for creating projects, currently `~/Documents/Ousia`.
+- Default session folder: directory used as the cwd for unassigned sessions,
+  initially `~/Documents/Ousia`.
+- Default project creation starting folder: initial directory shown when adding
+  a project, also initially `~/Documents/Ousia` but independently configurable.
 - Agent provider: the immutable Pi or Codex runtime selected when a session is
   created. Changing the default only affects new sessions.

@@ -156,16 +156,19 @@ function normalizeWindowState(value: unknown): OusiaWindowState {
   }
 }
 
-function normalizeSettings(settings: OusiaAppSettings): OusiaAppSettings {
-  const nextSettings = normalizeOusiaAppSettings({
-    ...defaultOusiaAppSettings,
-    ...settings,
-  })
+function normalizeSettings(
+  settings: OusiaAppSettings & { defaultWorkDir?: string }
+): OusiaAppSettings {
+  const nextSettings = normalizeOusiaAppSettings(settings)
 
   migrateLegacyDefaultWorkDir()
 
-  if (nextSettings.defaultWorkDir === defaultOusiaAppSettings.defaultWorkDir) {
-    mkdirSync(expandHomePath(nextSettings.defaultWorkDir), { recursive: true })
+  if (
+    nextSettings.defaultSessionDir === defaultOusiaAppSettings.defaultSessionDir
+  ) {
+    mkdirSync(expandHomePath(nextSettings.defaultSessionDir), {
+      recursive: true,
+    })
   }
 
   return nextSettings
@@ -173,7 +176,9 @@ function normalizeSettings(settings: OusiaAppSettings): OusiaAppSettings {
 
 function migrateLegacyDefaultWorkDir() {
   const legacyDefaultWorkDir = expandHomePath(OUSIA_LEGACY_DEFAULT_WORK_DIR)
-  const defaultWorkDir = expandHomePath(defaultOusiaAppSettings.defaultWorkDir)
+  const defaultWorkDir = expandHomePath(
+    defaultOusiaAppSettings.defaultSessionDir
+  )
   if (
     legacyDefaultWorkDir === defaultWorkDir ||
     !existsSync(legacyDefaultWorkDir)
@@ -280,12 +285,12 @@ function normalizeExpandedProjectIds(
     : []
 }
 
-function normalizeDefaultWorkDirProjectReferences(
+function normalizeDefaultSessionDirProjectReferences(
   settings: OusiaAppSettings,
   projects: OusiaProjectRecord[],
   sessions: OusiaSessionRecord[]
 ) {
-  const defaultWorkDir = expandHomePath(settings.defaultWorkDir)
+  const defaultWorkDir = expandHomePath(settings.defaultSessionDir)
   const defaultProjectIds = new Set(
     projects
       .filter((project) => expandHomePath(project.path) === defaultWorkDir)
@@ -318,8 +323,10 @@ function normalizeAppState(value: unknown): OusiaAppState {
     return fallback
   }
 
-  const settings = normalizeSettings(value.settings as OusiaAppSettings)
-  const normalizedReferences = normalizeDefaultWorkDirProjectReferences(
+  const settings = normalizeSettings(
+    value.settings as OusiaAppSettings & { defaultWorkDir?: string }
+  )
+  const normalizedReferences = normalizeDefaultSessionDirProjectReferences(
     settings,
     normalizeProjects(value.projects),
     normalizeSessions(value.sessions)

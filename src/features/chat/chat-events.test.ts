@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import { applyChatEvent, type ChatItem } from "./chat-events"
+import {
+  shouldAutoCollapseToolDisclosure,
+  shouldAutoExpandToolDisclosure,
+} from "./chat-tool-disclosure"
 
 describe("applyChatEvent", () => {
   it("appends user messages with attachment summaries", () => {
@@ -16,6 +20,7 @@ describe("applyChatEvent", () => {
       ],
       id: "user-1",
       text: "hello",
+      delivery: "optimistic",
       timestamp: "2026-07-07T00:00:00.000Z",
       type: "user_message",
     })
@@ -33,10 +38,157 @@ describe("applyChatEvent", () => {
         ],
         id: "user-1",
         role: "user",
+        status: "finished",
         text: "hello",
         timestamp: "2026-07-07T00:00:00.000Z",
       },
     ])
+  })
+
+  it("treats a repeated optimistic user message as idempotent", () => {
+    const optimistic = applyChatEvent([], {
+      delivery: "optimistic",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:00.000Z",
+      type: "user_message",
+    })
+    expect(optimistic[0].status).toBe("finished")
+    const repeated = applyChatEvent(optimistic, {
+      delivery: "optimistic",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "user_message",
+    })
+
+    expect(repeated).toBe(optimistic)
+    expect(repeated).toHaveLength(1)
+    expect(repeated[0].timestamp).toBe("2026-07-07T00:00:00.000Z")
+    expect(repeated[0].status).toBe("finished")
+    expect(
+      applyChatEvent(repeated, {
+        delivery: "optimistic",
+        id: "user-client-1",
+        text: "hello",
+        timestamp: "2026-07-07T00:00:02.000Z",
+        type: "user_message",
+      })
+    ).toBe(repeated)
+  })
+
+  it("keeps the earliest timestamp when a repeated optimistic event is reduced first", () => {
+    const laterFirst = applyChatEvent([], {
+      delivery: "optimistic",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "user_message",
+    })
+    const optimisticSecond = applyChatEvent(laterFirst, {
+      delivery: "optimistic",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:00.000Z",
+      type: "user_message",
+    })
+
+    expect(optimisticSecond).toHaveLength(1)
+    expect(optimisticSecond[0].timestamp).toBe("2026-07-07T00:00:00.000Z")
+    expect(optimisticSecond[0].status).toBe("finished")
+  })
+
+  it("keeps a failed optimistic message failed after a repeated local event", () => {
+    const optimistic = applyChatEvent([], {
+      delivery: "optimistic",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:00.000Z",
+      type: "user_message",
+    })
+    const failed = applyChatEvent(optimistic, {
+      id: "user-client-1",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "user_message_failed",
+    })
+    const lateOptimisticEvent = applyChatEvent(failed, {
+      delivery: "optimistic",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:02.000Z",
+      type: "user_message",
+    })
+
+    expect(failed[0].status).toBe("failed")
+    expect(lateOptimisticEvent).toBe(failed)
+  })
+
+  it("reconstructs an atomic provider failure when local optimistic state is gone", () => {
+    const failed = applyChatEvent([], {
+      delivery: "failed",
+      id: "user-client-1",
+      text: "hello",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "user_message",
+    })
+
+    expect(failed).toEqual([
+      expect.objectContaining({
+        id: "user-client-1",
+        role: "user",
+        status: "failed",
+        text: "hello",
+      }),
+    ])
+  })
+
+  it("keeps equal user message text when client ids differ", () => {
+    const first = applyChatEvent([], {
+      id: "user-client-1",
+      text: "same text",
+      timestamp: "2026-07-07T00:00:00.000Z",
+      type: "user_message",
+    })
+    const second = applyChatEvent(first, {
+      id: "user-client-2",
+      text: "same text",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "user_message",
+    })
+
+    expect(second.map((item) => item.id)).toEqual([
+      "user-client-1",
+      "user-client-2",
+    ])
+  })
+
+  it("fails fast when a user confirmation reuses an id with new content", () => {
+    const optimistic = applyChatEvent([], {
+      id: "user-client-1",
+      text: "original",
+      timestamp: "2026-07-07T00:00:00.000Z",
+      type: "user_message",
+    })
+
+    expect(() =>
+      applyChatEvent(optimistic, {
+        id: "user-client-1",
+        text: "changed",
+        timestamp: "2026-07-07T00:00:01.000Z",
+        type: "user_message",
+      })
+    ).toThrow("Conflicting user message confirmation")
+  })
+
+  it("fails fast when a user message collides with another event role", () => {
+    expect(() =>
+      applyChatEvent([{ id: "shared-id", role: "assistant", text: "answer" }], {
+        id: "shared-id",
+        text: "question",
+        timestamp: "2026-07-07T00:00:00.000Z",
+        type: "user_message",
+      })
+    ).toThrow("Chat event id collision")
   })
 
   it("streams assistant text through start, delta, and end events", () => {
@@ -301,6 +453,57 @@ describe("applyChatEvent", () => {
         text: '{\n  "path": "src/App.tsx"\n}',
       },
     ])
+  })
+
+  it("keeps each tool input completion independent and sticky", () => {
+    let items = applyChatEvent([], {
+      id: "write-1",
+      name: "write",
+      timestamp: "2026-07-07T00:00:00.000Z",
+      type: "tool_start",
+    })
+    items = applyChatEvent(items, {
+      id: "write-1",
+      timestamp: "2026-07-07T00:00:01.000Z",
+      type: "tool_input_end",
+    })
+    items = applyChatEvent(items, {
+      args: { path: "first.html" },
+      id: "write-1",
+      name: "write",
+      timestamp: "2026-07-07T00:00:01.500Z",
+      type: "tool_start",
+    })
+    items = applyChatEvent(items, {
+      id: "write-2",
+      name: "write",
+      timestamp: "2026-07-07T00:00:02.000Z",
+      type: "tool_start",
+    })
+    items = applyChatEvent(items, {
+      id: "write-1",
+      name: "write",
+      phase: "input",
+      timestamp: "2026-07-07T00:00:03.000Z",
+      type: "tool_update",
+      value: { path: "first.html" },
+    })
+
+    const tools = items.filter(
+      (item): item is Extract<ChatItem, { role: "tool" }> =>
+        item.role === "tool"
+    )
+    expect(tools).toMatchObject([
+      { id: "write-1", inputComplete: true, status: "running" },
+      { id: "write-2", status: "running" },
+    ])
+    expect(tools.map(shouldAutoExpandToolDisclosure)).toEqual([true, true])
+    expect(
+      shouldAutoCollapseToolDisclosure(
+        { ...tools[0], inputComplete: false },
+        tools[0]
+      )
+    ).toBe(true)
   })
 
   it("stores failed tool results as error text", () => {

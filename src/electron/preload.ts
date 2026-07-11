@@ -51,6 +51,8 @@ import type {
   OusiaSelectDirectoryResult,
   OusiaShowFileInFinderPayload,
   OusiaShowFileInFinderResult,
+  OusiaUpdateActionResult,
+  OusiaUpdateStatus,
   OusiaWindowFullscreenEvent,
   OusiaWindowFullscreenResult,
   OusiaWindowThemePayload,
@@ -90,6 +92,17 @@ window.addEventListener("unhandledrejection", (event) => {
     type: "window.unhandledrejection",
   })
 })
+
+let lastActivitySentAt = 0
+function reportActivity() {
+  const now = Date.now()
+  if (now - lastActivitySentAt < 30_000) return
+  lastActivitySentAt = now
+  ipcRenderer.send("ousia:update:activity")
+}
+window.addEventListener("focus", reportActivity)
+window.addEventListener("keydown", reportActivity, { capture: true })
+window.addEventListener("pointerdown", reportActivity, { capture: true })
 
 const api = {
   loadAppState(): Promise<OusiaAppState> {
@@ -258,6 +271,21 @@ const api = {
   },
   setWindowTheme(payload: OusiaWindowThemePayload): void {
     ipcRenderer.send("ousia:window:theme", payload)
+  },
+  getUpdateStatus(): Promise<OusiaUpdateStatus> {
+    return ipcRenderer.invoke("ousia:update:status")
+  },
+  downloadUpdate(): Promise<OusiaUpdateActionResult> {
+    return ipcRenderer.invoke("ousia:update:download")
+  },
+  installUpdate(): Promise<OusiaUpdateActionResult> {
+    return ipcRenderer.invoke("ousia:update:install")
+  },
+  onUpdateStatus(callback: (status: OusiaUpdateStatus) => void): () => void {
+    const listener = (_event: IpcRendererEvent, payload: OusiaUpdateStatus) =>
+      callback(payload)
+    ipcRenderer.on("ousia:update:status", listener)
+    return () => ipcRenderer.off("ousia:update:status", listener)
   },
   onChatEvent(callback: (event: OusiaChatEvent) => void): () => void {
     const listener = (_event: IpcRendererEvent, payload: OusiaChatEvent) =>

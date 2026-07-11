@@ -38,6 +38,11 @@ import type {
   OusiaCodexEnvironmentStatus,
   OusiaCodexReasoningEffort,
 } from "./chat-types.js"
+import {
+  createOusiaUserMessageEvent,
+  requireOusiaChatMessageId,
+} from "./chat-types.js"
+import { chatMessageIdFingerprint } from "./chat-message-replay-guard.js"
 import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
@@ -446,19 +451,6 @@ function textForQueuedInput(inputs: CodexUserInput[]) {
     .join("\n\n")
 }
 
-function attachmentSummary(attachment: OusiaChatAttachment) {
-  return {
-    id: attachment.id,
-    kind: attachment.kind,
-    mediaType: attachment.mediaType,
-    name: attachment.name,
-    size: attachment.size,
-    ...(attachment.kind === "image"
-      ? { dataBase64: attachment.dataBase64 }
-      : {}),
-  } satisfies OusiaChatAttachmentSummary
-}
-
 function codexInputs(payload: OusiaChatSendPayload): CodexUserInput[] {
   const attachments = payload.attachments ?? []
   const textParts = [payload.prompt.trim()]
@@ -850,25 +842,27 @@ export function createCodexAgentProvider({
     )
   }
 
-  function emitUserMessage(payload: OusiaChatSendPayload) {
-    emitChatEvent(
-      {
-        type: "user_message",
-        id: randomId("codex-user"),
-        text: payload.prompt,
-        ...(payload.attachments?.length
-          ? { attachments: payload.attachments.map(attachmentSummary) }
-          : {}),
-        timestamp: now(),
-      },
-      { projectPath: payload.projectPath, sessionId: payload.sessionId }
-    )
+  function emitUserMessageFailure(
+    payload: OusiaChatSendPayload,
+    startedAt: number,
+    operation: "followUp" | "start" | "steer"
+  ) {
+    const messageId = requireOusiaChatMessageId(payload.messageId)
+    emitChatEvent(createOusiaUserMessageEvent(payload, now(), "failed"), {
+      projectPath: payload.projectPath,
+      sessionId: payload.sessionId,
+    })
+    log("warn", "Marked Codex user message failed", {
+      elapsedMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      messageIdFingerprint: chatMessageIdFingerprint(messageId),
+      operation,
+      sessionId: payload.sessionId,
+    })
   }
 
   async function startTurn(
     payload: OusiaChatSendPayload,
-    inputs: CodexUserInput[],
-    shouldEmitUser: boolean
+    inputs: CodexUserInput[]
   ) {
     sandboxForMode(payload.agentMode)
     const effort = await validateReasoningEffort(
@@ -879,9 +873,6 @@ export function createCodexAgentProvider({
     const key = sessionKey(context)
     if (activeBySessionKey.has(key)) {
       throw new Error("Codex already has an active turn for this session.")
-    }
-    if (shouldEmitUser) {
-      emitUserMessage(payload)
     }
     emitChatEvent(
       { type: "run_status", status: "starting", timestamp: now() },
@@ -940,7 +931,7 @@ export function createCodexAgentProvider({
       return
     }
     try {
-      await startTurn(next.payload, next.inputs, false)
+      await startTurn(next.payload, next.inputs)
     } catch (error) {
       const text = errorText(error)
       emitChatEvent(
@@ -1223,21 +1214,35 @@ export function createCodexAgentProvider({
 
   const conversations: AgentConversationProvider = {
     async sendChatMessage(payload) {
+      const sendStartedAt = performance.now()
       const context = {
         projectPath: payload.projectPath,
         sessionId: payload.sessionId,
       }
       const key = sessionKey(context)
-      const inputs = codexInputs(payload)
       const hadActiveTurn = activeBySessionKey.has(key)
+      let messageId: string | undefined
+      let operation: "followUp" | "start" | "steer" = "start"
       try {
+        messageId = requireOusiaChatMessageId(payload.messageId)
+        if (payload.autoRetryOnFailure !== undefined) {
+          throw new Error(
+            "Codex received Pi-only autoRetryOnFailure configuration."
+          )
+        }
+        const inputs = codexInputs(payload)
+        log("debug", "Received Codex user message", {
+          messageIdFingerprint: chatMessageIdFingerprint(messageId),
+          sendBehavior: payload.sendBehavior ?? "normal",
+          sessionId: context.sessionId,
+        })
         const active = activeBySessionKey.get(key)
         if (active) {
           if (payload.sendBehavior === "followUp") {
+            operation = "followUp"
             const queue = queuedBySessionKey.get(key) ?? []
             queue.push({ inputs, payload })
             queuedBySessionKey.set(key, queue)
-            emitUserMessage(payload)
             emitQueue(context)
             return { ok: true }
           }
@@ -1246,15 +1251,15 @@ export function createCodexAgentProvider({
               "Codex turn is already running. Queue or steer the message."
             )
           }
+          operation = "steer"
           await client.request("turn/steer", {
             threadId: active.threadId,
             expectedTurnId: active.turnId,
             input: inputs,
           })
-          emitUserMessage(payload)
           return { ok: true }
         }
-        await startTurn(payload, inputs, true)
+        await startTurn(payload, inputs)
         return { ok: true }
       } catch (error) {
         const text = errorText(error)
@@ -1262,6 +1267,9 @@ export function createCodexAgentProvider({
           error: text,
           sessionId: context.sessionId,
         })
+        if (messageId) {
+          emitUserMessageFailure(payload, sendStartedAt, operation)
+        }
         emitChatEvent(
           {
             type: "error",
