@@ -86,7 +86,9 @@ type CodexAgentProviderOptions = {
   client?: CodexAppServerClient
   clientVersion?: string
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
-  nativeBinaryResolver?: () => CodexNativeBinaryResolution
+  nativeBinaryResolver?: () =>
+    | CodexNativeBinaryResolution
+    | Promise<CodexNativeBinaryResolution>
   openExternal?: (url: string) => Promise<unknown>
 }
 
@@ -642,7 +644,10 @@ export function createCodexAgentProvider({
 }: CodexAgentProviderOptions) {
   const client =
     injectedClient ??
-    createCodexAppServerClient({ clientVersion: clientVersion ?? "0.0.0" })
+    createCodexAppServerClient({
+      clientVersion: clientVersion ?? "0.0.0",
+      dependencies: { resolveNativeBinary: nativeBinaryResolver },
+    })
   const contextByThreadId = new Map<string, OusiaChatContext>()
   const activeBySessionKey = new Map<string, ActiveTurn>()
   const activeByThreadId = new Map<string, ActiveTurn>()
@@ -1573,7 +1578,7 @@ export function createCodexAgentProvider({
   async function checkEnvironment(): Promise<OusiaCodexEnvironmentStatus> {
     let resolution: CodexNativeBinaryResolution
     try {
-      resolution = nativeBinaryResolver()
+      resolution = await nativeBinaryResolver()
       const initialize = await client.start()
       const [accountResponse, { defaultModelId, models }] = await Promise.all([
         client.request<{
@@ -1590,11 +1595,11 @@ export function createCodexAgentProvider({
         defaultModelId,
         models,
         requiresOpenaiAuth: accountResponse.requiresOpenaiAuth === true,
-        runtime: "bundled",
+        runtime: "downloaded",
         version: codexVersion(initialize.userAgent),
       }
     } catch (error) {
-      const text = errorText(error, "Bundled Codex runtime is unavailable.")
+      const text = errorText(error, "Downloaded Codex runtime is unavailable.")
       log("error", "Codex environment check failed", { error: text })
       return {
         account: null,
@@ -1602,7 +1607,7 @@ export function createCodexAgentProvider({
         error: text,
         models: [],
         requiresOpenaiAuth: true,
-        runtime: "bundled",
+        runtime: "downloaded",
       }
     }
   }

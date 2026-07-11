@@ -7,7 +7,7 @@ Ousia extension runtime. The renderer hosts the sidebar, chat, and settings.
 
 - Electron Forge + Vite for main, preload, and renderer builds.
 - React renderer with Tailwind/shadcn UI.
-- Pi coding agent and bundled Codex app-server hosted in Electron main.
+- Pi coding agent and an on-demand Codex app-server hosted in Electron main.
 - Streamdown for assistant Markdown rendering.
 
 Removed from this branch:
@@ -111,8 +111,11 @@ Main process entrypoints:
   canonical per-session agent provider.
 - `src/electron/agent-conversations.ts`: owns Pi session creation, model
   selection, chat streaming, history, and interrupt handling.
-- `src/electron/codex-app-server-client.ts`: owns the bundled native Codex
+- `src/electron/codex-app-server-client.ts`: owns the downloaded native Codex
   process, JSONL RPC, lifecycle, and sanitized diagnostics.
+- `src/electron/codex-runtime-manager.ts`: downloads the pinned native Codex
+  archive on first use, verifies SHA-512 integrity, and atomically owns its
+  versioned user-data cache.
 - `src/electron/codex-agent-provider.ts`: adapts Codex threads, turns, items,
   authentication, history, and tools to Ousia chat contracts.
 - `src/electron/app-state-store.ts`: persists shell, settings, project, session,
@@ -197,7 +200,9 @@ provider settings.
 The app no longer installs an Ousia usage skill, filters a user `ousia` skill,
 or prepends an `ousia` CLI shim to the agent environment.
 
-Codex uses the pinned bundled `codex app-server` native binary over stdio.
+Codex uses a pinned, on-demand `codex app-server` native binary over stdio.
+The first Codex capability request downloads and verifies the matching platform
+archive; later requests reuse the versioned user-data cache.
 Ousia persists the opaque thread id returned by Codex instead of deriving it
 from the Ousia session id or parsing private rollout files. Authentication goes
 through app-server account RPCs so Codex remains the credential owner. See

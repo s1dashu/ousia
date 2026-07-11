@@ -30,13 +30,18 @@ typed IPC/event model.
 
 ## Runtime Boundary
 
-- Electron main owns one long-running bundled `codex app-server --stdio`
+- Electron main owns one long-running downloaded `codex app-server --stdio`
   process. Renderer code only sees Ousia's typed preload IPC.
 - Before any request reaches Codex, Electron main resolves the session's cwd
   from canonical app state and rejects a mismatched renderer path. That same
   canonical path defines `workspaceWrite.writableRoots`.
-- `@openai/codex` is pinned to `0.144.0`. Its matching optional platform
-  package and native binary are included by Electron Forge.
+- `@openai/codex` is pinned to `0.144.0`, but Electron Forge excludes its native
+  platform package. On first Codex use, Electron main downloads the exact
+  platform archive from the official npm registry, verifies the pinned SHA-512
+  integrity before extraction, and atomically caches it under the Ousia
+  user-data directory. Concurrent callers share one installation promise;
+  download, verification, extraction, and startup failures are logged and
+  returned without falling back to a system Codex installation.
 - The client sends `initialize`, then `initialized`, with
   `experimentalApi: false` and `requestAttestation: false`.
 - Stdout is newline-delimited JSON RPC. Request ids, notifications, and
@@ -95,9 +100,11 @@ returned ChatGPT login URL but never reads or writes Codex's auth file.
 The App Server command and wire protocol can evolve. Before changing the pinned
 Codex version:
 
-1. Run the new bundled binary's `codex app-server generate-ts --out <temp-dir>`.
+1. Download the new pinned platform binary and run
+   `codex app-server generate-ts --out <temp-dir>`.
 2. Compare every method and field used by the client/provider adapter.
 3. Update fixture contract tests.
 4. Run typecheck, lint, unit tests, and a real app-server smoke test.
-5. Bump the Ousia app version, package the app, and verify the native Codex
-   binary launches from the packaged `.app` (including Finder launch).
+5. Update every platform archive URL/integrity in the runtime manifest, bump the
+   Ousia app version, package the app, verify no Codex native package is embedded,
+   and test first-use download plus app-server launch from the packaged `.app`.

@@ -69,9 +69,13 @@ export const messages = {
       codexAgent: "Codex",
       codexAuthentication: "Codex 认证",
       codexUnchecked: "尚未检查",
-      codexUncheckedHelp: "检查内置 Codex runtime 和登录状态。",
+      codexUncheckedHelp: "首次使用时会下载 Codex runtime。",
+      codexDownloading: "正在准备 Codex",
+      codexDownloadingHelp:
+        "正在从 OpenAI 下载并校验 Codex runtime；以后会直接使用本地版本。",
+      downloadingCodex: "下载中...",
       codexUnavailable: "Codex 不可用",
-      codexUnavailableHelp: "内置 Codex runtime 当前不可用。",
+      codexUnavailableHelp: "Codex runtime 下载或启动失败。",
       codexSignedOut: "未登录",
       codexSignedOutHelp: "使用 ChatGPT 账号登录后即可创建 Codex 会话。",
       codexChatGptAccount: "已通过 ChatGPT 登录",
@@ -330,10 +334,13 @@ export const messages = {
       codexAgent: "Codex",
       codexAuthentication: "Codex authentication",
       codexUnchecked: "Not checked",
-      codexUncheckedHelp: "Check the bundled Codex runtime and sign-in status.",
+      codexUncheckedHelp: "The Codex runtime downloads on first use.",
+      codexDownloading: "Preparing Codex",
+      codexDownloadingHelp:
+        "Downloading and verifying the Codex runtime from OpenAI. Future launches use the local copy.",
+      downloadingCodex: "Downloading...",
       codexUnavailable: "Codex unavailable",
-      codexUnavailableHelp:
-        "The bundled Codex runtime is currently unavailable.",
+      codexUnavailableHelp: "The Codex runtime failed to download or start.",
       codexSignedOut: "Not signed in",
       codexSignedOutHelp:
         "Sign in with a ChatGPT account to create Codex chats.",

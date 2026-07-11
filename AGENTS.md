@@ -39,6 +39,10 @@ match the task.
 - There is no Ousia extension/runtime-extension/plugin surface in this branch.
 - The desktop runtime is Electron + Vite + React.
 - The app supports Pi and Codex coding agents, both hosted from Electron main.
+- Packaged builds do not embed the Codex native runtime. The pinned
+  platform-specific `@openai/codex` archive is downloaded from the official npm
+  registry on first Codex use, verified against its SHA-512 integrity, and
+  atomically cached under the Ousia user-data directory.
 - Agent provider is immutable per session. Pi uses the Ousia session id; Codex
   uses a separately persisted opaque thread id returned by app-server.
 - Pi thinking level and Codex reasoning effort are separate preferences. Codex
@@ -179,9 +183,10 @@ match the task.
 - When changing agent behavior, verify whether the change belongs in renderer
   state, Electron IPC, the provider router, Pi session setup, or Codex
   app-server adaptation.
-- Keep `@openai/codex` pinned to the version documented in
-  `docs/codex-integration.md`. Regenerate/compare app-server protocol types and
-  run packaged native-binary smoke tests before upgrading it.
+- Keep `@openai/codex` and the on-demand runtime manifest pinned to the version
+  documented in `docs/codex-integration.md`. Regenerate/compare app-server
+  protocol types and run downloaded native-binary smoke tests before upgrading
+  it.
 - Preserve every non-empty Codex reasoning effort returned by `model/list`,
   including unknown future values, and validate the selected effort at the
   provider boundary. Do not filter Codex efforts through Pi's fixed levels.

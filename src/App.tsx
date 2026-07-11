@@ -386,6 +386,7 @@ export function App() {
   const [modelRegistry, setModelRegistry] = useState<OusiaModelRegistryResult>()
   const [codexEnvironment, setCodexEnvironment] =
     useState<OusiaCodexEnvironmentStatus>()
+  const [codexEnvironmentLoading, setCodexEnvironmentLoading] = useState(false)
   const [projects, setProjects] = useState<ProjectRecord[]>(
     initialState.projects
   )
@@ -633,9 +634,14 @@ export function App() {
     if (!window.ousia) {
       return undefined
     }
-    const status = await window.ousia.checkCodexEnvironment()
-    setCodexEnvironment(status)
-    return status
+    setCodexEnvironmentLoading(true)
+    try {
+      const status = await window.ousia.checkCodexEnvironment()
+      setCodexEnvironment(status)
+      return status
+    } finally {
+      setCodexEnvironmentLoading(false)
+    }
   }, [])
   const flushPendingChatEvents = useCallback(() => {
     pendingChatEventsFrameRef.current = 0
@@ -2383,6 +2389,7 @@ export function App() {
             <SettingsPage
               activeSection={activeSettingsSection}
               codexEnvironment={codexEnvironment}
+              codexEnvironmentLoading={codexEnvironmentLoading}
               modelRegistry={modelRegistry}
               settings={settings}
               onRefreshModelRegistry={refreshModelRegistry}

@@ -3,11 +3,12 @@ import {
   BrowserWindow,
   dialog,
   ipcMain,
+  net,
   shell,
   type OpenDialogOptions,
 } from "electron"
 import { mkdirSync, statSync } from "node:fs"
-import { basename, isAbsolute, resolve } from "node:path"
+import { basename, isAbsolute, join, resolve } from "node:path"
 
 import {
   createAgentProviderRouter,
@@ -31,6 +32,7 @@ import {
   touchAppStateSession,
 } from "./app-state-store.js"
 import { createCodexAgentProvider } from "./codex-agent-provider.js"
+import { createCodexRuntimeManager } from "./codex-runtime-manager.js"
 import { createChatEventBatcher } from "./chat-event-batcher.js"
 import type {
   OusiaAppStateCreateProjectPayload,
@@ -119,9 +121,15 @@ function emitChatEvent(event: OusiaChatEvent, context?: OusiaChatContext) {
   chatEventBatcher.enqueue(event, context)
 }
 
+const codexRuntimeManager = createCodexRuntimeManager({
+  fetchRuntime: (url) => net.fetch(url),
+  runtimeRoot: join(app.getPath("userData"), "runtimes", "codex"),
+})
+
 const codexAgentProvider = createCodexAgentProvider({
   clientVersion: app.getVersion(),
   emitChatEvent,
+  nativeBinaryResolver: () => codexRuntimeManager.ensureInstalled(),
   openExternal: (url: string) => shell.openExternal(url),
 })
 
@@ -628,17 +636,21 @@ ipcMain.on("ousia:window:theme", (_event, payload: OusiaWindowThemePayload) => {
   windowHost.setWindowTheme(payload)
 })
 
-ipcMain.handle("ousia:update:status", (): OusiaUpdateStatus =>
-  updateManagerRef.current!.getStatus()
+ipcMain.handle(
+  "ousia:update:status",
+  (): OusiaUpdateStatus => updateManagerRef.current!.getStatus()
 )
 ipcMain.handle(
   "ousia:update:download",
   (): Promise<OusiaUpdateActionResult> => updateManagerRef.current!.download()
 )
-ipcMain.handle("ousia:update:install", (): OusiaUpdateActionResult =>
-  updateManagerRef.current!.install()
+ipcMain.handle(
+  "ousia:update:install",
+  (): OusiaUpdateActionResult => updateManagerRef.current!.install()
 )
-ipcMain.on("ousia:update:activity", () => updateManagerRef.current!.noteActivity())
+ipcMain.on("ousia:update:activity", () =>
+  updateManagerRef.current!.noteActivity()
+)
 
 ipcMain.handle("ousia:app-state:load", async () => {
   await shellEnvironmentReady

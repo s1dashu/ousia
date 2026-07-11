@@ -72,8 +72,9 @@ desktop agent client:
   levels; Codex renders each model's app-server-provided efforts and default.
 - Immediate final-style optimistic user-message rendering with provider success
   echoes removed and explicit same-id failure reporting.
-- Bundled Codex app-server authentication, model discovery, streaming,
-  history, branch, compact, interrupt, and export adaptation.
+- On-demand Codex app-server runtime download plus authentication, model
+  discovery, streaming, history, branch, compact, interrupt, and export
+  adaptation. The native archive is SHA-512 verified and cached atomically.
 - Settings mode replaces the normal sidebar with categorized navigation and
   separates shared chat behavior from the selected Pi or Codex harness-specific
   configuration. Pi permission mode is Pi-only. Its controls use feature-local

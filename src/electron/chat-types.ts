@@ -186,7 +186,7 @@ export type OusiaCodexEnvironmentStatus = {
   error?: string
   models: OusiaAvailableModel[]
   requiresOpenaiAuth: boolean
-  runtime: "bundled"
+  runtime: "downloaded"
   version?: string
 }
 

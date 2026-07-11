@@ -45,11 +45,16 @@ the build emits content-hashed filenames.
 | Renderer initial JavaScript        | 1,163,776 B | 1,166,873 B |  +0.3% |
 | Packaged `.app`                    |     ~653 MB |     ~650 MB | ~-0.5% |
 
+After moving Codex `0.144.0` to its integrity-verified first-use download, the
+arm64 macOS 0.1.22 build measures approximately 345 MB unpacked and 153 MB as a
+local DMG. The preceding table remains the historical rendering-optimization
+baseline rather than a current package-size baseline.
+
 The renderer entry size is effectively unchanged; the icon change improves the
 module graph, build time, and build memory rather than hiding code in another
-initial chunk. The packaged application remains dominated by Electron and the
-bundled Codex native runtime, so package-size work has sharply diminishing
-returns unless those product dependencies change.
+initial chunk. This historical baseline predates the on-demand Codex runtime:
+packaged builds now exclude the native platform archive and download the pinned,
+integrity-verified runtime only on first Codex use.
 
 ## Implemented Runtime Changes
 

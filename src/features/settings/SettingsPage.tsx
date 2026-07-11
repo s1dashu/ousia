@@ -81,6 +81,7 @@ const appearanceColorScales: Array<{
 type SettingsPageProps = {
   activeSection: SettingsSectionId
   codexEnvironment: OusiaCodexEnvironmentStatus | undefined
+  codexEnvironmentLoading: boolean
   modelRegistry: OusiaModelRegistryResult | undefined
   onRefreshCodexEnvironment: () => Promise<
     OusiaCodexEnvironmentStatus | undefined
@@ -183,6 +184,7 @@ type ProviderRow = {
 function SettingsPageComponent({
   activeSection,
   codexEnvironment,
+  codexEnvironmentLoading,
   modelRegistry,
   onRefreshCodexEnvironment,
   onRefreshModelRegistry,
@@ -713,32 +715,37 @@ function SettingsPageComponent({
     codexAccount?.type === "chatgpt"
       ? [codexAccount.email, codexAccount.planType].filter(Boolean).join(" · ")
       : ""
-  const codexStatus = !codexEnvironment
+  const codexStatus = codexEnvironmentLoading
     ? {
-        description: t.settings.codexUncheckedHelp,
-        label: t.settings.codexUnchecked,
+        description: t.settings.codexDownloadingHelp,
+        label: t.settings.codexDownloading,
       }
-    : !codexEnvironment.available
+    : !codexEnvironment
       ? {
-          description:
-            codexEnvironment.error || t.settings.codexUnavailableHelp,
-          label: t.settings.codexUnavailable,
+          description: t.settings.codexUncheckedHelp,
+          label: t.settings.codexUnchecked,
         }
-      : !codexAccount
+      : !codexEnvironment.available
         ? {
-            description: t.settings.codexSignedOutHelp,
-            label: t.settings.codexSignedOut,
+            description:
+              codexEnvironment.error || t.settings.codexUnavailableHelp,
+            label: t.settings.codexUnavailable,
           }
-        : codexAccount.type === "apiKey"
+        : !codexAccount
           ? {
-              description: t.settings.codexApiKeyHelp,
-              label: t.settings.codexApiKeyAccount,
+              description: t.settings.codexSignedOutHelp,
+              label: t.settings.codexSignedOut,
             }
-          : {
-              description:
-                codexChatGptDetails || t.settings.codexChatGptAccountHelp,
-              label: t.settings.codexChatGptAccount,
-            }
+          : codexAccount.type === "apiKey"
+            ? {
+                description: t.settings.codexApiKeyHelp,
+                label: t.settings.codexApiKeyAccount,
+              }
+            : {
+                description:
+                  codexChatGptDetails || t.settings.codexChatGptAccountHelp,
+                label: t.settings.codexChatGptAccount,
+              }
   const sectionTitle =
     activeSection === "general"
       ? t.settings.general
@@ -1479,11 +1486,11 @@ function SettingsPageComponent({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={codexAction !== null}
+                      disabled={codexAction !== null || codexEnvironmentLoading}
                       onClick={() => void refreshCodexStatus()}
                     >
-                      {codexAction === "refresh"
-                        ? t.settings.checkingCodex
+                      {codexAction === "refresh" || codexEnvironmentLoading
+                        ? t.settings.downloadingCodex
                         : codexEnvironment
                           ? t.settings.retryCodexCheck
                           : t.settings.checkCodex}
@@ -1493,7 +1500,7 @@ function SettingsPageComponent({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={codexAction !== null}
+                      disabled={codexAction !== null || codexEnvironmentLoading}
                       onClick={() => void runCodexAuthAction("logout")}
                     >
                       {codexAction === "logout"
@@ -1504,7 +1511,7 @@ function SettingsPageComponent({
                     <Button
                       type="button"
                       size="sm"
-                      disabled={codexAction !== null}
+                      disabled={codexAction !== null || codexEnvironmentLoading}
                       onClick={() => void runCodexAuthAction("login")}
                     >
                       {codexAction === "login"

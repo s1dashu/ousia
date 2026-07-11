@@ -15,11 +15,15 @@ vi.mock("@/components/theme-provider", async (importOriginal) => {
   }
 })
 
-function renderProviderSettings(agentProvider: "pi" | "codex") {
+function renderProviderSettings(
+  agentProvider: "pi" | "codex",
+  codexEnvironmentLoading = false
+) {
   return renderToStaticMarkup(
     <SettingsPage
       activeSection="provider"
       codexEnvironment={undefined}
+      codexEnvironmentLoading={codexEnvironmentLoading}
       modelRegistry={undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
@@ -38,6 +42,7 @@ function renderGeneralSettings() {
     <SettingsPage
       activeSection="general"
       codexEnvironment={undefined}
+      codexEnvironmentLoading={false}
       modelRegistry={undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
@@ -52,6 +57,7 @@ function renderConversationSettings() {
     <SettingsPage
       activeSection="conversation"
       codexEnvironment={undefined}
+      codexEnvironmentLoading={false}
       modelRegistry={undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
@@ -62,6 +68,16 @@ function renderConversationSettings() {
 }
 
 describe("SettingsPage provider isolation", () => {
+  it("shows the first-use Codex download state", () => {
+    const t = getMessages("en")
+    const html = renderProviderSettings("codex", true)
+
+    expect(html).toContain(t.settings.codexDownloading)
+    expect(html).toContain(t.settings.codexDownloadingHelp)
+    expect(html).toContain(t.settings.downloadingCodex)
+    expect(html).toContain("disabled")
+  })
+
   it("renders the three general-setting groups in the requested order", () => {
     const t = getMessages("zh")
     const html = renderGeneralSettings()
