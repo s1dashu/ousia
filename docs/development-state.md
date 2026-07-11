@@ -66,7 +66,8 @@ desktop agent client:
 - Sidebar collapse/expand and resizing.
 - Chat history rendering with Streamdown.
 - File and image attachments in chat input.
-- Appearance mode and Radix color-scale settings.
+- Appearance mode, Radix color-scale, chat font, text-size, line-spacing,
+  message-spacing, and content-width settings.
 - Model provider API key settings, including local provider disable/hide state.
 - Model and reasoning controls in the chat input. Pi uses its fixed thinking
   levels; Codex renders each model's app-server-provided efforts and default.

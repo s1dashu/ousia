@@ -111,18 +111,20 @@ function chatItemSpacingClass(item: ChatItem, previousItem?: ChatItem) {
   }
 
   if (item.role === "tool") {
-    return previousItem.role === "tool" ? "mt-0.5" : "mt-4"
+    return previousItem.role === "tool"
+      ? "mt-[var(--ousia-chat-spacing-tool-consecutive)]"
+      : "mt-[var(--ousia-chat-spacing-before-tool)]"
   }
 
   if (previousItem.role === "tool") {
-    return "mt-5"
+    return "mt-[var(--ousia-chat-spacing-after-tool)]"
   }
 
   if (item.role === "user" && previousItem.role === "assistant") {
-    return "mt-2"
+    return "mt-[var(--ousia-chat-spacing-user-after-assistant)]"
   }
 
-  return "mt-6"
+  return "mt-[var(--ousia-chat-spacing-default)]"
 }
 
 type ChatRenderItem =

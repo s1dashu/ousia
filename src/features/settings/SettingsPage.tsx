@@ -55,6 +55,9 @@ import {
   type OusiaAgentProvider,
   type OusiaAppearanceColorScale,
   type OusiaChatContentWidth,
+  type OusiaChatFontSize,
+  type OusiaChatLineSpacing,
+  type OusiaChatMessageSpacing,
   type OusiaCodexEnvironmentStatus,
   type OusiaFontFamily,
   type OusiaLanguage,
@@ -266,6 +269,27 @@ function SettingsPageComponent({
     { label: t.settings.chatWidthWide, value: "wide" },
     { label: t.settings.chatWidthExtraWide, value: "extraWide" },
   ]
+  const chatFontSizeOptions: Array<{
+    label: string
+    value: OusiaChatFontSize
+  }> = [
+    { label: t.settings.chatFontSizeSmall, value: "small" },
+    { label: t.settings.chatFontSizeStandard, value: "standard" },
+    { label: t.settings.chatFontSizeLarge, value: "large" },
+    { label: t.settings.chatFontSizeExtraLarge, value: "extraLarge" },
+  ]
+  const chatLineSpacingOptions: Array<{
+    label: string
+    value: OusiaChatLineSpacing
+  }> = [
+    { label: t.settings.spacingCompact, value: "compact" },
+    { label: t.settings.spacingStandard, value: "standard" },
+    { label: t.settings.spacingRelaxed, value: "relaxed" },
+  ]
+  const chatMessageSpacingOptions: Array<{
+    label: string
+    value: OusiaChatMessageSpacing
+  }> = chatLineSpacingOptions
 
   useEffect(() => {
     queueMicrotask(() => setDraft(settings))
@@ -1085,6 +1109,99 @@ function SettingsPageComponent({
                       <SelectContent align="start" position="popper">
                         <SelectGroup>
                           {chatContentWidthOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.chatFontSize}
+                  description={t.settings.chatFontSizeHelp}
+                  control={
+                    <Select
+                      items={chatFontSizeOptions}
+                      value={draft.chatFontSize}
+                      onValueChange={(value) =>
+                        applySettings({
+                          chatFontSize: value as OusiaChatFontSize,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={t.settings.chatFontSize}
+                        className={settingsSelectTriggerClass}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          {chatFontSizeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.chatLineSpacing}
+                  description={t.settings.chatLineSpacingHelp}
+                  control={
+                    <Select
+                      items={chatLineSpacingOptions}
+                      value={draft.chatLineSpacing}
+                      onValueChange={(value) =>
+                        applySettings({
+                          chatLineSpacing: value as OusiaChatLineSpacing,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={t.settings.chatLineSpacing}
+                        className={settingsSelectTriggerClass}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          {chatLineSpacingOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.chatMessageSpacing}
+                  description={t.settings.chatMessageSpacingHelp}
+                  control={
+                    <Select
+                      items={chatMessageSpacingOptions}
+                      value={draft.chatMessageSpacing}
+                      onValueChange={(value) =>
+                        applySettings({
+                          chatMessageSpacing: value as OusiaChatMessageSpacing,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={t.settings.chatMessageSpacing}
+                        className={settingsSelectTriggerClass}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          {chatMessageSpacingOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}
                             </SelectItem>

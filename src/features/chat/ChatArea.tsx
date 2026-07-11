@@ -2039,7 +2039,7 @@ function ChatAreaComponent({
                     event.currentTarget.form?.requestSubmit()
                   }
                 }}
-                className="ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 placeholder:text-muted-foreground/55 focus-visible:ring-0"
+                className="ousia-chat-composer-input ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 placeholder:text-muted-foreground/55 focus-visible:ring-0"
                 placeholder={
                   editingQueueId
                     ? t.chat.editQueuedMessage

@@ -55,7 +55,9 @@ Main renderer entrypoints:
 
 The renderer theme has two explicit layers. Global shadcn tokens are the exact
 neutral `bbVKEbY` Maia light/dark values and define the default behavior for new
-and uncustomized UI. Existing appearance palettes currently live under the
+and uncustomized UI. Chat typography and spacing preferences are persisted in
+app state and applied through Ousia-prefixed chat CSS variables. Existing
+appearance palettes currently live under the
 `--ousia-app-*` migration palette. The tuned chat and session-sidebar roots map
 those values through `ousia-chat-theme` and `ousia-sidebar-theme` as a temporary
 compatibility boundary. The target architecture in `docs/design.md` replaces

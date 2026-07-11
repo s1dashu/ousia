@@ -34,6 +34,8 @@ import {
 import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
+  resolveOusiaChatFontSizeValue,
+  resolveOusiaChatLineSpacingValue,
   resolveOusiaFontFamilyValue,
   type OusiaAppStateTransactionResult,
   type OusiaChatEvent,
@@ -817,6 +819,25 @@ export function App() {
       resolveOusiaChatContentWidthValue(settings.chatContentWidth)
     )
   }, [settings.chatContentWidth])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--ousia-chat-font-size",
+      resolveOusiaChatFontSizeValue(settings.chatFontSize)
+    )
+  }, [settings.chatFontSize])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--ousia-chat-line-height",
+      resolveOusiaChatLineSpacingValue(settings.chatLineSpacing)
+    )
+  }, [settings.chatLineSpacing])
+
+  useEffect(() => {
+    document.documentElement.dataset.chatMessageSpacing =
+      settings.chatMessageSpacing
+  }, [settings.chatMessageSpacing])
 
   useEffect(() => {
     if (!isAppStateLoaded) {
