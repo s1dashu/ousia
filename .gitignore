@@ -21,6 +21,7 @@ tmp
 .ousia
 ref/
 *.local
+AGENTS.md
 
 # Editor directories and files
 .vscode/*
