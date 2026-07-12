@@ -13,6 +13,7 @@ const { isAbsolute, join, resolve } = require("node:path")
 const {
   requireEnabledPackagedSentry,
 } = require("./sentry-build-verification.cjs")
+const { loadSentryBuildToken } = require("./sentry-build-credentials.cjs")
 
 const rootDir = join(__dirname, "..")
 const outDir = join(rootDir, "out")
@@ -531,6 +532,11 @@ async function buildMac(options = {}) {
   }
   if (notarize) {
     requireAppleNotarizationCredentials()
+  }
+
+  const sentryTokenSource = loadSentryBuildToken()
+  if (sentryTokenSource === "keychain") {
+    console.log("Loaded the Sentry source-map token from macOS Keychain.")
   }
 
   for (const dir of [

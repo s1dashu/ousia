@@ -47,6 +47,16 @@ are present:
 - `SENTRY_ORG`
 - `<PRODUCT>_SENTRY_PROJECT`
 
+For local macOS releases, `SENTRY_AUTH_TOKEN` may instead live in the login
+Keychain under service `sidasoftware-sentry-build` and account
+`source-map-upload`. The build reads it only when the environment variable is
+unset and never prints the value. Create or rotate that entry interactively:
+
+```sh
+security add-generic-password -U -s sidasoftware-sentry-build \
+  -a source-map-upload -w
+```
+
 The public DSN is embedded in the application. The auth token is consumed only
 by `@sentry/vite-plugin` and must never be shipped. Source maps are generated as
 hidden maps, uploaded to the exact `<release-name>@<package-version>` release,
