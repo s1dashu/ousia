@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { autoUpdater, writeRuntimeLog } = vi.hoisted(() => ({
+const { autoUpdater, captureError, writeRuntimeLog } = vi.hoisted(() => ({
   autoUpdater: {
     on: vi.fn(),
     removeAllListeners: vi.fn(),
   },
+  captureError: vi.fn(),
   writeRuntimeLog: vi.fn(),
 }))
 
@@ -29,6 +30,7 @@ describe("createUpdateManager", () => {
   function createManager(fetchRelease: typeof fetch) {
     return createUpdateManager({
       currentVersion: "0.1.23",
+      captureError,
       fetchRelease,
       getWindow: () => undefined,
       isPackaged: true,
@@ -100,6 +102,12 @@ describe("createUpdateManager", () => {
       "error",
       expect.objectContaining({ message: "fetch failed" })
     )
+    expect(captureError).toHaveBeenCalledWith(expect.any(Error), {
+      errorCode: "update.check_failed",
+      operation: "check",
+      retryable: true,
+      subsystem: "update",
+    })
   })
 
   it("publishes progress and joins repeated retries after a failed check", async () => {

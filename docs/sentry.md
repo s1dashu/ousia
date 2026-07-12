@@ -8,13 +8,23 @@ product names or DSNs inside the reusable runtime modules.
 ## Runtime boundary
 
 The official `@sentry/electron` SDK initializes in Electron main, preload, and
-renderer entrypoints. A build with no product DSN is explicitly disabled and
+renderer entrypoints. The main-process framework also exposes a validated
+handled-error boundary for failures that application code catches and converts
+into UI state. Its metadata is limited to lowercase diagnostic tokens for
+`subsystem`, `operation`, and `error_code`, plus boolean handled/retryable tags;
+never pass messages, paths, account identifiers, provider responses, or user
+content as diagnostic metadata. Update checks/downloads and telemetry delivery
+use this boundary so operational failures do not disappear into local logs.
+
+A build with no product DSN is explicitly disabled and
 records `sentry.init` with `dsn_not_configured` in the local runtime log.
 Development builds also require `<PRODUCT>_SENTRY_ENABLE_IN_DEVELOPMENT=1`.
 The Vite composition explicitly loads the normal mode-specific Vite environment
-files, including ignored `.env.local`, before applying process-environment
-overrides. Electron Forge does not load those files on its own; keep this
-behavior covered by `sentry-vite.test.ts`.
+files, including ignored `.env.local`, from the repository root before applying
+process-environment overrides. Never derive that root from `process.cwd()`:
+Electron Forge's programmatic packager may run config evaluation with a
+different working directory. Keep this behavior covered by
+`sentry-vite.test.ts`.
 
 Every outbound JavaScript error passes through one sanitizer. It removes user,
 request, breadcrumb, extra, message, log, fingerprint, server-name, device, and
@@ -43,7 +53,11 @@ hidden maps, uploaded to the exact `<release-name>@<package-version>` release,
 and excluded from the packaged application by Forge.
 
 The build rejects malformed DSNs, partial upload credentials, and non-boolean
-feature flags instead of silently producing an unobservable release.
+feature flags instead of silently producing an unobservable release. Every DMG
+and full macOS release additionally inspects the packaged main bundle for the
+exact enabled release marker and refuses to create a distributable when Sentry
+was compiled out. Development-only `npm run package` may remain explicitly
+disabled for credential-free local packaging.
 
 ## Product configuration
 

@@ -34,7 +34,14 @@ describe("sanitizeSentryEvent", () => {
         message: "private message",
         request: { headers: { authorization: "Bearer token" } },
         server_name: "private-host",
-        tags: { account_id: "private-account" },
+        tags: {
+          account_id: "private-account",
+          error_code: "update.check_failed",
+          handled: "true",
+          operation: "check",
+          retryable: "true",
+          subsystem: "update",
+        },
         user: { email: "person@example.com" },
       },
       "ousia",
@@ -63,14 +70,25 @@ describe("sanitizeSentryEvent", () => {
           },
         ],
       },
-      tags: { process_type: "main", product_id: "ousia" },
+      tags: {
+        error_code: "update.check_failed",
+        handled: "true",
+        operation: "check",
+        process_type: "main",
+        product_id: "ousia",
+        retryable: "true",
+        subsystem: "update",
+      },
     })
     expect(event.contexts).not.toHaveProperty("device")
-    expect(event.exception?.values?.[0].stacktrace?.frames?.[0]).not.toHaveProperty("vars")
+    expect(
+      event.exception?.values?.[0].stacktrace?.frames?.[0]
+    ).not.toHaveProperty("vars")
     expect(event.message).toBeUndefined()
     expect(event.request).toBeUndefined()
     expect(event.user).toBeUndefined()
     expect(event.extra).toBeUndefined()
     expect(event.breadcrumbs).toBeUndefined()
+    expect(event.tags).not.toHaveProperty("account_id")
   })
 })

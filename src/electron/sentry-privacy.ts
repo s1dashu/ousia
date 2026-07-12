@@ -1,6 +1,13 @@
 import type { Event, StackFrame, Thread } from "@sentry/electron/main"
 
 const SAFE_CONTEXT_KEYS = new Set(["app", "os", "runtime", "trace"])
+const SAFE_TAG_KEYS = new Set([
+  "error_code",
+  "handled",
+  "operation",
+  "retryable",
+  "subsystem",
+])
 
 function privatePath(value: string | undefined) {
   return value
@@ -21,7 +28,10 @@ function safeThread(thread: Thread): Thread {
   return {
     ...thread,
     stacktrace: thread.stacktrace
-      ? { ...thread.stacktrace, frames: thread.stacktrace.frames?.map(safeFrame) }
+      ? {
+          ...thread.stacktrace,
+          frames: thread.stacktrace.frames?.map(safeFrame),
+        }
       : undefined,
   }
 }
@@ -32,7 +42,12 @@ export function sanitizeSentryEvent<T extends Event>(
   processType: "main" | "preload" | "renderer"
 ): T {
   const safeContexts = Object.fromEntries(
-    Object.entries(event.contexts || {}).filter(([key]) => SAFE_CONTEXT_KEYS.has(key))
+    Object.entries(event.contexts || {}).filter(([key]) =>
+      SAFE_CONTEXT_KEYS.has(key)
+    )
+  )
+  const safeTags = Object.fromEntries(
+    Object.entries(event.tags || {}).filter(([key]) => SAFE_TAG_KEYS.has(key))
   )
   return {
     ...event,
@@ -59,7 +74,11 @@ export function sanitizeSentryEvent<T extends Event>(
     message: undefined,
     request: undefined,
     server_name: undefined,
-    tags: { process_type: processType, product_id: productId },
+    tags: {
+      ...safeTags,
+      process_type: processType,
+      product_id: productId,
+    },
     threads: event.threads
       ? { ...event.threads, values: event.threads.values?.map(safeThread) }
       : undefined,

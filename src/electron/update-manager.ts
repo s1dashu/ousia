@@ -8,6 +8,10 @@ import type {
   OusiaUpdateStatus,
 } from "./chat-types.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
+import {
+  captureDesktopHandledError,
+  type DesktopHandledErrorContext,
+} from "./sentry-handled-errors.js"
 
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
 const IDLE_INSTALL_DELAY_MS = 5 * 60 * 1000
@@ -19,6 +23,10 @@ type LatestRelease = {
 }
 
 type UpdateManagerOptions = {
+  captureError?: (
+    error: unknown,
+    context: DesktopHandledErrorContext
+  ) => unknown
   currentVersion: string
   fetchRelease?: typeof fetch
   isPackaged: boolean
@@ -44,6 +52,7 @@ function compareVersions(left: string, right: string) {
 }
 
 export function createUpdateManager({
+  captureError = captureDesktopHandledError,
   currentVersion,
   fetchRelease = fetch,
   getWindow,
@@ -92,6 +101,12 @@ export function createUpdateManager({
   }
 
   autoUpdater.on("error", (error) => {
+    captureError(error, {
+      errorCode: "update.auto_updater_error",
+      operation: "download",
+      retryable: true,
+      subsystem: "update",
+    })
     publish({
       phase: "error",
       currentVersion,
@@ -155,6 +170,12 @@ export function createUpdateManager({
       })
       return status
     } catch (error) {
+      captureError(error, {
+        errorCode: "update.check_failed",
+        operation: "check",
+        retryable: true,
+        subsystem: "update",
+      })
       const message = error instanceof Error ? error.message : String(error)
       publish({
         phase: "error",
@@ -198,6 +219,12 @@ export function createUpdateManager({
       await autoUpdater.checkForUpdates()
       return { ok: true }
     } catch (error) {
+      captureError(error, {
+        errorCode: "update.download_failed",
+        operation: "download",
+        retryable: true,
+        subsystem: "update",
+      })
       const message = error instanceof Error ? error.message : String(error)
       publish({
         phase: "error",

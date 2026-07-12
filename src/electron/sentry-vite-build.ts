@@ -12,6 +12,7 @@ export type DesktopSentryBuildOptions = {
 }
 
 type DesktopSentryBuildConfig = {
+  buildVerificationMarker: string
   dsn: string
   enabled: boolean
   enabledInDevelopment: boolean
@@ -71,6 +72,7 @@ export function desktopSentryVite({
 }: DesktopSentryBuildOptions) {
   const dsn = publicDsn(environment, `${envPrefix}_SENTRY_DSN`)
   const config: DesktopSentryBuildConfig = {
+    buildVerificationMarker: "",
     dsn,
     enabled: false,
     enabledInDevelopment: booleanEnvironment(
@@ -89,6 +91,7 @@ export function desktopSentryVite({
   }
   config.enabled =
     Boolean(dsn) && (command === "build" || config.enabledInDevelopment)
+  config.buildVerificationMarker = `desktop-sentry-build:${config.enabled ? "enabled" : "disabled"}:${config.release}`
   if (config.enabledInDevelopment && !dsn) {
     throw new Error(
       `${envPrefix}_SENTRY_ENABLE_IN_DEVELOPMENT requires ${envPrefix}_SENTRY_DSN`
@@ -143,10 +146,10 @@ export function desktopSentryVite({
 
 export function loadDesktopSentryEnvironment({
   mode,
-  root = process.cwd(),
+  root,
 }: {
   mode: string
-  root?: string
+  root: string
 }) {
   return {
     ...loadEnv(mode, root, ""),

@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/electron/main"
 
 import { sanitizeSentryEvent } from "./sentry-privacy.js"
 import type { DesktopSentryConfig } from "./sentry-config.js"
+import { configureDesktopHandledErrorCapture } from "./sentry-handled-errors.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 const PRIVATE_DEFAULT_INTEGRATIONS = new Set([
@@ -17,6 +18,7 @@ const PRIVATE_DEFAULT_INTEGRATIONS = new Set([
 
 export function initializeDesktopSentry(config: DesktopSentryConfig) {
   if (!config.enabled) {
+    configureDesktopHandledErrorCapture(undefined)
     writeRuntimeLog("sentry.init", "info", {
       enabled: false,
       productId: config.productId,
@@ -48,6 +50,9 @@ export function initializeDesktopSentry(config: DesktopSentryConfig) {
     sendDefaultPii: false,
     tracesSampleRate: 0,
   })
+  configureDesktopHandledErrorCapture((error, context) =>
+    Sentry.captureException(error, context)
+  )
   writeRuntimeLog("sentry.init", "info", {
     enabled: true,
     environment: config.environment,

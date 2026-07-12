@@ -6,6 +6,8 @@ describe("requireDesktopSentryConfig", () => {
   it("accepts a complete disabled product configuration", () => {
     expect(
       requireDesktopSentryConfig({
+        buildVerificationMarker:
+          "desktop-sentry-build:disabled:ousia-desktop@0.1.25",
         dsn: "",
         enabled: false,
         enabledInDevelopment: false,
@@ -20,6 +22,8 @@ describe("requireDesktopSentryConfig", () => {
   it("fails when an enabled build has no DSN", () => {
     expect(() =>
       requireDesktopSentryConfig({
+        buildVerificationMarker:
+          "desktop-sentry-build:enabled:ousia-desktop@0.1.25",
         dsn: "",
         enabled: true,
         enabledInDevelopment: false,

@@ -1,4 +1,5 @@
 export type DesktopSentryConfig = {
+  buildVerificationMarker: string
   dsn: string
   enabled: boolean
   enabledInDevelopment: boolean
@@ -15,7 +16,13 @@ export function requireDesktopSentryConfig(
     throw new Error("Desktop Sentry build configuration is missing")
   }
   const config = value as Record<string, unknown>
-  const stringFields = ["dsn", "environment", "productId", "release"] as const
+  const stringFields = [
+    "buildVerificationMarker",
+    "dsn",
+    "environment",
+    "productId",
+    "release",
+  ] as const
   const booleanFields = [
     "enabled",
     "enabledInDevelopment",
@@ -23,12 +30,16 @@ export function requireDesktopSentryConfig(
   ] as const
   for (const field of stringFields) {
     if (typeof config[field] !== "string") {
-      throw new Error(`Desktop Sentry configuration field ${field} must be a string`)
+      throw new Error(
+        `Desktop Sentry configuration field ${field} must be a string`
+      )
     }
   }
   for (const field of booleanFields) {
     if (typeof config[field] !== "boolean") {
-      throw new Error(`Desktop Sentry configuration field ${field} must be a boolean`)
+      throw new Error(
+        `Desktop Sentry configuration field ${field} must be a boolean`
+      )
     }
   }
   if (!config.productId || !config.release || !config.environment) {
@@ -38,6 +49,10 @@ export function requireDesktopSentryConfig(
   }
   if (config.enabled && !config.dsn) {
     throw new Error("Enabled Desktop Sentry configuration requires a DSN")
+  }
+  const expectedBuildVerificationMarker = `desktop-sentry-build:${config.enabled ? "enabled" : "disabled"}:${config.release}`
+  if (config.buildVerificationMarker !== expectedBuildVerificationMarker) {
+    throw new Error("Desktop Sentry build verification marker is invalid")
   }
   return config as DesktopSentryConfig
 }

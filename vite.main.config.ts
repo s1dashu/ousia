@@ -17,7 +17,7 @@ const external = [
 export default defineConfig(({ command, mode }) => {
   const sentry = desktopSentryVite({
     command,
-    environment: loadDesktopSentryEnvironment({ mode }),
+    environment: loadDesktopSentryEnvironment({ mode, root: __dirname }),
     envPrefix: "OUSIA",
     productId: "ousia",
     releaseName: "ousia-desktop",

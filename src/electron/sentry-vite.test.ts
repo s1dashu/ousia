@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
@@ -54,11 +54,43 @@ describe("desktopSentryVite", () => {
     })
   })
 
+  it("loads from the explicit repository root", () => {
+    const repositoryRoot = mkdtempSync(join(tmpdir(), "ousia-sentry-root-"))
+    temporaryDirectories.push(repositoryRoot)
+    writeFileSync(
+      join(repositoryRoot, ".env.local"),
+      "OUSIA_SENTRY_DSN=https://file@example.ingest.sentry.io/123\n"
+    )
+
+    expect(
+      loadDesktopSentryEnvironment({
+        mode: "production",
+        root: repositoryRoot,
+      })
+    ).toMatchObject({
+      OUSIA_SENTRY_DSN: "https://file@example.ingest.sentry.io/123",
+    })
+  })
+
+  it("wires every Vite entry to the config-file repository root", () => {
+    for (const configPath of [
+      "vite.main.config.ts",
+      "vite.preload.config.ts",
+      "vite.renderer.config.ts",
+    ]) {
+      expect(readFileSync(configPath, "utf8")).toContain(
+        "loadDesktopSentryEnvironment({ mode, root: __dirname })"
+      )
+    }
+  })
+
   it("builds an explicit disabled configuration without credentials", () => {
     const config = JSON.parse(
       String(build("serve").define.__DESKTOP_SENTRY_CONFIG__)
     )
     expect(config).toMatchObject({
+      buildVerificationMarker:
+        "desktop-sentry-build:disabled:ousia-desktop@0.1.30",
       dsn: "",
       enabled: false,
       environment: "development",

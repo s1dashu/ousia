@@ -10,6 +10,9 @@ const {
 } = require("node:fs")
 const { homedir, tmpdir } = require("node:os")
 const { isAbsolute, join, resolve } = require("node:path")
+const {
+  requireEnabledPackagedSentry,
+} = require("./sentry-build-verification.cjs")
 
 const rootDir = join(__dirname, "..")
 const outDir = join(rootDir, "out")
@@ -519,6 +522,7 @@ async function buildMac(options = {}) {
     makeZip = false,
     notarize = false,
     platform = "darwin",
+    requireSentry = false,
     sign = notarize,
   } = options
 
@@ -578,6 +582,12 @@ async function buildMac(options = {}) {
   )
 
   const mainBundleSource = readFileSync(mainBundle, "utf8")
+  if (requireSentry) {
+    requireEnabledPackagedSentry(
+      mainBundleSource,
+      `ousia-desktop@${appVersion}`
+    )
+  }
   assert(
     mainBundleSource.includes(".tmp") && /\.rename\(/.test(mainBundleSource),
     "Packaged app does not include atomic app-state writes."

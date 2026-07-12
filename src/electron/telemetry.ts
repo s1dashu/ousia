@@ -4,11 +4,19 @@ import { arch, platform } from "node:process"
 import { join } from "node:path"
 
 import { writeRuntimeLog } from "./runtime-logger.js"
+import {
+  captureDesktopHandledError,
+  type DesktopHandledErrorContext,
+} from "./sentry-handled-errors.js"
 
 type TelemetryOptions = {
   appVersion: string
   serviceBaseUrl: string
   userDataPath: string
+  captureError?: (
+    error: unknown,
+    context: DesktopHandledErrorContext
+  ) => unknown
 }
 
 function installationId(userDataPath: string) {
@@ -19,7 +27,11 @@ function installationId(userDataPath: string) {
     return value
   }
   const value = randomUUID()
-  writeFileSync(path, `${value}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 })
+  writeFileSync(path, `${value}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  })
   return value
 }
 
@@ -27,6 +39,7 @@ export function createTelemetry({
   appVersion,
   serviceBaseUrl,
   userDataPath,
+  captureError = captureDesktopHandledError,
 }: TelemetryOptions) {
   const installId = installationId(userDataPath)
 
@@ -52,6 +65,12 @@ export function createTelemetry({
   return {
     record(event: "app_opened" | "update_downloaded") {
       void record(event).catch((error) => {
+        captureError(error, {
+          errorCode: "telemetry.delivery_failed",
+          operation: "deliver",
+          retryable: true,
+          subsystem: "telemetry",
+        })
         writeRuntimeLog("telemetry", "warn", {
           event,
           error: error instanceof Error ? error.message : String(error),

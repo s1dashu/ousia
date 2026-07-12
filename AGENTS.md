@@ -62,9 +62,13 @@ match the task.
   Chromium network stack so they follow the operating system proxy/PAC policy.
   Native Codex app-server traffic and provider SDKs with custom Node transports
   remain separate process/transport boundaries; see `docs/technical-architecture.md`.
-- Remote Electron error monitoring is an optional Ousia-owned Sentry framework
-  capability. Product builds must use separate projects/DSNs and preserve the
-  sanitizer, source-map, and native-minidump rules in `docs/sentry.md`.
+- Remote Electron error monitoring is an Ousia-owned Sentry framework
+  capability. Distributed DMG/release builds fail when Sentry is compiled out;
+  credential-free local package builds remain explicitly disabled. Caught
+  operational failures use the validated handled-error boundary and only
+  emit controlled diagnostic tokens. Product builds must use separate
+  projects/DSNs and preserve the sanitizer, source-map, and native-minidump
+  rules in `docs/sentry.md`.
 - Packaged macOS updates use the independent analytics/update service and
   Squirrel.Mac. Releases must include a signed/notarized ZIP in addition to the
   DMG; checks do not download until the user clicks Update.
