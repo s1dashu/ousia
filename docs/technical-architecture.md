@@ -7,7 +7,7 @@ Ousia extension runtime. The renderer hosts the sidebar, chat, and settings.
 
 - Electron Forge + Vite for main, preload, and renderer builds.
 - React renderer with Tailwind/shadcn UI.
-- Pi coding agent and bundled Codex app-server hosted in Electron main.
+- Pi coding agent and an on-demand Codex app-server hosted in Electron main.
 - Streamdown for assistant Markdown rendering.
 
 Removed from this branch:
@@ -26,7 +26,7 @@ Main renderer entrypoints:
 
 - `src/App.tsx`: shell state, sidebar/chat layout, persistence.
 - `src/components/ui/card.tsx`: the existing product Card primitive; Settings
-  uses its feature-local Maia Card.
+  uses its feature-local Vega Card.
 - `src/features/chat/ChatArea.tsx`: chat history, input, attachments, controls.
 - `src/features/chat/ChatHeader.tsx`: chat title bar actions.
 - `src/features/chat/ChatMessageList.tsx`: assistant/user/system message
@@ -45,8 +45,8 @@ Main renderer entrypoints:
 - `src/features/settings/SettingsSelect.tsx`, `SettingsSwitch.tsx`,
   `SettingsButton.tsx`, `SettingsCard.tsx`, `SettingsInput.tsx`, and
   `SettingsDialog.tsx`: feature-local Base UI controls aligned with the
-  `bbVKEbY` Maia reference, isolated from globally customized primitives.
-- `src/features/settings/settings-local-styles.ts`: settings shell-only Maia
+  `bIkeymG` Vega reference, isolated from globally customized primitives.
+- `src/features/settings/settings-local-styles.ts`: settings shell-only Vega
   sidebar and panel classes; primitive styling lives with each local component.
 - `src/features/shell/main-panel-styles.ts`: shared left-corner geometry for the
   chat and settings panels. Both panels sit on a `bg-sidebar` host so the
@@ -54,8 +54,10 @@ Main renderer entrypoints:
 - `src/features/sidebar/Sidebar.tsx`: project/session/settings navigation.
 
 The renderer theme has two explicit layers. Global shadcn tokens are the exact
-neutral `bbVKEbY` Maia light/dark values and define the default behavior for new
-and uncustomized UI. Existing appearance palettes currently live under the
+neutral `bIkeymG` Vega light/dark values and define the default behavior for new
+and uncustomized UI. Chat typography and spacing preferences are persisted in
+app state and applied through Ousia-prefixed chat CSS variables. Existing
+appearance palettes currently live under the
 `--ousia-app-*` migration palette. The tuned chat and session-sidebar roots map
 those values through `ousia-chat-theme` and `ousia-sidebar-theme` as a temporary
 compatibility boundary. The target architecture in `docs/design.md` replaces
@@ -111,8 +113,11 @@ Main process entrypoints:
   canonical per-session agent provider.
 - `src/electron/agent-conversations.ts`: owns Pi session creation, model
   selection, chat streaming, history, and interrupt handling.
-- `src/electron/codex-app-server-client.ts`: owns the bundled native Codex
+- `src/electron/codex-app-server-client.ts`: owns the downloaded native Codex
   process, JSONL RPC, lifecycle, and sanitized diagnostics.
+- `src/electron/codex-runtime-manager.ts`: downloads the pinned native Codex
+  archive on first use, verifies SHA-512 integrity, and atomically owns its
+  versioned user-data cache.
 - `src/electron/codex-agent-provider.ts`: adapts Codex threads, turns, items,
   authentication, history, and tools to Ousia chat contracts.
 - `src/electron/app-state-store.ts`: persists shell, settings, project, session,
@@ -156,6 +161,11 @@ synchronizes Pi's retry preference, preventing environment/package-path races.
 - `onWindowFullscreenChange(callback)`
 - `onWindowZoomChange(callback)`
 
+Chat-title requests carry the current interface language as a required field.
+Both Pi utility-model titles and Codex ephemeral-thread titles generate and
+normalize output in that language. Changing the language does not rename titles
+that were already persisted.
+
 ## Agent Sessions
 
 Each chat request includes `projectPath` and `sessionId`. Electron main resolves
@@ -197,7 +207,9 @@ provider settings.
 The app no longer installs an Ousia usage skill, filters a user `ousia` skill,
 or prepends an `ousia` CLI shim to the agent environment.
 
-Codex uses the pinned bundled `codex app-server` native binary over stdio.
+Codex uses a pinned, on-demand `codex app-server` native binary over stdio.
+The first Codex capability request downloads and verifies the matching platform
+archive; later requests reuse the versioned user-data cache.
 Ousia persists the opaque thread id returned by Codex instead of deriving it
 from the Ousia session id or parsing private rollout files. Authentication goes
 through app-server account RPCs so Codex remains the credential owner. See
@@ -214,8 +226,10 @@ Packaged macOS builds query the independently deployed Ousia analytics service
 for the latest GitHub release. Checking and downloading are separate actions:
 the renderer exposes an update button only after a newer signed ZIP is known to
 exist, and Electron's native Squirrel.Mac updater begins downloading only after
-the user clicks it. Update state and errors are emitted over IPC and recorded in
-the runtime log.
+the user clicks it. Startup checks and the native **Check for Updates…** app-menu
+action use Electron `net.fetch` so they share Chromium's system-proxy behavior.
+Manual checks always show a native result dialog; update state and errors are
+emitted over IPC and recorded in the runtime log.
 
 After download, installation waits for either an explicit Restart click or a
 strict idle condition: the window is not focused, no input was observed for five

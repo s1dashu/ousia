@@ -26,6 +26,7 @@ import {
   findWorkingChatSession,
   resolveChatEventTarget,
 } from "@/app/chat-event-routing"
+import { nextBranchSessionTitle } from "@/app/branch-session-title"
 import {
   shouldResetEmptyChatHistory,
   shouldRetryChatHistoryAfterSelection,
@@ -34,6 +35,8 @@ import {
 import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
+  resolveOusiaChatFontSizeValue,
+  resolveOusiaChatLineSpacingValue,
   resolveOusiaFontFamilyValue,
   type OusiaAppStateTransactionResult,
   type OusiaChatEvent,
@@ -386,6 +389,7 @@ export function App() {
   const [modelRegistry, setModelRegistry] = useState<OusiaModelRegistryResult>()
   const [codexEnvironment, setCodexEnvironment] =
     useState<OusiaCodexEnvironmentStatus>()
+  const [codexEnvironmentLoading, setCodexEnvironmentLoading] = useState(false)
   const [projects, setProjects] = useState<ProjectRecord[]>(
     initialState.projects
   )
@@ -633,9 +637,14 @@ export function App() {
     if (!window.ousia) {
       return undefined
     }
-    const status = await window.ousia.checkCodexEnvironment()
-    setCodexEnvironment(status)
-    return status
+    setCodexEnvironmentLoading(true)
+    try {
+      const status = await window.ousia.checkCodexEnvironment()
+      setCodexEnvironment(status)
+      return status
+    } finally {
+      setCodexEnvironmentLoading(false)
+    }
   }, [])
   const flushPendingChatEvents = useCallback(() => {
     pendingChatEventsFrameRef.current = 0
@@ -811,6 +820,25 @@ export function App() {
       resolveOusiaChatContentWidthValue(settings.chatContentWidth)
     )
   }, [settings.chatContentWidth])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--ousia-chat-font-size",
+      resolveOusiaChatFontSizeValue(settings.chatFontSize)
+    )
+  }, [settings.chatFontSize])
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--ousia-chat-line-height",
+      resolveOusiaChatLineSpacingValue(settings.chatLineSpacing)
+    )
+  }, [settings.chatLineSpacing])
+
+  useEffect(() => {
+    document.documentElement.dataset.chatMessageSpacing =
+      settings.chatMessageSpacing
+  }, [settings.chatMessageSpacing])
 
   useEffect(() => {
     if (!isAppStateLoaded) {
@@ -1913,6 +1941,7 @@ export function App() {
     void window.ousia
       .generateChatTitle({
         agentProvider: session.agentProvider,
+        language: settings.language,
         prompt: firstPrompt,
         projectPath: projectPathForSession(session),
         sessionId,
@@ -1970,8 +1999,10 @@ export function App() {
     }
 
     const now = new Date().toISOString()
-    const titleSuffix = settings.language === "zh" ? "分支" : "Fork"
-    const branchTitle = `${selectedSession.title} · ${titleSuffix}`
+    const branchTitle = nextBranchSessionTitle(
+      selectedSession,
+      sessionsRef.current
+    )
     let branchSession = {
       ...createSession(branchTitle, selectedSession.agentProvider),
       projectId: selectedSession.projectId,
@@ -2383,6 +2414,7 @@ export function App() {
             <SettingsPage
               activeSection={activeSettingsSection}
               codexEnvironment={codexEnvironment}
+              codexEnvironmentLoading={codexEnvironmentLoading}
               modelRegistry={modelRegistry}
               settings={settings}
               onRefreshModelRegistry={refreshModelRegistry}

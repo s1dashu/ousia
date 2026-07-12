@@ -19,10 +19,7 @@
   </g>
   
   <!-- Text -->
-  <text x="56" y="29" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="white" letter-spacing="-0.2">
+  <text x="140" y="29" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="white" letter-spacing="-0.2">
     Download for macOS
   </text>
-  
-  <!-- Subtle arrow -->
-  <path d="M 248 20 L 252 24 L 248 28" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
 </svg>

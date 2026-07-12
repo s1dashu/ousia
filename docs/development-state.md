@@ -66,31 +66,36 @@ desktop agent client:
 - Sidebar collapse/expand and resizing.
 - Chat history rendering with Streamdown.
 - File and image attachments in chat input.
-- Appearance mode and Radix color-scale settings.
+- Appearance mode, Radix color-scale, chat font, text-size, line-spacing,
+  message-spacing, and content-width settings.
 - Model provider API key settings, including local provider disable/hide state.
 - Model and reasoning controls in the chat input. Pi uses its fixed thinking
   levels; Codex renders each model's app-server-provided efforts and default.
 - Immediate final-style optimistic user-message rendering with provider success
   echoes removed and explicit same-id failure reporting.
-- Bundled Codex app-server authentication, model discovery, streaming,
-  history, branch, compact, interrupt, and export adaptation.
+- On-demand Codex app-server runtime download plus authentication, model
+  discovery, streaming, history, branch, compact, interrupt, and export
+  adaptation. The native archive is SHA-512 verified and cached atomically.
 - Settings mode replaces the normal sidebar with categorized navigation and
   separates shared chat behavior from the selected Pi or Codex harness-specific
   configuration. Pi permission mode is Pi-only. Its controls use feature-local
-  copies of the original `bbVKEbY` Maia Base UI primitives. Settings rows use a `720px` container breakpoint
+  copies of the `bIkeymG` Vega Base UI primitives. Settings rows use a `720px` container breakpoint
   and a `52rem` content maximum.
 - General settings are grouped as Agent Harness, Language & Region, and Default
   Creation Paths; the two creation-path settings stay together.
-- Global shadcn semantic tokens now match the neutral `bbVKEbY` Maia preset.
+- Global shadcn semantic tokens match the neutral `bIkeymG` Vega preset.
   Appearance palettes are isolated as `--ousia-app-*` tokens and are mapped
   back only inside the tuned chat and session-sidebar roots. Settings remains
-  outside those product scopes and uses Maia tokens directly.
+  outside those product scopes and uses Vega tokens directly.
 - Sortable top-level sidebar sections: `会话` and `项目`.
 - Packaged macOS builds check the private analytics service for releases. An
   available release adds an Update button to the sidebar footer; download is
-  explicit, while installation is automatic only after five minutes without
-  input, no focused Ousia window, and no running agent turn. Otherwise the
-  button becomes Restart after the update finishes downloading.
+  explicit, while the native app menu also provides **Check for Updates…** with
+  visible success and failure results. Release checks use Electron's Chromium
+  network stack so macOS proxy settings are honored. Installation is automatic
+  only after five minutes without input, no focused Ousia window, and no running
+  agent turn. Otherwise the button becomes Restart after the update finishes
+  downloading.
 
 ## Persistence
 

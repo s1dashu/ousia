@@ -20,6 +20,7 @@ type LatestRelease = {
 
 type UpdateManagerOptions = {
   currentVersion: string
+  fetchRelease?: typeof fetch
   isPackaged: boolean
   serviceBaseUrl: string
   getWindow: () => BrowserWindow | undefined
@@ -44,6 +45,7 @@ function compareVersions(left: string, right: string) {
 
 export function createUpdateManager({
   currentVersion,
+  fetchRelease = fetch,
   getWindow,
   isPackaged,
   serviceBaseUrl,
@@ -61,13 +63,19 @@ export function createUpdateManager({
   function publish(next: OusiaUpdateStatus) {
     status = next
     getWindow()?.webContents.send("ousia:update:status", next)
-    writeRuntimeLog("update.state", next.phase === "error" ? "error" : "info", next)
+    writeRuntimeLog(
+      "update.state",
+      next.phase === "error" ? "error" : "info",
+      next
+    )
   }
 
   function installIfIdle() {
     if (status.phase !== "downloaded") return
     const window = getWindow()
-    const focused = Boolean(window && !window.isDestroyed() && window.isFocused())
+    const focused = Boolean(
+      window && !window.isDestroyed() && window.isFocused()
+    )
     if (
       focused ||
       runningSessions.size > 0 ||
@@ -92,20 +100,33 @@ export function createUpdateManager({
   })
   autoUpdater.on("update-downloaded", (_event, _notes, releaseName) => {
     const version =
-      status.phase === "downloading" ? status.version : releaseName.replace(/^v/, "")
+      status.phase === "downloading"
+        ? status.version
+        : releaseName.replace(/^v/, "")
     publish({ phase: "downloaded", currentVersion, version })
     onDownloaded?.()
     idleTimer ??= setInterval(installIfIdle, IDLE_POLL_MS)
     installIfIdle()
   })
 
-  async function check() {
-    if (!isPackaged || !serviceBaseUrl) return
+  async function check(
+    source: "startup" | "interval" | "manual" | "download-retry" = "manual"
+  ): Promise<OusiaUpdateStatus> {
+    if (!isPackaged || !serviceBaseUrl) return status
+    if (status.phase === "downloading" || status.phase === "downloaded") {
+      return status
+    }
+    writeRuntimeLog("update.check", "info", {
+      arch,
+      currentVersion,
+      platform,
+      source,
+    })
     try {
       const url = new URL("/api/releases/latest", serviceBaseUrl)
       url.searchParams.set("platform", platform)
       url.searchParams.set("arch", arch)
-      const response = await fetch(url, {
+      const response = await fetchRelease(url.toString(), {
         headers: { "user-agent": `Ousia/${currentVersion}` },
         signal: AbortSignal.timeout(15_000),
       })
@@ -116,37 +137,46 @@ export function createUpdateManager({
       if (!release.version || !release.releaseName) {
         throw new Error("Release service returned an invalid response")
       }
+      writeRuntimeLog("update.check", "info", {
+        currentVersion,
+        latestVersion: release.version,
+        source,
+      })
       if (compareVersions(release.version, currentVersion) <= 0) {
-        if (status.phase !== "downloading" && status.phase !== "downloaded") {
-          publish({ phase: "idle", currentVersion })
-        }
-        return
+        publish({ phase: "idle", currentVersion })
+        return status
       }
-      if (status.phase !== "downloading" && status.phase !== "downloaded") {
-        publish({
-          phase: "available",
-          currentVersion,
-          version: release.version,
-          releaseName: release.releaseName,
-        })
-      }
+      publish({
+        phase: "available",
+        currentVersion,
+        version: release.version,
+        releaseName: release.releaseName,
+      })
+      return status
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      if (status.phase === "available" || status.phase === "error") {
-        publish({ phase: "error", currentVersion, message, version: status.version })
-      } else {
-        writeRuntimeLog("update.check", "error", { message })
-      }
+      publish({
+        phase: "error",
+        currentVersion,
+        message,
+        ...(status.phase === "available" || status.phase === "error"
+          ? { version: status.version }
+          : {}),
+      })
+      return status
     }
   }
 
   async function download(): Promise<OusiaUpdateActionResult> {
     if (status.phase !== "available" && status.phase !== "error") {
-      return { ok: false, error: `Cannot download from update phase: ${status.phase}` }
+      return {
+        ok: false,
+        error: `Cannot download from update phase: ${status.phase}`,
+      }
     }
     let targetVersion = status.version
     if (!targetVersion) {
-      await check()
+      await check("download-retry")
       const refreshedStatus: OusiaUpdateStatus = status
       if (refreshedStatus.phase !== "available") {
         return { ok: false, error: "No update is currently available." }
@@ -164,7 +194,12 @@ export function createUpdateManager({
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      publish({ phase: "error", currentVersion, message, version: targetVersion })
+      publish({
+        phase: "error",
+        currentVersion,
+        message,
+        version: targetVersion,
+      })
       return { ok: false, error: message }
     }
   }
@@ -207,8 +242,11 @@ export function createUpdateManager({
     observeChatEvent,
     start() {
       if (!isPackaged || !serviceBaseUrl) return
-      void check()
-      checkTimer ??= setInterval(() => void check(), CHECK_INTERVAL_MS)
+      void check("startup")
+      checkTimer ??= setInterval(
+        () => void check("interval"),
+        CHECK_INTERVAL_MS
+      )
     },
   }
 }

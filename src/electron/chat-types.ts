@@ -55,6 +55,26 @@ export const OUSIA_CHAT_CONTENT_WIDTHS = [
   "extraWide",
 ] as const
 export type OusiaChatContentWidth = (typeof OUSIA_CHAT_CONTENT_WIDTHS)[number]
+export const OUSIA_CHAT_FONT_SIZES = [
+  "small",
+  "standard",
+  "large",
+  "extraLarge",
+] as const
+export type OusiaChatFontSize = (typeof OUSIA_CHAT_FONT_SIZES)[number]
+export const OUSIA_CHAT_LINE_SPACINGS = [
+  "compact",
+  "standard",
+  "relaxed",
+] as const
+export type OusiaChatLineSpacing = (typeof OUSIA_CHAT_LINE_SPACINGS)[number]
+export const OUSIA_CHAT_MESSAGE_SPACINGS = [
+  "compact",
+  "standard",
+  "relaxed",
+] as const
+export type OusiaChatMessageSpacing =
+  (typeof OUSIA_CHAT_MESSAGE_SPACINGS)[number]
 export type OusiaAgentToolName =
   | "read"
   | "write"
@@ -94,6 +114,9 @@ export type OusiaAppSettings = {
   theme: OusiaThemePreference
   appFontFamily: OusiaFontFamily
   chatFontFamily: OusiaFontFamily
+  chatFontSize: OusiaChatFontSize
+  chatLineSpacing: OusiaChatLineSpacing
+  chatMessageSpacing: OusiaChatMessageSpacing
   chatContentWidth: OusiaChatContentWidth
   language: OusiaLanguage
   defaultSessionDir: string
@@ -186,7 +209,7 @@ export type OusiaCodexEnvironmentStatus = {
   error?: string
   models: OusiaAvailableModel[]
   requiresOpenaiAuth: boolean
-  runtime: "bundled"
+  runtime: "downloaded"
   version?: string
 }
 
@@ -387,6 +410,9 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   theme: "light",
   appFontFamily: "system",
   chatFontFamily: "system",
+  chatFontSize: "standard",
+  chatLineSpacing: "standard",
+  chatMessageSpacing: "standard",
   chatContentWidth: "standard",
   language: "zh",
   defaultSessionDir: OUSIA_DEFAULT_WORK_DIR,
@@ -457,6 +483,31 @@ function normalizeOusiaChatContentWidth(
     : undefined
 }
 
+function normalizeOusiaChatFontSize(
+  chatFontSize: OusiaChatFontSize | undefined
+): OusiaChatFontSize | undefined {
+  return chatFontSize && OUSIA_CHAT_FONT_SIZES.includes(chatFontSize)
+    ? chatFontSize
+    : undefined
+}
+
+function normalizeOusiaChatLineSpacing(
+  chatLineSpacing: OusiaChatLineSpacing | undefined
+): OusiaChatLineSpacing | undefined {
+  return chatLineSpacing && OUSIA_CHAT_LINE_SPACINGS.includes(chatLineSpacing)
+    ? chatLineSpacing
+    : undefined
+}
+
+function normalizeOusiaChatMessageSpacing(
+  chatMessageSpacing: OusiaChatMessageSpacing | undefined
+): OusiaChatMessageSpacing | undefined {
+  return chatMessageSpacing &&
+    OUSIA_CHAT_MESSAGE_SPACINGS.includes(chatMessageSpacing)
+    ? chatMessageSpacing
+    : undefined
+}
+
 export function normalizeOusiaAppSettings(
   settings: Partial<OusiaAppSettings> & { defaultWorkDir?: string } = {}
 ): OusiaAppSettings {
@@ -493,6 +544,15 @@ export function normalizeOusiaAppSettings(
   const chatFontFamily =
     normalizeOusiaFontFamily(settings.chatFontFamily) ??
     defaultOusiaAppSettings.chatFontFamily
+  const chatFontSize =
+    normalizeOusiaChatFontSize(settings.chatFontSize) ??
+    defaultOusiaAppSettings.chatFontSize
+  const chatLineSpacing =
+    normalizeOusiaChatLineSpacing(settings.chatLineSpacing) ??
+    defaultOusiaAppSettings.chatLineSpacing
+  const chatMessageSpacing =
+    normalizeOusiaChatMessageSpacing(settings.chatMessageSpacing) ??
+    defaultOusiaAppSettings.chatMessageSpacing
   const chatContentWidth =
     normalizeOusiaChatContentWidth(settings.chatContentWidth) ??
     defaultOusiaAppSettings.chatContentWidth
@@ -542,6 +602,9 @@ export function normalizeOusiaAppSettings(
     appearanceColorScale,
     appFontFamily,
     chatFontFamily,
+    chatFontSize,
+    chatLineSpacing,
+    chatMessageSpacing,
     chatContentWidth,
     language: merged.language === "en" ? "en" : "zh",
     defaultSessionDir:
@@ -606,6 +669,31 @@ export function resolveOusiaChatContentWidthValue(
     return "56rem"
   }
   return "48rem"
+}
+
+export function resolveOusiaChatFontSizeValue(chatFontSize: OusiaChatFontSize) {
+  if (chatFontSize === "small") {
+    return "13px"
+  }
+  if (chatFontSize === "large") {
+    return "15px"
+  }
+  if (chatFontSize === "extraLarge") {
+    return "16px"
+  }
+  return "14px"
+}
+
+export function resolveOusiaChatLineSpacingValue(
+  chatLineSpacing: OusiaChatLineSpacing
+) {
+  if (chatLineSpacing === "compact") {
+    return "1.4"
+  }
+  if (chatLineSpacing === "relaxed") {
+    return "1.65"
+  }
+  return "1.5"
 }
 
 export function createOusiaId(prefix: string) {
@@ -900,6 +988,7 @@ export type OusiaChatSendResult = {
 
 export type OusiaChatGenerateTitlePayload = {
   agentProvider: OusiaAgentProvider
+  language: OusiaLanguage
   prompt: string
   projectPath: string
   sessionId: string

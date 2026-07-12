@@ -14,7 +14,6 @@
 <p align="center">
   <a href="https://github.com/s1dashu/ousia/releases/latest"><img src="https://img.shields.io/github/v/release/s1dashu/ousia?color=222222" alt="GitHub Release"></a>
   <img src="https://img.shields.io/badge/platform-macOS-222222" alt="Platform">
-  <img src="https://img.shields.io/badge/status-pre--release-ebc248" alt="Status">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-222222" alt="License"></a>
   <img src="https://img.shields.io/badge/built_with-Electron-47848f?logo=electron&logoColor=white" alt="Electron">
   <img src="https://img.shields.io/badge/stack-React%2019-087ea4?logo=react" alt="React">

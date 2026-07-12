@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+import path from "node:path"
 import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 
@@ -15,11 +17,15 @@ vi.mock("@/components/theme-provider", async (importOriginal) => {
   }
 })
 
-function renderProviderSettings(agentProvider: "pi" | "codex") {
+function renderProviderSettings(
+  agentProvider: "pi" | "codex",
+  codexEnvironmentLoading = false
+) {
   return renderToStaticMarkup(
     <SettingsPage
       activeSection="provider"
       codexEnvironment={undefined}
+      codexEnvironmentLoading={codexEnvironmentLoading}
       modelRegistry={undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
@@ -38,6 +44,7 @@ function renderGeneralSettings() {
     <SettingsPage
       activeSection="general"
       codexEnvironment={undefined}
+      codexEnvironmentLoading={false}
       modelRegistry={undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
@@ -52,6 +59,7 @@ function renderConversationSettings() {
     <SettingsPage
       activeSection="conversation"
       codexEnvironment={undefined}
+      codexEnvironmentLoading={false}
       modelRegistry={undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
@@ -62,6 +70,16 @@ function renderConversationSettings() {
 }
 
 describe("SettingsPage provider isolation", () => {
+  it("shows the first-use Codex download state", () => {
+    const t = getMessages("en")
+    const html = renderProviderSettings("codex", true)
+
+    expect(html).toContain(t.settings.codexDownloading)
+    expect(html).toContain(t.settings.codexDownloadingHelp)
+    expect(html).toContain(t.settings.downloadingCodex)
+    expect(html).toContain("disabled")
+  })
+
   it("renders the three general-setting groups in the requested order", () => {
     const t = getMessages("zh")
     const html = renderGeneralSettings()
@@ -94,24 +112,24 @@ describe("SettingsPage provider isolation", () => {
     expect(html).not.toContain("@min-[880px]")
   })
 
-  it("renders the original Maia component treatment", () => {
+  it("renders the Vega component treatment", () => {
     const html = renderGeneralSettings()
 
-    expect(html).toContain("rounded-2xl bg-card")
-    expect(html).toContain("ring-1 ring-foreground/10")
-    expect(html).toContain("rounded-4xl border border-input bg-input/30")
+    expect(html).toContain("rounded-xl bg-card")
+    expect(html).toContain("shadow-xs ring-1 ring-foreground/10")
+    expect(html).toContain("rounded-md border border-input bg-transparent")
     expect(html).toContain("bg-background text-foreground")
     expect(html).not.toContain("rounded-[10px]")
     expect(html).not.toContain("border-[#e5e5e5]")
   })
 
-  it("keeps path inputs and browse buttons on the same Maia control height", () => {
+  it("keeps path inputs and browse buttons on the same Vega control height", () => {
     const html = renderGeneralSettings()
 
     expect(html).toContain('data-slot="settings-input"')
     expect(html).toContain('data-slot="settings-button"')
-    expect(html).toContain("h-9 w-full min-w-0 rounded-4xl")
-    expect(html).toContain("h-9 gap-1.5 px-3")
+    expect(html).toContain("h-9 w-full min-w-0 rounded-md")
+    expect(html).toContain("h-9 gap-1.5 px-2.5")
     expect(html).not.toContain("h-8 gap-1 px-3")
   })
 
@@ -124,6 +142,20 @@ describe("SettingsPage provider isolation", () => {
     expect(html).toContain(t.settings.providerKeys)
     expect(html).toContain(t.settings.autoRetryOnFailure)
     expect(html).not.toContain(t.settings.codexAuthentication)
+  })
+
+  it("uses Vega spacing and destructive semantics in provider dialogs", () => {
+    const source = readFileSync(
+      path.resolve(process.cwd(), "src/features/settings/SettingsPage.tsx"),
+      "utf8"
+    )
+
+    expect(source.match(/<label className="block">/g)).toHaveLength(2)
+    expect(source).not.toContain('className="mt-4 block"')
+    expect(source).toContain("bg-destructive/10")
+    expect(source).toContain("text-destructive")
+    expect(source).not.toContain("text-red-")
+    expect(source).not.toContain("bg-red-")
   })
 
   it("renders Codex-only settings for the Codex harness", () => {

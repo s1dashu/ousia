@@ -15,7 +15,7 @@ In scope:
 - Agent chat backed by a per-session Pi or Codex agent in Electron main.
 - Project/session isolated cwd for agent work.
 - User settings for the default agent for new sessions, Codex authentication,
-  appearance mode, Radix color scale, Pi model provider API keys, model,
+  appearance mode, Radix color scale, chat typography and spacing, Pi model provider API keys, model,
   provider-specific thinking/reasoning preference, default session folder, and
   default project creation starting folder.
 

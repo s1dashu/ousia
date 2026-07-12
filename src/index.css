@@ -90,6 +90,8 @@
     --font-sans-default: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono-default: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     --ousia-chat-font-family: var(--font-sans-default);
+    --ousia-chat-font-size: 14px;
+    --ousia-chat-line-height: 1.5;
     --font-weight-light: 300;
     --font-weight-regular: 400;
     --font-weight-medium: 500;
@@ -103,16 +105,22 @@
     --ousia-baseline: 8px;
     --ousia-leading: 24px;
     --ousia-chat-content-max-width: 48rem;
+    --ousia-chat-spacing-tool-consecutive: 0.125rem;
+    --ousia-chat-spacing-before-tool: 1rem;
+    --ousia-chat-spacing-after-tool: 1.25rem;
+    --ousia-chat-spacing-user-after-assistant: 0.5rem;
+    --ousia-chat-spacing-default: 1.5rem;
     --ousia-chat-gutter: 20px;
     --ousia-chat-panel-radius: 24px;
     --ousia-chat-composer-radius: 36px;
+    --ousia-composer-surface: #fff;
     --ousia-chat-composer-ring-size: 3px;
     --ousia-chat-composer-ring-color: rgba(36, 31, 27, 0.055);
     --ousia-chat-composer-border: rgba(36, 31, 27, 0.1);
     --ousia-chat-composer-border-focus: rgba(36, 31, 27, 0.16);
     --ousia-main-panel-shadow: 0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.56);
-    --ousia-chat-composer-shadow: 0 -2px 8px -6px rgba(24, 24, 27, 0.11), 0 2px 8px -5px rgba(24, 24, 27, 0.1), 0 10px 24px -14px rgba(24, 24, 27, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.56);
-    --ousia-chat-composer-shadow-focus: 0 -2px 9px -6px rgba(24, 24, 27, 0.13), 0 2px 9px -5px rgba(24, 24, 27, 0.12), 0 12px 28px -14px rgba(24, 24, 27, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.64);
+    --ousia-chat-composer-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+    --ousia-chat-composer-shadow-focus: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
     --ousia-floating-panel-border: rgba(36, 31, 27, 0.1);
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(24, 24, 27, 0.08), 0 2px 7px -5px rgba(24, 24, 27, 0.1), 0 12px 28px -18px rgba(24, 24, 27, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.56);
     --ousia-sidebar-selected-radius: 16px;
@@ -120,7 +128,7 @@
     --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
     --ousia-settings-content-max-width: 44rem;
     --ousia-settings-gutter: 32px;
-    /* shadcn/ui bbVKEbY Maia foundation: keep these global tokens source-aligned. */
+    /* shadcn/ui bIkeymG Vega foundation: keep these global tokens source-aligned. */
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -194,9 +202,25 @@
     --ousia-sidebar-ring: color-mix(in srgb, var(--ousia-app-sidebar-ring) 78%, var(--ousia-app-sidebar));
 }
 
+:root[data-chat-message-spacing="compact"] {
+  --ousia-chat-spacing-tool-consecutive: 0.125rem;
+  --ousia-chat-spacing-before-tool: 0.75rem;
+  --ousia-chat-spacing-after-tool: 1rem;
+  --ousia-chat-spacing-user-after-assistant: 0.375rem;
+  --ousia-chat-spacing-default: 1.125rem;
+}
+
+:root[data-chat-message-spacing="relaxed"] {
+  --ousia-chat-spacing-tool-consecutive: 0.25rem;
+  --ousia-chat-spacing-before-tool: 1.25rem;
+  --ousia-chat-spacing-after-tool: 1.5rem;
+  --ousia-chat-spacing-user-after-assistant: 0.75rem;
+  --ousia-chat-spacing-default: 2rem;
+}
+
 /*
  * Product scopes preserve the tuned Ousia chat/sidebar palette without
- * changing the default Maia semantics used by Settings and new UI.
+ * changing the default Vega semantics used by Settings and new UI.
  */
 .ousia-chat-theme,
 .ousia-sidebar-theme {
@@ -885,6 +909,7 @@
     --ousia-app-foreground: #f4f0ec;
     --ousia-app-card: #1e1b19;
     --ousia-app-card-foreground: #f4f0ec;
+    --ousia-composer-surface: color-mix(in srgb, var(--ousia-app-card) 97%, white);
     --ousia-app-popover: #1b1917;
     --ousia-app-popover-foreground: #f4f0ec;
     --ousia-app-primary: #f4f0ec;
@@ -919,8 +944,8 @@
     --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
     --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
     --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow: 0 -2px 8px -6px rgba(0, 0, 0, 0.44), 0 2px 8px -5px rgba(0, 0, 0, 0.48), 0 10px 24px -14px rgba(0, 0, 0, 0.68), 0 0 0 0.5px rgba(255, 255, 255, 0.018), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow-focus: 0 -2px 9px -6px rgba(0, 0, 0, 0.52), 0 2px 9px -5px rgba(0, 0, 0, 0.56), 0 12px 28px -14px rgba(0, 0, 0, 0.78), 0 0 0 0.5px rgba(255, 255, 255, 0.032), inset 0 1px 0 rgba(255, 255, 255, 0.018);
+    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
+    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
     --ousia-floating-panel-border: color-mix(in srgb, var(--ousia-app-popover) 72%, black);
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
     --ousia-sidebar-row-selected-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2), 0 5px 12px -10px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.018);
@@ -1187,8 +1212,8 @@
     --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
     --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
     --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow: 0 -2px 8px -6px rgba(0, 0, 0, 0.44), 0 2px 8px -5px rgba(0, 0, 0, 0.48), 0 10px 24px -14px rgba(0, 0, 0, 0.68), 0 0 0 0.5px rgba(255, 255, 255, 0.018), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow-focus: 0 -2px 9px -6px rgba(0, 0, 0, 0.52), 0 2px 9px -5px rgba(0, 0, 0, 0.56), 0 12px 28px -14px rgba(0, 0, 0, 0.78), 0 0 0 0.5px rgba(255, 255, 255, 0.032), inset 0 1px 0 rgba(255, 255, 255, 0.018);
+    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
+    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
     --ousia-floating-panel-border: color-mix(in srgb, var(--ousia-app-popover) 72%, black);
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
     --ousia-sidebar-row-selected-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2), 0 5px 12px -10px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.018);
@@ -1321,6 +1346,45 @@
   scrollbar-gutter: stable both-edges;
 }
 
+/*
+ * Compact scrollbars for portaled UI popups. Chromium's native scrollbar can
+ * reserve a wide, opaque track when macOS is configured to always show
+ * scrollbars, which overwhelms small Select and Menu surfaces.
+ */
+.ui-popup-scrollbar {
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 28%, transparent)
+    transparent;
+  scrollbar-width: thin;
+}
+
+.ui-popup-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.ui-popup-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ui-popup-scrollbar::-webkit-scrollbar-thumb {
+  background-clip: content-box;
+  background-color: color-mix(
+    in oklch,
+    var(--muted-foreground) 28%,
+    transparent
+  );
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+
+.ui-popup-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(
+    in oklch,
+    var(--muted-foreground) 44%,
+    transparent
+  );
+}
+
 .ousia-diff-preview-frame {
   overflow-y: auto;
   scrollbar-width: none;
@@ -1426,11 +1490,19 @@
 
 .ousia-chat-markdown {
   font-family: var(--ousia-chat-font-family);
-  line-height: 1.3125rem;
+  font-size: var(--ousia-chat-font-size);
+  line-height: var(--ousia-chat-line-height);
 }
 
 .ousia-chat-message-text {
   font-family: var(--ousia-chat-font-family);
+  font-size: var(--ousia-chat-font-size);
+  line-height: var(--ousia-chat-line-height);
+}
+
+.ousia-chat-composer-input {
+  font-size: var(--ousia-chat-font-size);
+  line-height: var(--ousia-chat-line-height);
 }
 
 .ousia-chat-markdown :where(*, p, ul, ol, li, blockquote, table, th, td) {

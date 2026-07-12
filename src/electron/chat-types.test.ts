@@ -15,6 +15,8 @@ import {
   OUSIA_LEGACY_DEFAULT_WORK_DIR,
   ousiaProjectNameFromPath,
   resolveOusiaChatContentWidthValue,
+  resolveOusiaChatFontSizeValue,
+  resolveOusiaChatLineSpacingValue,
   resolveOusiaFontFamilyValue,
   requireOusiaChatMessageId,
   type OusiaAppSettings,
@@ -58,6 +60,9 @@ describe("normalizeOusiaAppSettings", () => {
       autoRetryOnFailure: "yes",
       chatContentWidth: "narrow",
       chatFontFamily: "bad-font",
+      chatFontSize: "huge",
+      chatLineSpacing: "dense",
+      chatMessageSpacing: "sparse",
       continueQueuedMessagesAfterInterrupt: "yes",
       codexModelId: 7,
       codexReasoningEffort: 7,
@@ -81,6 +86,9 @@ describe("normalizeOusiaAppSettings", () => {
       autoRetryOnFailure: defaultOusiaAppSettings.autoRetryOnFailure,
       chatContentWidth: defaultOusiaAppSettings.chatContentWidth,
       chatFontFamily: defaultOusiaAppSettings.chatFontFamily,
+      chatFontSize: defaultOusiaAppSettings.chatFontSize,
+      chatLineSpacing: defaultOusiaAppSettings.chatLineSpacing,
+      chatMessageSpacing: defaultOusiaAppSettings.chatMessageSpacing,
       continueQueuedMessagesAfterInterrupt:
         defaultOusiaAppSettings.continueQueuedMessagesAfterInterrupt,
       codexModelId: "",
@@ -251,5 +259,18 @@ describe("presentation setting helpers", () => {
     expect(resolveOusiaChatContentWidthValue("standard")).toBe("48rem")
     expect(resolveOusiaChatContentWidthValue("wide")).toBe("56rem")
     expect(resolveOusiaChatContentWidthValue("extraWide")).toBe("64rem")
+  })
+
+  it("resolves chat font sizes", () => {
+    expect(resolveOusiaChatFontSizeValue("small")).toBe("13px")
+    expect(resolveOusiaChatFontSizeValue("standard")).toBe("14px")
+    expect(resolveOusiaChatFontSizeValue("large")).toBe("15px")
+    expect(resolveOusiaChatFontSizeValue("extraLarge")).toBe("16px")
+  })
+
+  it("resolves chat line spacing", () => {
+    expect(resolveOusiaChatLineSpacingValue("compact")).toBe("1.4")
+    expect(resolveOusiaChatLineSpacingValue("standard")).toBe("1.5")
+    expect(resolveOusiaChatLineSpacingValue("relaxed")).toBe("1.65")
   })
 })

@@ -16,8 +16,8 @@ function readSettingsSource(fileName: string) {
   )
 }
 
-describe("settings Maia primitive styling", () => {
-  it("keeps the bbVKEbY Maia geometry and surfaces", () => {
+describe("settings Vega primitive styling", () => {
+  it("keeps the bIkeymG Vega geometry and surfaces", () => {
     const button = readSettingsSource("SettingsButton.tsx")
     const card = readSettingsSource("SettingsCard.tsx")
     const dialog = readSettingsSource("SettingsDialog.tsx")
@@ -25,18 +25,19 @@ describe("settings Maia primitive styling", () => {
     const select = readSettingsSource("SettingsSelect.tsx")
     const switchSource = readSettingsSource("SettingsSwitch.tsx")
 
-    expect(button).toContain("rounded-4xl")
+    expect(button).toContain("rounded-md")
     expect(button).toContain("active:not-aria-[haspopup]:translate-y-px")
-    expect(input).toContain("h-9 w-full min-w-0 rounded-4xl")
-    expect(input).toContain("bg-input/30")
-    expect(card).toContain("rounded-2xl bg-card")
-    expect(card).toContain("ring-1 ring-foreground/10")
-    expect(dialog).toContain("gap-6 rounded-4xl bg-popover p-6")
-    expect(dialog).toContain("ring-1 ring-foreground/5")
-    expect(select).toContain("rounded-4xl border border-input bg-input/30")
-    expect(select).toContain("rounded-2xl bg-popover")
-    expect(select).toContain("shadow-2xl ring-1 ring-foreground/5")
-    expect(select).toContain("gap-2.5 rounded-xl py-2 pr-8 pl-3")
+    expect(input).toContain("h-9 w-full min-w-0 rounded-md")
+    expect(input).toContain("bg-transparent")
+    expect(card).toContain("rounded-xl bg-card")
+    expect(card).toContain("shadow-xs ring-1 ring-foreground/10")
+    expect(dialog).toContain("gap-6 rounded-xl bg-popover p-6")
+    expect(dialog).toContain("ring-1 ring-foreground/10")
+    expect(select).toContain("rounded-md border border-input bg-transparent")
+    expect(select).toContain("rounded-md bg-popover")
+    expect(select).toContain("shadow-md ring-1 ring-foreground/10")
+    expect(select).toContain("ui-popup-scrollbar")
+    expect(select).toContain("gap-2 rounded-sm py-1.5 pr-8 pl-2")
     expect(switchSource).toContain("data-checked:bg-primary")
     expect(switchSource).toContain("data-unchecked:bg-input")
   })
@@ -59,7 +60,7 @@ describe("settings Maia primitive styling", () => {
     }
   })
 
-  it("uses the Maia sidebar menu states and semantic main surface", () => {
+  it("uses the Vega sidebar menu states and semantic main surface", () => {
     expect(SETTINGS_SIDEBAR_SURFACE_CLASS).toBe(
       "bg-[var(--ousia-sidebar)] text-sidebar-foreground"
     )

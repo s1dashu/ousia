@@ -1,11 +1,11 @@
-import {
-  spawn,
-  type ChildProcessWithoutNullStreams,
-} from "node:child_process"
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process"
 import { existsSync } from "node:fs"
 import { createRequire } from "node:module"
 import { delimiter, dirname, join } from "node:path"
-import { createInterface, type Interface as ReadlineInterface } from "node:readline"
+import {
+  createInterface,
+  type Interface as ReadlineInterface,
+} from "node:readline"
 
 import { writeRuntimeLog } from "./runtime-logger.js"
 
@@ -122,7 +122,9 @@ export type CodexRuntimeLogger = (
 
 export interface CodexAppServerClientDependencies {
   logger?: CodexRuntimeLogger
-  resolveNativeBinary?: () => CodexNativeBinaryResolution
+  resolveNativeBinary?: () =>
+    | CodexNativeBinaryResolution
+    | Promise<CodexNativeBinaryResolution>
   spawnProcess?: CodexAppServerSpawner
 }
 
@@ -145,9 +147,7 @@ type PendingRequest = {
 }
 
 type NotificationListener = {
-  listener: (
-    notification: CodexAppServerNotification
-  ) => Promise<void> | void
+  listener: (notification: CodexAppServerNotification) => Promise<void> | void
   method?: string
 }
 
@@ -204,9 +204,7 @@ export function resolveCodexNativeBinary(
   const platform = normalizePlatform(options.platform ?? process.platform)
   const arch = options.arch ?? process.arch
   const target =
-    TARGET_BY_PLATFORM[
-      `${platform}:${arch}` as keyof typeof TARGET_BY_PLATFORM
-    ]
+    TARGET_BY_PLATFORM[`${platform}:${arch}` as keyof typeof TARGET_BY_PLATFORM]
 
   if (!target) {
     throw new Error(`Unsupported Codex platform: ${platform} (${arch})`)
@@ -359,7 +357,9 @@ export class CodexAppServerClient {
     CodexAppServerRequestId,
     PendingRequest
   >()
-  private readonly resolveNativeBinary: () => CodexNativeBinaryResolution
+  private readonly resolveNativeBinary: () =>
+    | CodexNativeBinaryResolution
+    | Promise<CodexNativeBinaryResolution>
   private readonly serverRequestListeners = new Set<ServerRequestListener>()
   private readonly spawnProcess: CodexAppServerSpawner
 
@@ -383,7 +383,8 @@ export class CodexAppServerClient {
     this.logger = options.dependencies?.logger ?? writeRuntimeLog
     this.resolveNativeBinary =
       options.dependencies?.resolveNativeBinary ?? resolveCodexNativeBinary
-    this.spawnProcess = options.dependencies?.spawnProcess ?? defaultSpawnProcess
+    this.spawnProcess =
+      options.dependencies?.spawnProcess ?? defaultSpawnProcess
   }
 
   get initializeResult() {
@@ -432,9 +433,7 @@ export class CodexAppServerClient {
   }
 
   onNotification(
-    listener: (
-      notification: CodexAppServerNotification
-    ) => Promise<void> | void
+    listener: (notification: CodexAppServerNotification) => Promise<void> | void
   ): () => void
   onNotification<TParams = unknown>(
     method: string,
@@ -445,9 +444,7 @@ export class CodexAppServerClient {
   onNotification<TParams = unknown>(
     methodOrListener:
       | string
-      | ((
-          notification: CodexAppServerNotification
-        ) => Promise<void> | void),
+      | ((notification: CodexAppServerNotification) => Promise<void> | void),
     maybeListener?: (
       notification: CodexAppServerNotification<TParams>
     ) => Promise<void> | void
@@ -470,9 +467,7 @@ export class CodexAppServerClient {
   ): () => void
   onServerRequest<TParams = unknown>(
     method: string,
-    listener: (
-      request: CodexAppServerRequest<TParams>
-    ) => Promise<void> | void
+    listener: (request: CodexAppServerRequest<TParams>) => Promise<void> | void
   ): () => void
   onServerRequest<TParams = unknown>(
     methodOrListener:
@@ -518,7 +513,9 @@ export class CodexAppServerClient {
       const abort = () => {
         cleanup()
         reject(
-          createAbortError(`Waiting for Codex notification ${method} was aborted`)
+          createAbortError(
+            `Waiting for Codex notification ${method} was aborted`
+          )
         )
       }
       const waiter: NotificationWaiter = {
@@ -563,9 +560,7 @@ export class CodexAppServerClient {
       }
 
       void this.start().catch((error: unknown) => {
-        waiter.reject(
-          error instanceof Error ? error : new Error(String(error))
-        )
+        waiter.reject(error instanceof Error ? error : new Error(String(error)))
       })
     })
   }
@@ -584,7 +579,7 @@ export class CodexAppServerClient {
 
   private async launchAndInitialize(): Promise<CodexInitializeResult> {
     try {
-      const resolution = this.resolveNativeBinary()
+      const resolution = await this.resolveNativeBinary()
       const environment = buildSpawnEnvironment(
         this.environmentOverrides,
         resolution.pathDirs
@@ -643,9 +638,7 @@ export class CodexAppServerClient {
     }
   }
 
-  private attachProcessListeners(
-    childProcess: ChildProcessWithoutNullStreams
-  ) {
+  private attachProcessListeners(childProcess: ChildProcessWithoutNullStreams) {
     this.stdoutReader = createInterface({
       crlfDelay: Infinity,
       input: childProcess.stdout,
@@ -688,7 +681,9 @@ export class CodexAppServerClient {
       this.fail(
         new Error(
           `Codex app-server exited${
-            signal ? ` from signal ${signal}` : ` with code ${code ?? "unknown"}`
+            signal
+              ? ` from signal ${signal}`
+              : ` with code ${code ?? "unknown"}`
           }`
         )
       )
@@ -958,12 +953,10 @@ export class CodexAppServerClient {
     method: string,
     error: unknown
   ) {
-    this.logger(
-      "codex.app-server",
-      "error",
-      `Codex ${kind} listener failed`,
-      { error: errorDetails(error), method }
-    )
+    this.logger("codex.app-server", "error", `Codex ${kind} listener failed`, {
+      error: errorDetails(error),
+      method,
+    })
   }
 
   private fail(error: Error) {

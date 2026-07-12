@@ -55,6 +55,9 @@ import {
   type OusiaAgentProvider,
   type OusiaAppearanceColorScale,
   type OusiaChatContentWidth,
+  type OusiaChatFontSize,
+  type OusiaChatLineSpacing,
+  type OusiaChatMessageSpacing,
   type OusiaCodexEnvironmentStatus,
   type OusiaFontFamily,
   type OusiaLanguage,
@@ -81,6 +84,7 @@ const appearanceColorScales: Array<{
 type SettingsPageProps = {
   activeSection: SettingsSectionId
   codexEnvironment: OusiaCodexEnvironmentStatus | undefined
+  codexEnvironmentLoading: boolean
   modelRegistry: OusiaModelRegistryResult | undefined
   onRefreshCodexEnvironment: () => Promise<
     OusiaCodexEnvironmentStatus | undefined
@@ -183,6 +187,7 @@ type ProviderRow = {
 function SettingsPageComponent({
   activeSection,
   codexEnvironment,
+  codexEnvironmentLoading,
   modelRegistry,
   onRefreshCodexEnvironment,
   onRefreshModelRegistry,
@@ -264,6 +269,27 @@ function SettingsPageComponent({
     { label: t.settings.chatWidthWide, value: "wide" },
     { label: t.settings.chatWidthExtraWide, value: "extraWide" },
   ]
+  const chatFontSizeOptions: Array<{
+    label: string
+    value: OusiaChatFontSize
+  }> = [
+    { label: t.settings.chatFontSizeSmall, value: "small" },
+    { label: t.settings.chatFontSizeStandard, value: "standard" },
+    { label: t.settings.chatFontSizeLarge, value: "large" },
+    { label: t.settings.chatFontSizeExtraLarge, value: "extraLarge" },
+  ]
+  const chatLineSpacingOptions: Array<{
+    label: string
+    value: OusiaChatLineSpacing
+  }> = [
+    { label: t.settings.spacingCompact, value: "compact" },
+    { label: t.settings.spacingStandard, value: "standard" },
+    { label: t.settings.spacingRelaxed, value: "relaxed" },
+  ]
+  const chatMessageSpacingOptions: Array<{
+    label: string
+    value: OusiaChatMessageSpacing
+  }> = chatLineSpacingOptions
 
   useEffect(() => {
     queueMicrotask(() => setDraft(settings))
@@ -713,32 +739,37 @@ function SettingsPageComponent({
     codexAccount?.type === "chatgpt"
       ? [codexAccount.email, codexAccount.planType].filter(Boolean).join(" · ")
       : ""
-  const codexStatus = !codexEnvironment
+  const codexStatus = codexEnvironmentLoading
     ? {
-        description: t.settings.codexUncheckedHelp,
-        label: t.settings.codexUnchecked,
+        description: t.settings.codexDownloadingHelp,
+        label: t.settings.codexDownloading,
       }
-    : !codexEnvironment.available
+    : !codexEnvironment
       ? {
-          description:
-            codexEnvironment.error || t.settings.codexUnavailableHelp,
-          label: t.settings.codexUnavailable,
+          description: t.settings.codexUncheckedHelp,
+          label: t.settings.codexUnchecked,
         }
-      : !codexAccount
+      : !codexEnvironment.available
         ? {
-            description: t.settings.codexSignedOutHelp,
-            label: t.settings.codexSignedOut,
+            description:
+              codexEnvironment.error || t.settings.codexUnavailableHelp,
+            label: t.settings.codexUnavailable,
           }
-        : codexAccount.type === "apiKey"
+        : !codexAccount
           ? {
-              description: t.settings.codexApiKeyHelp,
-              label: t.settings.codexApiKeyAccount,
+              description: t.settings.codexSignedOutHelp,
+              label: t.settings.codexSignedOut,
             }
-          : {
-              description:
-                codexChatGptDetails || t.settings.codexChatGptAccountHelp,
-              label: t.settings.codexChatGptAccount,
-            }
+          : codexAccount.type === "apiKey"
+            ? {
+                description: t.settings.codexApiKeyHelp,
+                label: t.settings.codexApiKeyAccount,
+              }
+            : {
+                description:
+                  codexChatGptDetails || t.settings.codexChatGptAccountHelp,
+                label: t.settings.codexChatGptAccount,
+              }
   const sectionTitle =
     activeSection === "general"
       ? t.settings.general
@@ -1087,6 +1118,99 @@ function SettingsPageComponent({
                     </Select>
                   }
                 />
+                <SettingsRow
+                  title={t.settings.chatFontSize}
+                  description={t.settings.chatFontSizeHelp}
+                  control={
+                    <Select
+                      items={chatFontSizeOptions}
+                      value={draft.chatFontSize}
+                      onValueChange={(value) =>
+                        applySettings({
+                          chatFontSize: value as OusiaChatFontSize,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={t.settings.chatFontSize}
+                        className={settingsSelectTriggerClass}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          {chatFontSizeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.chatLineSpacing}
+                  description={t.settings.chatLineSpacingHelp}
+                  control={
+                    <Select
+                      items={chatLineSpacingOptions}
+                      value={draft.chatLineSpacing}
+                      onValueChange={(value) =>
+                        applySettings({
+                          chatLineSpacing: value as OusiaChatLineSpacing,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={t.settings.chatLineSpacing}
+                        className={settingsSelectTriggerClass}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          {chatLineSpacingOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.chatMessageSpacing}
+                  description={t.settings.chatMessageSpacingHelp}
+                  control={
+                    <Select
+                      items={chatMessageSpacingOptions}
+                      value={draft.chatMessageSpacing}
+                      onValueChange={(value) =>
+                        applySettings({
+                          chatMessageSpacing: value as OusiaChatMessageSpacing,
+                        })
+                      }
+                    >
+                      <SelectTrigger
+                        aria-label={t.settings.chatMessageSpacing}
+                        className={settingsSelectTriggerClass}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent align="start" position="popper">
+                        <SelectGroup>
+                          {chatMessageSpacingOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  }
+                />
               </SettingsGroup>
             </>
           ) : null}
@@ -1342,7 +1466,7 @@ function SettingsPageComponent({
                 {providerError ? (
                   <div
                     role="alert"
-                    className="bg-red-50 px-4 py-3 text-sm leading-5 text-red-700 dark:bg-red-950/40 dark:text-red-300"
+                    className="bg-destructive/10 px-4 py-3 text-sm leading-5 text-destructive"
                   >
                     {providerError}
                   </div>
@@ -1377,7 +1501,7 @@ function SettingsPageComponent({
                     </DialogDescription>
                   </DialogHeader>
 
-                  <label className="mt-4 block">
+                  <label className="block">
                     <span className="text-sm font-medium">
                       {t.settings.provider}
                     </span>
@@ -1407,7 +1531,7 @@ function SettingsPageComponent({
                     </Select>
                   </label>
 
-                  <label className="mt-4 block">
+                  <label className="block">
                     <span className="text-sm font-medium">API Key</span>
                     <Input
                       aria-label="API Key"
@@ -1466,7 +1590,7 @@ function SettingsPageComponent({
                     {codexError ? (
                       <span
                         role="alert"
-                        className="mt-1 block text-red-600 dark:text-red-400"
+                        className="mt-1 block text-destructive"
                       >
                         {codexError}
                       </span>
@@ -1479,11 +1603,11 @@ function SettingsPageComponent({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={codexAction !== null}
+                      disabled={codexAction !== null || codexEnvironmentLoading}
                       onClick={() => void refreshCodexStatus()}
                     >
-                      {codexAction === "refresh"
-                        ? t.settings.checkingCodex
+                      {codexAction === "refresh" || codexEnvironmentLoading
+                        ? t.settings.downloadingCodex
                         : codexEnvironment
                           ? t.settings.retryCodexCheck
                           : t.settings.checkCodex}
@@ -1493,7 +1617,7 @@ function SettingsPageComponent({
                       type="button"
                       variant="outline"
                       size="sm"
-                      disabled={codexAction !== null}
+                      disabled={codexAction !== null || codexEnvironmentLoading}
                       onClick={() => void runCodexAuthAction("logout")}
                     >
                       {codexAction === "logout"
@@ -1504,7 +1628,7 @@ function SettingsPageComponent({
                     <Button
                       type="button"
                       size="sm"
-                      disabled={codexAction !== null}
+                      disabled={codexAction !== null || codexEnvironmentLoading}
                       onClick={() => void runCodexAuthAction("login")}
                     >
                       {codexAction === "login"

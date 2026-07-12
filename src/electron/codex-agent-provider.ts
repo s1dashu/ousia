@@ -42,6 +42,10 @@ import {
   createOusiaUserMessageEvent,
   requireOusiaChatMessageId,
 } from "./chat-types.js"
+import {
+  buildStructuredChatTitlePrompt,
+  normalizeGeneratedChatTitle,
+} from "./chat-title-policy.js"
 import { chatMessageIdFingerprint } from "./chat-message-replay-guard.js"
 import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
@@ -86,7 +90,9 @@ type CodexAgentProviderOptions = {
   client?: CodexAppServerClient
   clientVersion?: string
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
-  nativeBinaryResolver?: () => CodexNativeBinaryResolution
+  nativeBinaryResolver?: () =>
+    | CodexNativeBinaryResolution
+    | Promise<CodexNativeBinaryResolution>
   openExternal?: (url: string) => Promise<unknown>
 }
 
@@ -642,7 +648,10 @@ export function createCodexAgentProvider({
 }: CodexAgentProviderOptions) {
   const client =
     injectedClient ??
-    createCodexAppServerClient({ clientVersion: clientVersion ?? "0.0.0" })
+    createCodexAppServerClient({
+      clientVersion: clientVersion ?? "0.0.0",
+      dependencies: { resolveNativeBinary: nativeBinaryResolver },
+    })
   const contextByThreadId = new Map<string, OusiaChatContext>()
   const activeBySessionKey = new Map<string, ActiveTurn>()
   const activeByThreadId = new Map<string, ActiveTurn>()
@@ -1573,7 +1582,7 @@ export function createCodexAgentProvider({
   async function checkEnvironment(): Promise<OusiaCodexEnvironmentStatus> {
     let resolution: CodexNativeBinaryResolution
     try {
-      resolution = nativeBinaryResolver()
+      resolution = await nativeBinaryResolver()
       const initialize = await client.start()
       const [accountResponse, { defaultModelId, models }] = await Promise.all([
         client.request<{
@@ -1590,11 +1599,11 @@ export function createCodexAgentProvider({
         defaultModelId,
         models,
         requiresOpenaiAuth: accountResponse.requiresOpenaiAuth === true,
-        runtime: "bundled",
+        runtime: "downloaded",
         version: codexVersion(initialize.userAgent),
       }
     } catch (error) {
-      const text = errorText(error, "Bundled Codex runtime is unavailable.")
+      const text = errorText(error, "Downloaded Codex runtime is unavailable.")
       log("error", "Codex environment check failed", { error: text })
       return {
         account: null,
@@ -1602,7 +1611,7 @@ export function createCodexAgentProvider({
         error: text,
         models: [],
         requiresOpenaiAuth: true,
-        runtime: "bundled",
+        runtime: "downloaded",
       }
     }
   }
@@ -1663,6 +1672,11 @@ export function createCodexAgentProvider({
   async function generateTitle(
     payload: OusiaChatGenerateTitlePayload
   ): Promise<OusiaChatGenerateTitleResult> {
+    log("info", "Generating session title", {
+      language: payload.language,
+      modelId: payload.model.modelId,
+      sessionId: payload.sessionId,
+    })
     try {
       const effort = await defaultReasoningEffort(payload.model.modelId)
       const response = await client.request<{ thread?: unknown }>(
@@ -1700,7 +1714,10 @@ export function createCodexAgentProvider({
           input: [
             {
               type: "text",
-              text: `为下面的用户请求生成一个简短会话标题，不超过 20 个中文字符或 8 个英文单词。只返回 JSON。\n\n${payload.prompt}`,
+              text: buildStructuredChatTitlePrompt(
+                payload.language,
+                payload.prompt
+              ),
               text_elements: [],
             },
           ],
@@ -1721,17 +1738,32 @@ export function createCodexAgentProvider({
           throw new Error("Codex returned an empty title.")
         }
         const parsed: unknown = JSON.parse(text)
-        const title = isObject(parsed)
+        const rawTitle = isObject(parsed)
           ? stringValue(parsed.title)?.trim()
+          : undefined
+        const title = rawTitle
+          ? normalizeGeneratedChatTitle(rawTitle, payload.language)
           : undefined
         if (!title) {
           throw new Error("Codex returned an invalid title response.")
         }
-        return { ok: true, title: title.slice(0, 80) }
+        log("info", "Generated session title", {
+          language: payload.language,
+          modelId: payload.model.modelId,
+          sessionId: payload.sessionId,
+          title,
+        })
+        return { ok: true, title }
       } finally {
         controller.abort()
       }
     } catch (error) {
+      log("error", "Session title generation failed", {
+        error: errorText(error, "Codex title generation failed."),
+        language: payload.language,
+        modelId: payload.model.modelId,
+        sessionId: payload.sessionId,
+      })
       return {
         ok: false,
         error: errorText(error, "Codex title generation failed."),
