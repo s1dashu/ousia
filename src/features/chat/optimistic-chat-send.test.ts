@@ -2,11 +2,17 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   createOptimisticUserMessage,
+  sendBehaviorForActiveTurn,
   sendChatMessageOptimistically,
   shouldEndOptimisticRunAfterBridgeFailure,
 } from "./optimistic-chat-send"
 
 describe("optimistic chat send", () => {
+  it("always declares how main should handle an active turn", () => {
+    expect(sendBehaviorForActiveTurn("steer")).toBe("steer")
+    expect(sendBehaviorForActiveTurn("queue")).toBe("followUp")
+  })
+
   it("generates a collision-resistant client message id", () => {
     const { messageId } = createOptimisticUserMessage({
       attachments: [],

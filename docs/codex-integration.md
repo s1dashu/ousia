@@ -95,6 +95,18 @@ Authentication uses `account/read`, `account/login/start`, and
 `account/logout`. Codex owns credential storage and refresh. Ousia opens the
 returned ChatGPT login URL but never reads or writes Codex's auth file.
 
+## Messages During an Active Turn
+
+Every renderer submission declares how Electron main should handle it if a
+Codex turn is active: `steer` maps to App Server `turn/steer`, while the queue
+mode maps to Ousia's `followUp` queue. This declaration is sent even when the
+renderer currently believes the session is idle. Electron main is the source
+of truth for active-turn state, so delayed or missed renderer status events
+cannot turn a valid queue or steer action into a conflicting normal start.
+
+This behavior was backported from Miki commit
+`312513dac6cdf7b8407d8ed0da2362d7f2c99b84`.
+
 ## Protocol Upgrade Workflow
 
 The App Server command and wire protocol can evolve. Before changing the pinned

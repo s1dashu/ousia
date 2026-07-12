@@ -3,7 +3,14 @@ import {
   type OusiaChatAttachment,
   type OusiaChatContext,
   type OusiaChatEvent,
+  type OusiaSendDuringRunMode,
 } from "@/electron/chat-types"
+
+export function sendBehaviorForActiveTurn(
+  mode: OusiaSendDuringRunMode
+): "steer" | "followUp" {
+  return mode === "queue" ? "followUp" : "steer"
+}
 
 export function createOptimisticUserMessage({
   attachments,

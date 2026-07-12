@@ -109,6 +109,7 @@ import {
 } from "@/features/chat/chat-turn-wait"
 import {
   createOptimisticUserMessage,
+  sendBehaviorForActiveTurn,
   sendChatMessageOptimistically,
   shouldEndOptimisticRunAfterBridgeFailure,
 } from "@/features/chat/optimistic-chat-send"
@@ -1427,7 +1428,7 @@ function ChatAreaComponent({
     await sendMessage({
       text,
       attachments: outgoingAttachments,
-      sendBehavior: isAgentWorking ? "steer" : "normal",
+      sendBehavior: sendBehaviorForActiveTurn(sendDuringRunModeRef.current),
     })
   }
 
@@ -1458,7 +1459,7 @@ function ChatAreaComponent({
     await sendMessage({
       text: message.text,
       attachments: message.attachments,
-      sendBehavior: isAgentWorking ? "steer" : "normal",
+      sendBehavior: "steer",
     })
   }
 
@@ -1559,7 +1560,7 @@ function ChatAreaComponent({
       void sendMessage({
         text: nextMessage.text,
         attachments: nextMessage.attachments,
-        sendBehavior: "normal",
+        sendBehavior: "followUp",
       })
     }, 0)
     return () => window.clearTimeout(timer)
