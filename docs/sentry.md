@@ -69,6 +69,13 @@ exact enabled release marker and refuses to create a distributable when Sentry
 was compiled out. Development-only `npm run package` may remain explicitly
 disabled for credential-free local packaging.
 
+Electron Forge builds main, preload, and renderer targets concurrently. Each
+Sentry Vite plugin must scan only the source maps owned by that target: main
+excludes `preload.js`, preload selects only `preload.js`, and renderer selects
+only `.vite/renderer`. Scanning the shared build directory from every target can
+read a large map while another target is still writing it. The plugin error
+handler must throw so parse and upload failures stop the production build.
+
 ## Product configuration
 
 Ousia Desktop uses:

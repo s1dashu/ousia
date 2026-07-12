@@ -69,6 +69,8 @@ match the task.
   emit controlled diagnostic tokens. Product builds must use separate
   projects/DSNs and preserve the sanitizer, source-map, and native-minidump
   rules in `docs/sentry.md`.
+- Main, preload, and renderer Sentry plugins scan only their owned output maps;
+  any source-map parse or upload error fails the build.
 - Packaged macOS updates use the independent analytics/update service and
   Squirrel.Mac. Releases must include a signed/notarized ZIP in addition to the
   DMG; checks do not download until the user clicks Update.

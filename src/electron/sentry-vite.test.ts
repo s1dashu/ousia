@@ -33,6 +33,7 @@ function build(command: "build" | "serve") {
     envPrefix: "OUSIA",
     productId: "ousia",
     releaseName: "ousia-desktop",
+    sourcemapAssets: [".vite/build/**/*.js"],
   })
 }
 
@@ -90,7 +91,7 @@ describe("desktopSentryVite", () => {
     )
     expect(config).toMatchObject({
       buildVerificationMarker:
-        "desktop-sentry-build:disabled:ousia-desktop@0.1.30",
+        "desktop-sentry-build:disabled:ousia-desktop@0.1.31",
       dsn: "",
       enabled: false,
       environment: "development",

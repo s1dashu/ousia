@@ -18,6 +18,7 @@ export default defineConfig(({ command, mode }) => {
     envPrefix: "OUSIA",
     productId: "ousia",
     releaseName: "ousia-desktop",
+    sourcemapAssets: [".vite/build/preload.js"],
   })
   return {
     define: sentry.define,

@@ -9,6 +9,7 @@ export type DesktopSentryBuildOptions = {
   envPrefix: string
   productId: string
   releaseName: string
+  sourcemapAssets: string[]
 }
 
 type DesktopSentryBuildConfig = {
@@ -69,7 +70,11 @@ export function desktopSentryVite({
   envPrefix,
   productId,
   releaseName,
+  sourcemapAssets,
 }: DesktopSentryBuildOptions) {
+  if (sourcemapAssets.length === 0) {
+    throw new Error("Desktop Sentry source-map assets must not be empty")
+  }
   const dsn = publicDsn(environment, `${envPrefix}_SENTRY_DSN`)
   const config: DesktopSentryBuildConfig = {
     buildVerificationMarker: "",
@@ -127,7 +132,11 @@ export function desktopSentryVite({
       sentryVitePlugin({
         ...uploadValues,
         release: { inject: false, name: config.release },
+        errorHandler: (error) => {
+          throw error
+        },
         sourcemaps: {
+          assets: sourcemapAssets,
           rewriteSources: (source) => source.replace(/^.*?\/src\//, "src/"),
         },
         telemetry: false,
