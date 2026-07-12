@@ -17,7 +17,6 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-222222" alt="License"></a>
   <img src="https://img.shields.io/badge/built_with-Electron-47848f?logo=electron&logoColor=white" alt="Electron">
   <img src="https://img.shields.io/badge/stack-React%2019-087ea4?logo=react" alt="React">
-  <img src="https://img.shields.io/badge/styled-Tailwind%20CSS%204-06b6d4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS">
 </p>
 
 <p align="center">
@@ -28,7 +27,7 @@
 
 <p align="center">
   <a href="https://ousia-analytics.vercel.app/api/download?platform=darwin&amp;arch=arm64&amp;kind=manual">
-    <img src="./assets/download-button.svg" alt="Download for macOS" width="280" height="48"/>
+    <img src="./assets/download-button-centered.svg" alt="Download for macOS" width="280" height="48"/>
   </a>
 </p>
 
