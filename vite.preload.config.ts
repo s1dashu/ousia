@@ -1,6 +1,9 @@
 import { builtinModules } from "node:module"
 import { defineConfig } from "vite"
-import { desktopSentryVite } from "./src/electron/sentry-vite-build"
+import {
+  desktopSentryVite,
+  loadDesktopSentryEnvironment,
+} from "./src/electron/sentry-vite-build"
 
 const external = [
   "electron",
@@ -8,21 +11,22 @@ const external = [
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
 ]
 
-export default defineConfig(({ command }) => {
+export default defineConfig(({ command, mode }) => {
   const sentry = desktopSentryVite({
     command,
+    environment: loadDesktopSentryEnvironment({ mode }),
     envPrefix: "OUSIA",
     productId: "ousia",
     releaseName: "ousia-desktop",
   })
   return {
-  define: sentry.define,
-  plugins: sentry.plugins,
-  build: {
-    sourcemap: sentry.sourcemap,
-    rollupOptions: {
-      external,
+    define: sentry.define,
+    plugins: sentry.plugins,
+    build: {
+      sourcemap: sentry.sourcemap,
+      rollupOptions: {
+        external,
+      },
     },
-  },
   }
 })

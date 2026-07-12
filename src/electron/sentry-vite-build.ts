@@ -1,10 +1,11 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { sentryVitePlugin } from "@sentry/vite-plugin"
-import type { PluginOption } from "vite"
+import { loadEnv, type PluginOption } from "vite"
 
 export type DesktopSentryBuildOptions = {
   command: "build" | "serve"
+  environment?: Record<string, string | undefined>
   envPrefix: string
   productId: string
   releaseName: string
@@ -20,19 +21,29 @@ type DesktopSentryBuildConfig = {
   release: string
 }
 
-function booleanEnvironment(name: string) {
-  const value = process.env[name]?.trim()
+function booleanEnvironment(
+  environment: Record<string, string | undefined>,
+  name: string
+) {
+  const value = environment[name]?.trim()
   if (!value) return false
   if (value === "1") return true
   if (value === "0") return false
   throw new Error(`${name} must be exactly 0 or 1`)
 }
 
-function publicDsn(name: string) {
-  const value = process.env[name]?.trim() || ""
+function publicDsn(
+  environment: Record<string, string | undefined>,
+  name: string
+) {
+  const value = environment[name]?.trim() || ""
   if (!value) return ""
   const parsed = new URL(value)
-  if (parsed.protocol !== "https:" || !parsed.username || !parsed.pathname.slice(1)) {
+  if (
+    parsed.protocol !== "https:" ||
+    !parsed.username ||
+    !parsed.pathname.slice(1)
+  ) {
     throw new Error(`${name} must be a valid public HTTPS Sentry DSN`)
   }
   if (parsed.password || parsed.search || parsed.hash) {
@@ -53,21 +64,24 @@ function packageVersion() {
 
 export function desktopSentryVite({
   command,
+  environment = process.env,
   envPrefix,
   productId,
   releaseName,
 }: DesktopSentryBuildOptions) {
-  const dsn = publicDsn(`${envPrefix}_SENTRY_DSN`)
+  const dsn = publicDsn(environment, `${envPrefix}_SENTRY_DSN`)
   const config: DesktopSentryBuildConfig = {
     dsn,
     enabled: false,
     enabledInDevelopment: booleanEnvironment(
+      environment,
       `${envPrefix}_SENTRY_ENABLE_IN_DEVELOPMENT`
     ),
     environment:
-      process.env[`${envPrefix}_SENTRY_ENVIRONMENT`]?.trim() ||
+      environment[`${envPrefix}_SENTRY_ENVIRONMENT`]?.trim() ||
       (command === "build" ? "production" : "development"),
     nativeCrashReportsEnabled: booleanEnvironment(
+      environment,
       `${envPrefix}_SENTRY_ENABLE_NATIVE_CRASH_REPORTS`
     ),
     productId,
@@ -87,9 +101,9 @@ export function desktopSentryVite({
   }
 
   const uploadValues = {
-    authToken: process.env.SENTRY_AUTH_TOKEN?.trim() || "",
-    org: process.env.SENTRY_ORG?.trim() || "",
-    project: process.env[`${envPrefix}_SENTRY_PROJECT`]?.trim() || "",
+    authToken: environment.SENTRY_AUTH_TOKEN?.trim() || "",
+    org: environment.SENTRY_ORG?.trim() || "",
+    project: environment[`${envPrefix}_SENTRY_PROJECT`]?.trim() || "",
   }
   const presentUploadValues = Object.values(uploadValues).filter(Boolean).length
   if (presentUploadValues !== 0 && presentUploadValues !== 3) {
@@ -124,5 +138,18 @@ export function desktopSentryVite({
     },
     plugins,
     sourcemap: uploadEnabled ? ("hidden" as const) : false,
+  }
+}
+
+export function loadDesktopSentryEnvironment({
+  mode,
+  root = process.cwd(),
+}: {
+  mode: string
+  root?: string
+}) {
+  return {
+    ...loadEnv(mode, root, ""),
+    ...process.env,
   }
 }

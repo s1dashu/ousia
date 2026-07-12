@@ -1,6 +1,12 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 
-import { desktopSentryVite } from "./sentry-vite-build"
+import {
+  desktopSentryVite,
+  loadDesktopSentryEnvironment,
+} from "./sentry-vite-build"
 
 const ENVIRONMENT_NAMES = [
   "OUSIA_SENTRY_DSN",
@@ -12,8 +18,13 @@ const ENVIRONMENT_NAMES = [
   "SENTRY_ORG",
 ] as const
 
+const temporaryDirectories: string[] = []
+
 afterEach(() => {
   for (const name of ENVIRONMENT_NAMES) delete process.env[name]
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { force: true, recursive: true })
+  }
 })
 
 function build(command: "build" | "serve") {
@@ -26,8 +37,27 @@ function build(command: "build" | "serve") {
 }
 
 describe("desktopSentryVite", () => {
+  it("loads ignored local environment files before applying process overrides", () => {
+    const root = mkdtempSync(join(tmpdir(), "ousia-sentry-env-"))
+    temporaryDirectories.push(root)
+    writeFileSync(
+      join(root, ".env.local"),
+      "OUSIA_SENTRY_DSN=https://file@example.ingest.sentry.io/123\n"
+    )
+    process.env.OUSIA_SENTRY_DSN =
+      "https://process@example.ingest.sentry.io/456"
+
+    expect(
+      loadDesktopSentryEnvironment({ mode: "development", root })
+    ).toMatchObject({
+      OUSIA_SENTRY_DSN: "https://process@example.ingest.sentry.io/456",
+    })
+  })
+
   it("builds an explicit disabled configuration without credentials", () => {
-    const config = JSON.parse(String(build("serve").define.__DESKTOP_SENTRY_CONFIG__))
+    const config = JSON.parse(
+      String(build("serve").define.__DESKTOP_SENTRY_CONFIG__)
+    )
     expect(config).toMatchObject({
       dsn: "",
       enabled: false,

@@ -11,6 +11,10 @@ The official `@sentry/electron` SDK initializes in Electron main, preload, and
 renderer entrypoints. A build with no product DSN is explicitly disabled and
 records `sentry.init` with `dsn_not_configured` in the local runtime log.
 Development builds also require `<PRODUCT>_SENTRY_ENABLE_IN_DEVELOPMENT=1`.
+The Vite composition explicitly loads the normal mode-specific Vite environment
+files, including ignored `.env.local`, before applying process-environment
+overrides. Electron Forge does not load those files on its own; keep this
+behavior covered by `sentry-vite.test.ts`.
 
 Every outbound JavaScript error passes through one sanitizer. It removes user,
 request, breadcrumb, extra, message, log, fingerprint, server-name, device, and
