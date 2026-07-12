@@ -13,6 +13,7 @@ match the task.
 - shadcn/ui local reference workflow: [docs/shadcn-reference.md](docs/shadcn-reference.md)
 - Current development state and commands: [docs/development-state.md](docs/development-state.md)
 - Performance architecture, baseline, and roadmap: [docs/performance.md](docs/performance.md)
+- Sentry error monitoring and privacy boundary: [docs/sentry.md](docs/sentry.md)
 
 ## High-Signal Facts
 
@@ -57,6 +58,9 @@ match the task.
 - Runtime logs are persisted at `~/.ousia/logs/ousia-desktop.log`; check this
   file first for Electron main errors, renderer console messages, renderer
   uncaught errors, and chat/title-generation failures.
+- Remote Electron error monitoring is an optional Ousia-owned Sentry framework
+  capability. Product builds must use separate projects/DSNs and preserve the
+  sanitizer, source-map, and native-minidump rules in `docs/sentry.md`.
 - Packaged macOS updates use the independent analytics/update service and
   Squirrel.Mac. Releases must include a signed/notarized ZIP in addition to the
   DMG; checks do not download until the user clicks Update.

@@ -1,5 +1,6 @@
 import { builtinModules } from "node:module"
 import { defineConfig } from "vite"
+import { desktopSentryVite } from "./src/electron/sentry-vite-build"
 
 const external = [
   "bufferutil",
@@ -10,13 +11,23 @@ const external = [
   ...builtinModules.map((moduleName) => `node:${moduleName}`),
 ]
 
-export default defineConfig({
+export default defineConfig(({ command }) => {
+  const sentry = desktopSentryVite({
+    command,
+    envPrefix: "OUSIA",
+    productId: "ousia",
+    releaseName: "ousia-desktop",
+  })
+  return {
+  define: sentry.define,
+  plugins: sentry.plugins,
   resolve: {
     // pi-coding-agent ships a nested copy of the exact same pi-ai version.
     // Force one module graph so provider implementations are not emitted twice.
     dedupe: ["@earendil-works/pi-ai"],
   },
   build: {
+    sourcemap: sentry.sourcemap,
     rollupOptions: {
       external,
       output: {
@@ -24,4 +35,5 @@ export default defineConfig({
       },
     },
   },
+  }
 })

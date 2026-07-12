@@ -86,6 +86,10 @@ module.exports = {
         return false
       }
 
+      if (file.startsWith("/.vite/") && file.endsWith(".map")) {
+        return true
+      }
+
       const includedFiles = [
         "/package.json",
         "/node_modules",

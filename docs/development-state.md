@@ -45,6 +45,13 @@ Useful log tail:
 tail -200 ~/.ousia/logs/ousia-desktop.log
 ```
 
+Optional Sentry builds use `OUSIA_SENTRY_DSN`; development delivery additionally
+requires `OUSIA_SENTRY_ENABLE_IN_DEVELOPMENT=1`. An enabled production package
+requires `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `OUSIA_SENTRY_PROJECT` so the
+exact release source maps are uploaded. Native minidumps remain off unless
+`OUSIA_SENTRY_ENABLE_NATIVE_CRASH_REPORTS=1` is explicitly approved. See
+`docs/sentry.md`; never commit any real token or DSN to the repository.
+
 Packaged startup timing is logged under `window.startup`, split into app-state,
 BrowserWindow, renderer-load, and total durations.
 

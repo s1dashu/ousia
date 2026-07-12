@@ -293,3 +293,14 @@ the log rotates at 8 MiB on process startup.
 
 See [performance.md](performance.md) for the measured baseline and performance
 regression guardrails.
+
+## Remote Error Monitoring
+
+The reusable Sentry integration initializes the official Electron SDK in main,
+preload, and renderer only when the product build embeds a valid public DSN.
+Ousia and downstream products use separate Sentry projects and releases. All
+JavaScript events pass through the shared fail-closed privacy sanitizer;
+screenshots, logs, tracing, replay, local variables, request data, breadcrumbs,
+and native minidumps are disabled by default. Production builds with Sentry
+enabled must upload matching hidden source maps and exclude them from the app.
+See [sentry.md](sentry.md).

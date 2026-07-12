@@ -61,6 +61,13 @@ import type {
 } from "./chat-types.js"
 
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
+import { initializeDesktopSentryRenderer } from "./sentry-renderer.js"
+import { requireDesktopSentryConfig } from "./sentry-config.js"
+
+initializeDesktopSentryRenderer(
+  requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__),
+  "preload"
+)
 
 function errorPayload(error: unknown) {
   if (error instanceof Error) {

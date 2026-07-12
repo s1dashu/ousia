@@ -122,6 +122,13 @@ The runtime log at `~/.ousia/logs/ousia-desktop.log` records:
 This makes startup regressions and runtime failures traceable in packaged builds
 without enabling DevTools.
 
+The optional Sentry framework adds the official Electron SDK to all process
+entrypoints only in the built module graph; runtime delivery stays disabled when
+the product DSN is absent. Because main-process initialization must occur early
+enough to capture uncaught failures, any enabled-release startup regression must
+be measured rather than hidden behind lazy initialization. See `docs/sentry.md`
+for the privacy and source-map boundary.
+
 One packaged `0.1.17` cold-start sample recorded 26.5 ms for app state,
 128.2 ms for BrowserWindow creation, 143.5 ms for renderer loading, and
 299.4 ms total through `did-finish-load`. Shell hydration took 258 ms in

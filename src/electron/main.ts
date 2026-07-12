@@ -83,11 +83,16 @@ import { hydrateShellEnvironment } from "./shell-environment.js"
 import { createTelemetry } from "./telemetry.js"
 import { createUpdateManager } from "./update-manager.js"
 import { createWindowHost } from "./window-host.js"
+import { initializeDesktopSentry } from "./sentry-runtime.js"
+import { requireDesktopSentryConfig } from "./sentry-config.js"
 
 configureOusiaAppPaths()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (hasSingleInstanceLock) {
   installRuntimeLogger()
+  initializeDesktopSentry(
+    requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__)
+  )
 } else {
   app.quit()
 }
