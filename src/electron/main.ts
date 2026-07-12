@@ -19,13 +19,17 @@ import { configureOusiaAppPaths } from "./app-paths.js"
 import {
   createAppStateProject,
   createAppStateSession,
+  archiveAppStateSessions,
+  archiveAppStateProjectSessions,
   deleteAppStateProject,
   deleteAppStateSession,
+  deleteAppStateSessions,
   loadAppState,
   moveAppStateSession,
   renameAppStateSession,
   reorderAppStateProjects,
   reorderAppStateSessions,
+  restoreAppStateSessions,
   saveAppStateSelection,
   saveAppStateSettings,
   saveAppStateShellLayout,
@@ -36,9 +40,11 @@ import { createCodexRuntimeManager } from "./codex-runtime-manager.js"
 import { createChatEventBatcher } from "./chat-event-batcher.js"
 import type {
   OusiaAppStateCreateProjectPayload,
+  OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
   OusiaAppStateDeleteProjectPayload,
   OusiaAppStateDeleteSessionPayload,
+  OusiaAppStateSessionIdsPayload,
   OusiaAppStateMoveSessionPayload,
   OusiaAppStateRenameSessionPayload,
   OusiaAppStateReorderProjectsPayload,
@@ -85,14 +91,14 @@ import { createUpdateManager } from "./update-manager.js"
 import { createWindowHost } from "./window-host.js"
 import { initializeDesktopSentry } from "./sentry-runtime.js"
 import { requireDesktopSentryConfig } from "./sentry-config.js"
+import { createSystemProxyFetch } from "./system-network.js"
+import { permanentlyDeleteArchivedSessions } from "./permanent-session-deletion.js"
 
 configureOusiaAppPaths()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 if (hasSingleInstanceLock) {
   installRuntimeLogger()
-  initializeDesktopSentry(
-    requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__)
-  )
+  initializeDesktopSentry(requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__))
 } else {
   app.quit()
 }
@@ -101,6 +107,23 @@ const shellEnvironmentReady = hasSingleInstanceLock
   : Promise.resolve()
 
 const enabledTools = ["read", "write", "edit", "bash", "grep", "find", "ls"]
+
+function installSystemProxyFetch() {
+  globalThis.fetch = createSystemProxyFetch({
+    fetchWithSystemProxy: (input, init) => net.fetch(input, init),
+    onFailure: (failure) => {
+      writeRuntimeLog(
+        "network.fetch",
+        failure.error.name === "AbortError" ? "debug" : "error",
+        failure
+      )
+    },
+  })
+  writeRuntimeLog("network.fetch", "info", {
+    mode: "system",
+    networkStack: "electron-net",
+  })
+}
 
 let mainWindow: BrowserWindow | undefined
 const updateManagerRef: {
@@ -145,6 +168,9 @@ function createDeferredAgentProvider(
   const getProvider = () => (providerPromise ??= load())
 
   return {
+    async deleteChatSession(context) {
+      await (await getProvider()).deleteChatSession(context)
+    },
     async dispose() {
       if (providerPromise) {
         await (await providerPromise).dispose?.()
@@ -667,8 +693,13 @@ ipcMain.handle("ousia:app-state:load", async () => {
 
 ipcMain.handle(
   "ousia:app-state:settings:save",
-  (_event, payload: OusiaAppStateSettingsPayload) =>
-    saveAppStateSettings(payload)
+  async (_event, payload: OusiaAppStateSettingsPayload) => {
+    const result = await saveAppStateSettings(payload)
+    if (result.ok) {
+      windowHost.setLanguage(result.state.settings.language)
+    }
+    return result
+  }
 )
 
 ipcMain.handle(
@@ -693,6 +724,66 @@ ipcMain.handle(
   "ousia:app-state:session:delete",
   async (_event, payload: OusiaAppStateDeleteSessionPayload) =>
     releaseRemovedAgentSessions(await deleteAppStateSession(payload))
+)
+
+ipcMain.handle(
+  "ousia:app-state:sessions:archive",
+  async (_event, payload: OusiaAppStateSessionIdsPayload) => {
+    const result = await archiveAppStateSessions(payload)
+    if (result.ok) {
+      writeRuntimeLog("app-state.archive", "info", {
+        sessionIds: payload.sessionIds,
+      })
+    }
+    return result
+  }
+)
+
+ipcMain.handle(
+  "ousia:app-state:project:archive",
+  async (_event, payload: OusiaAppStateArchiveProjectPayload) => {
+    const result = await archiveAppStateProjectSessions(payload)
+    if (result.ok) {
+      writeRuntimeLog("app-state.archive", "info", {
+        message: "Archived all active sessions in project",
+        projectId: payload.projectId,
+      })
+    }
+    return result
+  }
+)
+
+ipcMain.handle(
+  "ousia:app-state:sessions:restore",
+  async (_event, payload: OusiaAppStateSessionIdsPayload) => {
+    const result = await restoreAppStateSessions(payload)
+    if (result.ok) {
+      writeRuntimeLog("app-state.archive", "info", {
+        message: "Restored archived sessions",
+        sessionIds: payload.sessionIds,
+      })
+    }
+    return result
+  }
+)
+
+ipcMain.handle(
+  "ousia:app-state:sessions:delete",
+  async (_event, payload: OusiaAppStateSessionIdsPayload) => {
+    const result = await permanentlyDeleteArchivedSessions(payload, {
+      deleteAppStateSessions,
+      loadAppState,
+      provider: agentConversations,
+      writeLog: writeRuntimeLog,
+    })
+    if (result.ok) {
+      writeRuntimeLog("app-state.archive", "info", {
+        message: "Permanently deleted archived sessions",
+        sessionIds: payload.sessionIds,
+      })
+    }
+    return result
+  }
 )
 
 ipcMain.handle(
@@ -745,6 +836,7 @@ app.whenReady().then(async () => {
   if (!hasSingleInstanceLock) {
     return
   }
+  installSystemProxyFetch()
   writeRuntimeLog("main", "info", `Runtime log path: ${OUSIA_DESKTOP_LOG_PATH}`)
   writeRuntimeLog("main", "info", {
     appData: app.getPath("appData"),

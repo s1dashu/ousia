@@ -21,10 +21,53 @@ vi.mock("./pi-package-dir.js", () => ({
 
 import {
   createAgentConversationModule,
+  deletePersistedPiSessionFile,
   disposePiSessionBundle,
 } from "./agent-conversations.js"
 
 describe("Pi agent conversation boundaries", () => {
+  it("permanently deletes only the exact Pi session file in its canonical directory", async () => {
+    const deleteFile = vi.fn(async () => undefined)
+    const deletedPath = await deletePersistedPiSessionFile(
+      "/tmp/project",
+      "session-target",
+      {
+        deleteFile,
+        getSessionDir: () => "/tmp/pi-sessions",
+        listSessions: vi.fn(async () => [
+          {
+            id: "session-other",
+            path: "/tmp/pi-sessions/other.jsonl",
+          },
+          {
+            id: "session-target",
+            path: "/tmp/pi-sessions/target.jsonl",
+          },
+        ]) as never,
+      }
+    )
+
+    expect(deletedPath).toBe("/tmp/pi-sessions/target.jsonl")
+    expect(deleteFile).toHaveBeenCalledExactlyOnceWith(
+      "/tmp/pi-sessions/target.jsonl"
+    )
+  })
+
+  it("refuses a Pi session path outside the SDK canonical directory", async () => {
+    await expect(
+      deletePersistedPiSessionFile("/tmp/project", "session-target", {
+        deleteFile: vi.fn(async () => undefined),
+        getSessionDir: () => "/tmp/pi-sessions",
+        listSessions: vi.fn(async () => [
+          {
+            id: "session-target",
+            path: "/tmp/untrusted/target.jsonl",
+          },
+        ]) as never,
+      })
+    ).rejects.toThrow("outside its canonical directory")
+  })
+
   it("unsubscribes and disposes a released Pi session even if unsubscribe fails", () => {
     const dispose = vi.fn()
     const unsubscribe = vi.fn(() => {

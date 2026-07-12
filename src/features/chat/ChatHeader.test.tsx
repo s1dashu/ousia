@@ -9,7 +9,6 @@ function renderHeader(agentProvider: SessionRecord["agentProvider"]) {
   return renderToStaticMarkup(
     <ChatHeader
       copyStatus="idle"
-      currentProject={undefined}
       currentSession={{
         agentProvider,
         id: `session-${agentProvider}`,
@@ -17,7 +16,6 @@ function renderHeader(agentProvider: SessionRecord["agentProvider"]) {
         title: "Session title",
       }}
       isCompacting={false}
-      isOpeningProjectDirectory={false}
       isSessionMenuOpen={false}
       isSidebarCollapsed={false}
       isScrolled={false}
@@ -25,7 +23,6 @@ function renderHeader(agentProvider: SessionRecord["agentProvider"]) {
       onCopySessionHistory={vi.fn()}
       onExportSession={vi.fn()}
       onManualCompact={vi.fn()}
-      onOpenProjectDirectory={vi.fn()}
       onSessionMenuOpenChange={vi.fn()}
       t={getMessages("en")}
     />

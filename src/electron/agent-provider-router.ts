@@ -34,6 +34,7 @@ import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 export type AgentConversationProvider = {
+  deleteChatSession(context: OusiaChatContext): Promise<void>
   dispose?(): Promise<void> | void
   releaseChatSession?(context: OusiaChatContext): Promise<void> | void
   branchChat(payload: OusiaChatBranchPayload): Promise<OusiaChatBranchResult>
@@ -101,7 +102,8 @@ function canonicalProjectPathForSession(
 
 function canonicalAgentContextFromState(
   state: OusiaAppState,
-  requestedContext: OusiaChatContext
+  requestedContext: OusiaChatContext,
+  options: { allowArchived?: boolean } = {}
 ): CanonicalAgentContext {
   const session = state.sessions.find(
     (candidate) => candidate.id === requestedContext.sessionId
@@ -112,6 +114,14 @@ function canonicalAgentContextFromState(
       sessionId: requestedContext.sessionId,
     })
     throw new Error(`Unknown session: ${requestedContext.sessionId}`)
+  }
+  if (session.archivedAt && !options.allowArchived) {
+    writeRuntimeLog("agent.context", "warn", {
+      archivedAt: session.archivedAt,
+      message: "Rejected agent context for archived session",
+      sessionId: session.id,
+    })
+    throw new Error(`Archived session cannot run: ${session.id}`)
   }
 
   const canonicalProjectPath = canonicalProjectPathForSession(state, session)
@@ -154,6 +164,18 @@ export async function resolveCanonicalAgentContext(
   requestedContext: OusiaChatContext
 ): Promise<CanonicalAgentContext> {
   return canonicalAgentContextFromState(await loadAppState(), requestedContext)
+}
+
+async function resolveCanonicalAgentDeletionContext(
+  requestedContext: OusiaChatContext
+): Promise<CanonicalAgentContext> {
+  return canonicalAgentContextFromState(
+    await loadAppState(),
+    requestedContext,
+    {
+      allowArchived: true,
+    }
+  )
 }
 
 function canonicalPayload<T extends OusiaChatContext>(
@@ -235,6 +257,11 @@ export function createAgentProviderRouter({
   }
 
   return {
+    async deleteChatSession(requestedContext) {
+      const { agentProvider, context } =
+        await resolveCanonicalAgentDeletionContext(requestedContext)
+      await providers[agentProvider].deleteChatSession(context)
+    },
     async branchChat(payload) {
       const state = await loadAppState()
       const route = canonicalAgentContextFromState(state, payload)

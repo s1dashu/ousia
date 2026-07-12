@@ -27,9 +27,11 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
+  Archive,
   ChevronDown,
   Folder,
   FolderOpen,
+  MoreHorizontal,
   Plus,
   Settings,
   Trash2,
@@ -38,6 +40,13 @@ import {
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages, type I18nMessages } from "@/app/i18n"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type {
   OusiaLanguage,
   OusiaSidebarSectionId,
@@ -101,14 +110,17 @@ type SidebarMoveSessionTarget = {
 }
 
 type SidebarProps = {
+  onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onCreateSession: () => void
   onDeleteProject: (projectId: string) => void
-  onDeleteSession: (sessionId: string) => void
+  onArchiveSession: (sessionId: string) => void
   onExpandedProjectIdsChange: (projectIds: string[]) => void
   onMoveSession: (target: SidebarMoveSessionTarget) => void | Promise<void>
   onOpenProject: () => void
   onOpenSettings: () => void
+  onShowDefaultSessionInFolder: () => void
+  onShowProjectInFolder: (projectId: string) => void
   onUpdateAction: () => void
   onRenameSession: (sessionId: string, title: string) => void
   onReorderProjects: (sourceProjectId: string, targetProjectId: string) => void
@@ -139,7 +151,7 @@ type SortableSessionRowProps = {
   groupId: string
   onCancelRename: () => void
   onCommitRename: (session: SessionRecord) => void
-  onDeleteSession: (sessionId: string) => void
+  onArchiveSession: (sessionId: string) => void
   onRenameTitleChange: (title: string) => void
   onSelectSession: (sessionId: string) => void
   onStartRename: (session: SessionRecord) => void
@@ -155,8 +167,10 @@ type SortableProjectSectionProps = {
   children: React.ReactNode
   hasWorkingSession: boolean
   isExpanded: boolean
+  onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
+  onShowProjectInFolder: (projectId: string) => void
   onToggleProject: (projectId: string) => void
   project: ProjectRecord
   t: I18nMessages
@@ -164,6 +178,7 @@ type SortableProjectSectionProps = {
 
 type SortableSidebarSectionProps = {
   actionLabel: string
+  beforeAction?: React.ReactNode
   children: React.ReactNode
   id: OusiaSidebarSectionId
   isCollapsed: boolean
@@ -319,7 +334,7 @@ function SortableSessionRow({
   groupId,
   onCancelRename,
   onCommitRename,
-  onDeleteSession,
+  onArchiveSession,
   onRenameTitleChange,
   onSelectSession,
   onStartRename,
@@ -448,14 +463,14 @@ function SortableSessionRow({
                 sidebarGhostActionClass,
                 "opacity-0 transition-opacity group-focus-within/session:opacity-100 group-hover/session:opacity-100",
               ].join(" ")}
-              aria-label={t.sidebar.deleteSession(session.title)}
+              aria-label={t.sidebar.archiveSession(session.title)}
               onClick={(event) => {
                 event.stopPropagation()
-                onDeleteSession(session.id)
+                onArchiveSession(session.id)
               }}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              <Trash2
+              <Archive
                 className="text-sidebar-accent-foreground"
                 size={sidebarMenuIconSize}
                 strokeWidth={sidebarIconStrokeWidth}
@@ -472,8 +487,10 @@ function SortableProjectSection({
   children,
   hasWorkingSession,
   isExpanded,
+  onArchiveProject,
   onCreateProjectSession,
   onDeleteProject,
+  onShowProjectInFolder,
   onToggleProject,
   project,
   t,
@@ -533,28 +550,47 @@ function SortableProjectSection({
         >
           <span className="block min-w-0 flex-1 truncate">{project.name}</span>
         </button>
-        {hasWorkingSession ? (
-          <div aria-hidden="true" />
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
-            aria-label={t.sidebar.removeProject(project.name)}
-            onClick={(event) => {
-              event.stopPropagation()
-              onDeleteProject(project.id)
-            }}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <Trash2
-              className="text-sidebar-accent-foreground"
-              size={sidebarMenuIconSize}
-              strokeWidth={sidebarIconStrokeWidth}
-            />
-          </Button>
-        )}
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
+              aria-label={t.sidebar.projectActions(project.name)}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal
+                className="text-sidebar-accent-foreground"
+                size={sidebarMenuIconSize}
+                strokeWidth={sidebarIconStrokeWidth}
+              />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-auto min-w-44">
+            <DropdownMenuItem onClick={() => onShowProjectInFolder(project.id)}>
+              <FolderOpen className="text-muted-foreground" />
+              {t.sidebar.showProjectInFolder}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={hasWorkingSession}
+              onClick={() => onArchiveProject(project.id)}
+            >
+              <Archive className="text-muted-foreground" />
+              {t.sidebar.archiveProject}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={hasWorkingSession}
+              onClick={() => onDeleteProject(project.id)}
+            >
+              <Trash2 />
+              {t.sidebar.deleteProject}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           type="button"
           variant="ghost"
@@ -581,6 +617,7 @@ function SortableProjectSection({
 
 function SortableSidebarSection({
   actionLabel,
+  beforeAction,
   children,
   id,
   isCollapsed,
@@ -622,7 +659,9 @@ function SortableSidebarSection({
       <div
         className={[
           "group/section-header grid cursor-pointer items-center gap-1 pt-2 pb-1.5",
-          sidebarSingleActionGridClass,
+          beforeAction
+            ? "grid-cols-[minmax(0,1fr)_24px_24px]"
+            : sidebarSingleActionGridClass,
           sidebarSectionHeaderXClass,
         ].join(" ")}
         aria-expanded={!isCollapsed}
@@ -647,6 +686,7 @@ function SortableSidebarSection({
           />
           <span className="sr-only">{toggleLabel}</span>
         </div>
+        {beforeAction}
         <Button
           type="button"
           variant="ghost"
@@ -676,14 +716,17 @@ function SortableSidebarSection({
 }
 
 function SidebarComponent({
+  onArchiveProject,
   onCreateProjectSession,
   onCreateSession,
   onDeleteProject,
-  onDeleteSession,
+  onArchiveSession,
   onExpandedProjectIdsChange,
   onMoveSession,
   onOpenProject,
   onOpenSettings,
+  onShowDefaultSessionInFolder,
+  onShowProjectInFolder,
   onUpdateAction,
   onRenameSession,
   onReorderProjects,
@@ -720,6 +763,9 @@ function SidebarComponent({
   const editingInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
+  const isDefaultSessionSelected = defaultSessions.some(
+    (session) => session.id === selectedSessionId
+  )
   const canCompactDefaultSessions =
     defaultSessions.length > sidebarDefaultSessionPreviewCount
   const visibleDefaultSessions =
@@ -945,7 +991,7 @@ function SidebarComponent({
         groupId={options.groupId}
         onCancelRename={cancelRenameSession}
         onCommitRename={commitRenameSession}
-        onDeleteSession={onDeleteSession}
+        onArchiveSession={onArchiveSession}
         onRenameTitleChange={setEditingSessionTitle}
         onSelectSession={onSelectSession}
         onStartRename={startRenameSession}
@@ -970,6 +1016,40 @@ function SidebarComponent({
         toggleLabel={t.sidebar.toggleSection(t.sidebar.sessions)}
         onAction={onCreateSession}
         onToggleCollapsed={toggleSidebarSection}
+        beforeAction={
+          isDefaultSessionSelected ? (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={`${sidebarActionButtonClass} ${sidebarGhostActionClass}`}
+                  aria-label={t.sidebar.defaultSessionActions}
+                  onClick={(event) => event.stopPropagation()}
+                  onPointerDown={(event) => event.stopPropagation()}
+                >
+                  <MoreHorizontal
+                    className="text-muted-foreground"
+                    size={sidebarMenuIconSize}
+                    strokeWidth={sidebarIconStrokeWidth}
+                  />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto min-w-44">
+                <DropdownMenuItem
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onShowDefaultSessionInFolder()
+                  }}
+                >
+                  <FolderOpen className="text-muted-foreground" />
+                  {t.sidebar.openDefaultSessionFolder}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : undefined
+        }
       >
         <SortableContext
           items={visibleDefaultSessions.map((session) => session.id)}
@@ -1050,8 +1130,10 @@ function SidebarComponent({
                     (session) => sessionRunStatusById[session.id] === "working"
                   )}
                   isExpanded={isExpanded}
+                  onArchiveProject={onArchiveProject}
                   onCreateProjectSession={onCreateProjectSession}
                   onDeleteProject={onDeleteProject}
+                  onShowProjectInFolder={onShowProjectInFolder}
                   onToggleProject={toggleProject}
                   project={project}
                   t={t}
@@ -1167,7 +1249,9 @@ function SidebarComponent({
         </DndContext>
       </div>
 
-      <div className={`${sidebarFooterPaddingXClass} flex items-center gap-1 py-2`}>
+      <div
+        className={`${sidebarFooterPaddingXClass} flex items-center gap-1 py-2`}
+      >
         <Button
           type="button"
           variant="ghost"
@@ -1178,31 +1262,39 @@ function SidebarComponent({
           <span>{t.sidebar.settings}</span>
         </Button>
         {updateStatus.phase === "available" ||
+        updateStatus.phase === "checking" ||
         updateStatus.phase === "downloading" ||
         updateStatus.phase === "downloaded" ||
         updateStatus.phase === "error" ? (
           <Button
             type="button"
-            size="sm"
-            variant={updateStatus.phase === "downloaded" ? "default" : "outline"}
-            className="h-8 shrink-0 rounded-md px-2.5 text-xs"
-            disabled={updateStatus.phase === "downloading"}
+            size="xs"
+            variant={updateStatus.phase === "error" ? "destructive" : "default"}
+            className="shrink-0 border-transparent"
+            disabled={
+              updateStatus.phase === "checking" ||
+              updateStatus.phase === "downloading"
+            }
             title={
               updateStatus.phase === "error"
                 ? `${t.sidebar.updateFailed} ${updateStatus.message}`
                 : updateStatus.phase === "downloaded"
                   ? t.sidebar.restartToUpdate
-                  : updateStatus.phase === "downloading"
-                    ? t.sidebar.updating
-                    : `${t.sidebar.update} ${updateStatus.version}`
+                  : updateStatus.phase === "checking"
+                    ? t.sidebar.checkingForUpdate
+                    : updateStatus.phase === "downloading"
+                      ? t.sidebar.updating
+                      : `${t.sidebar.update} ${updateStatus.version}`
             }
             onClick={onUpdateAction}
           >
             {updateStatus.phase === "downloaded"
               ? t.sidebar.restartToUpdate
-              : updateStatus.phase === "downloading"
-                ? t.sidebar.updating
-                : t.sidebar.update}
+              : updateStatus.phase === "checking"
+                ? t.sidebar.checkingForUpdate
+                : updateStatus.phase === "downloading"
+                  ? t.sidebar.updating
+                  : t.sidebar.update}
           </Button>
         ) : null}
       </div>

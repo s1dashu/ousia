@@ -2,11 +2,10 @@ import {
   ArrowShrink,
   Check,
   Copy,
-  Folder,
   MoreHorizontal,
 } from "@/components/icons/huge-icons"
 
-import type { ProjectRecord, SessionRecord } from "@/app/app-state"
+import type { SessionRecord } from "@/app/app-state"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -14,12 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import type { getMessages } from "@/app/i18n"
 import { cn } from "@/lib/utils"
 
@@ -27,10 +20,8 @@ export type ChatCopyStatus = "idle" | "copied" | "failed"
 
 type ChatHeaderProps = {
   copyStatus: ChatCopyStatus
-  currentProject: ProjectRecord | undefined
   currentSession: SessionRecord | undefined
   isCompacting: boolean
-  isOpeningProjectDirectory: boolean
   isSessionMenuOpen: boolean
   isSidebarCollapsed: boolean
   isScrolled: boolean
@@ -38,17 +29,14 @@ type ChatHeaderProps = {
   onCopySessionHistory: () => void
   onExportSession: (format: "markdown" | "jsonl") => void
   onManualCompact: () => void
-  onOpenProjectDirectory: () => void
   onSessionMenuOpenChange: (open: boolean) => void
   t: ReturnType<typeof getMessages>
 }
 
 export function ChatHeader({
   copyStatus,
-  currentProject,
   currentSession,
   isCompacting,
-  isOpeningProjectDirectory,
   isSessionMenuOpen,
   isSidebarCollapsed,
   isScrolled,
@@ -56,7 +44,6 @@ export function ChatHeader({
   onCopySessionHistory,
   onExportSession,
   onManualCompact,
-  onOpenProjectDirectory,
   onSessionMenuOpenChange,
   t,
 }: ChatHeaderProps) {
@@ -94,26 +81,6 @@ export function ChatHeader({
         </div>
       </div>
       <div className="window-drag relative z-10 flex shrink-0 items-center justify-end gap-1">
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="window-no-drag pointer-events-auto shrink-0"
-                aria-label={t.chat.openProjectDirectory}
-                disabled={!currentProject || isOpeningProjectDirectory}
-                onClick={onOpenProjectDirectory}
-              >
-                <Folder size={18} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent align="end" side="bottom">
-              {t.chat.openProjectDirectory}
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
         <DropdownMenu
           modal={false}
           open={isSessionMenuOpen}

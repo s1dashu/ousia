@@ -20,6 +20,7 @@ import {
 import { getMessages, languageOptions } from "@/app/i18n"
 import { getConfiguredModelPresets, providerLabel } from "@/app/model-presets"
 import type { AppSettings } from "@/app/app-state"
+import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { useTheme, type Theme } from "@/components/theme-provider"
 import {
   Tooltip,
@@ -66,6 +67,7 @@ import {
 } from "@/electron/chat-types"
 import { cn } from "@/lib/utils"
 import type { SettingsSectionId } from "@/features/settings/settings-navigation"
+import { ArchivedSessionsSettings } from "@/features/settings/ArchivedSessionsSettings"
 
 const appearanceColorScales: Array<{
   label: string
@@ -86,11 +88,15 @@ type SettingsPageProps = {
   codexEnvironment: OusiaCodexEnvironmentStatus | undefined
   codexEnvironmentLoading: boolean
   modelRegistry: OusiaModelRegistryResult | undefined
+  onDeleteArchivedSessions: (sessionIds: string[]) => Promise<void>
   onRefreshCodexEnvironment: () => Promise<
     OusiaCodexEnvironmentStatus | undefined
   >
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSettingsChange: (settings: AppSettings) => void
+  onRestoreArchivedSessions: (sessionIds: string[]) => Promise<void>
+  projects: ProjectRecord[]
+  sessions: SessionRecord[]
   settings: AppSettings
 }
 
@@ -189,9 +195,13 @@ function SettingsPageComponent({
   codexEnvironment,
   codexEnvironmentLoading,
   modelRegistry,
+  onDeleteArchivedSessions,
   onRefreshCodexEnvironment,
   onRefreshModelRegistry,
   onSettingsChange,
+  onRestoreArchivedSessions,
+  projects,
+  sessions,
   settings,
 }: SettingsPageProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -777,9 +787,11 @@ function SettingsPageComponent({
         ? t.settings.appearance
         : activeSection === "conversation"
           ? t.settings.conversationSettings
-          : draft.defaultAgentProvider === "pi"
-            ? t.settings.piSettings
-            : t.settings.codexSettings
+          : activeSection === "archivedSessions"
+            ? t.settings.archivedSessions
+            : draft.defaultAgentProvider === "pi"
+              ? t.settings.piSettings
+              : t.settings.codexSettings
 
   return (
     <section
@@ -1577,6 +1589,16 @@ function SettingsPageComponent({
                 </DialogContent>
               </Dialog>
             </>
+          ) : null}
+
+          {activeSection === "archivedSessions" ? (
+            <ArchivedSessionsSettings
+              language={draft.language}
+              projects={projects}
+              sessions={sessions}
+              onDelete={onDeleteArchivedSessions}
+              onRestore={onRestoreArchivedSessions}
+            />
           ) : null}
 
           {activeSection === "provider" &&

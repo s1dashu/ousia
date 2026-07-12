@@ -130,6 +130,29 @@ their first capability boundary. Adjacent text deltas are coalesced for one
 short frame window in main before renderer IPC, while non-delta events retain
 strict ordering.
 
+### System Network Policy
+
+After Electron reaches `ready`, main replaces the Node global `fetch` boundary
+with an adapter over Electron `net.fetch`. Ousia-owned fetch traffic and Pi
+providers that use the platform fetch implementation therefore share
+Chromium's default session and follow the operating system proxy, PAC, bypass,
+proxy-authentication, DNS, and connection-pool behavior. With no configured
+proxy, the operating system policy still resolves to a direct connection.
+
+The adapter logs failed requests under `network.fetch` with only the target
+host, method, duration, and sanitized transport fields such as `code`,
+`syscall`, and `address`; paths, query strings, request bodies, and headers are
+not logged. Install this adapter before loading any lazy Pi provider module so
+provider SDKs capture the canonical fetch implementation.
+
+This policy does not pretend to intercept arbitrary native sockets. The Codex
+app-server is a separately spawned native process and follows the proxy
+environment supported by Codex itself. Pi providers with a custom Node
+transport, notably AWS Bedrock's request handler, follow their own documented
+proxy environment rather than Electron `net.fetch`. Keep these boundaries
+explicit instead of claiming PAC coverage that Electron cannot supply to a
+foreign process or transport.
+
 Ordinary main-process app-state reads never import Pi. The renderer's initial
 state IPC first awaits shell-environment hydration and then explicitly
 synchronizes Pi's retry preference, preventing environment/package-path races.
@@ -141,6 +164,8 @@ synchronizes Pi's retry preference, preventing environment/package-path races.
 - `loadAppState()`
 - App-state transactions such as `saveAppSettings(payload)`,
   `saveShellLayout(payload)`, `saveAppSelection(payload)`, `createSession(payload)`,
+  `archiveSessions(payload)`, `archiveProjectSessions(payload)`,
+  `restoreSessions(payload)`, `deleteSessions(payload)`,
   `deleteSession(payload)`, `renameSession(payload)`, `moveSession(payload)`,
   `reorderSessions(payload)`, `touchSession(payload)`, `createProject(payload)`,
   `deleteProject(payload)`, and `reorderProjects(payload)`
@@ -196,6 +221,29 @@ releases provider-local state; Pi listeners are unsubscribed and the session is
 disposed, while Codex thread/context maps are cleared. Disk history remains the
 source for lossless recreation after an idle eviction.
 
+Sidebar removal archives a session by setting its canonical `archivedAt`
+timestamp; archived sessions remain in app state and provider history but are
+excluded from normal navigation and rejected by the provider router. Settings
+owns the final archived-session destination, where restore and permanent-delete
+operations accept archived sessions only. Permanent deletion processes each
+selected session in provider-first order: Pi releases idle runtime state and
+unlinks the exact SDK-listed JSONL file inside its canonical session directory;
+Codex calls the pinned app-server `thread/delete` RPC. Only after provider data
+deletion succeeds is that session removed from canonical Ousia app state. Batch
+failures retain the failed and unattempted records while already completed
+items remain deleted, and every phase is recorded in the runtime log.
+The project-row archive action uses one project-scoped transaction to archive
+all of that project's active sessions together; the project registration and
+directory remain available in the sidebar. Project menu folder reveal reuses
+the validated main-process directory-opening boundary.
+
+Retryable Pi transport failures remain provisional until Pi decides whether the
+turn will retry. While retrying, the renderer shows one transient reconnecting
+status item keyed to the session. A successful retry removes that item without
+leaving it in chat history; only the final exhausted failure becomes an error
+item. Retry start/end decisions and sanitized failure text are recorded in the
+runtime log.
+
 On macOS, apps launched from Finder or a DMG do not inherit terminal shell
 environment variables. During main-process startup, Ousia reads the user's shell
 environment and imports missing variables into the Electron process so Pi can
@@ -230,6 +278,16 @@ the user clicks it. Startup checks and the native **Check for Updates…** app-m
 action use Electron `net.fetch` so they share Chromium's system-proxy behavior.
 Manual checks always show a native result dialog; update state and errors are
 emitted over IPC and recorded in the runtime log.
+
+An update retry publishes a checking state before network I/O. The main process
+keeps one download attempt in flight, so repeated clicks join that operation
+instead of starting parallel release checks; the sidebar disables the action
+until checking or downloading finishes.
+
+The Electron application menu, editable-text context menu, and manual-update
+dialogs use the persisted Ousia interface language rather than the operating
+system locale. The menu is built only after app state loads and is rebuilt
+immediately after a successful language-settings transaction.
 
 After download, installation waits for either an explicit Restart click or a
 strict idle condition: the window is not focused, no input was observed for five

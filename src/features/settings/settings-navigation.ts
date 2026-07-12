@@ -1,4 +1,5 @@
 import {
+  Archive,
   BubbleChat,
   Code,
   PaintBrush,
@@ -11,6 +12,7 @@ export type SettingsSectionId =
   | "appearance"
   | "conversation"
   | "provider"
+  | "archivedSessions"
 
 type SettingsNavigationCopy = {
   appearance: string
@@ -18,6 +20,7 @@ type SettingsNavigationCopy = {
   conversationSettings: string
   general: string
   piSettings: string
+  archivedSessions: string
 }
 
 export function getSettingsNavigationItems(
@@ -36,6 +39,11 @@ export function getSettingsNavigationItems(
       icon: Code,
       id: "provider" as const,
       label: agentProvider === "pi" ? copy.piSettings : copy.codexSettings,
+    },
+    {
+      icon: Archive,
+      id: "archivedSessions" as const,
+      label: copy.archivedSessions,
     },
   ]
 }

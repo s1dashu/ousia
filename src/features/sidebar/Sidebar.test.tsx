@@ -47,16 +47,19 @@ function renderSidebar({
 
   return renderToStaticMarkup(
     <Sidebar
+      onArchiveProject={vi.fn()}
       expandedProjectIds={[]}
       language="en"
       onCreateProjectSession={vi.fn()}
       onCreateSession={vi.fn()}
       onDeleteProject={vi.fn()}
-      onDeleteSession={vi.fn()}
+      onArchiveSession={vi.fn()}
       onExpandedProjectIdsChange={vi.fn()}
       onMoveSession={vi.fn()}
       onOpenProject={vi.fn()}
       onOpenSettings={vi.fn()}
+      onShowDefaultSessionInFolder={vi.fn()}
+      onShowProjectInFolder={vi.fn()}
       onUpdateAction={vi.fn()}
       onRenameSession={vi.fn()}
       onReorderProjects={vi.fn()}
@@ -78,6 +81,16 @@ function renderSidebar({
 }
 
 describe("Sidebar running actions", () => {
+  it("shows the default-session folder menu only for a selected non-project chat", () => {
+    expect(renderSidebar()).toContain('aria-label="Non-project chat actions"')
+    expect(
+      renderSidebar({
+        projects: [project],
+        sessions: [{ ...session, projectId: project.id }],
+      })
+    ).not.toContain('aria-label="Non-project chat actions"')
+  })
+
   it("shows the update action only when a release is available", () => {
     expect(renderSidebar()).not.toContain(">Update</button>")
     expect(
@@ -90,6 +103,25 @@ describe("Sidebar running actions", () => {
         },
       })
     ).toContain(">Update</button>")
+  })
+
+  it("renders a compact filled update action and disables it while checking", () => {
+    const available = renderSidebar({
+      updateStatus: {
+        phase: "available",
+        currentVersion: "0.1.21",
+        version: "0.1.22",
+        releaseName: "Ousia 0.1.22",
+      },
+    })
+    const checking = renderSidebar({
+      updateStatus: { phase: "checking", currentVersion: "0.1.21" },
+    })
+
+    expect(available).toContain('data-variant="default"')
+    expect(available).toContain('data-size="xs"')
+    expect(checking).toContain("disabled")
+    expect(checking).toContain(">Checking</button>")
   })
 
   it("insets session surfaces while keeping actions close to the right edge", () => {
@@ -109,11 +141,9 @@ describe("Sidebar running actions", () => {
       sessionRunStatusById: { [session.id]: "working" },
     })
 
-    expect(html).toContain(
-      `aria-label="${session.title} ${t.sidebar.running}"`
-    )
+    expect(html).toContain(`aria-label="${session.title} ${t.sidebar.running}"`)
     expect(html).not.toContain(
-      `aria-label="${t.sidebar.deleteSession(session.title)}"`
+      `aria-label="${t.sidebar.archiveSession(session.title)}"`
     )
   })
 
@@ -124,7 +154,7 @@ describe("Sidebar running actions", () => {
       `aria-label="${session.title} ${t.sidebar.running}"`
     )
     expect(html).toContain(
-      `aria-label="${t.sidebar.deleteSession(session.title)}"`
+      `aria-label="${t.sidebar.archiveSession(session.title)}"`
     )
   })
 
@@ -142,8 +172,8 @@ describe("Sidebar running actions", () => {
     expect(html).not.toContain(
       `aria-label="${project.name} ${t.sidebar.running}"`
     )
-    expect(html).not.toContain(
-      `aria-label="${t.sidebar.removeProject(project.name)}"`
+    expect(html).toContain(
+      `aria-label="${t.sidebar.projectActions(project.name)}"`
     )
   })
 })

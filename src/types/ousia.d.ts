@@ -1,9 +1,11 @@
 import type {
   OusiaAppState,
   OusiaAppStateCreateProjectPayload,
+  OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
   OusiaAppStateDeleteProjectPayload,
   OusiaAppStateDeleteSessionPayload,
+  OusiaAppStateSessionIdsPayload,
   OusiaAppStateMoveSessionPayload,
   OusiaAppStateRenameSessionPayload,
   OusiaAppStateReorderProjectsPayload,
@@ -77,6 +79,18 @@ declare global {
       deleteSession(
         payload: OusiaAppStateDeleteSessionPayload
       ): Promise<OusiaAppStateTransactionResult>
+      archiveSessions(
+        payload: OusiaAppStateSessionIdsPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      archiveProjectSessions(
+        payload: OusiaAppStateArchiveProjectPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      restoreSessions(
+        payload: OusiaAppStateSessionIdsPayload
+      ): Promise<OusiaAppStateTransactionResult>
+      deleteSessions(
+        payload: OusiaAppStateSessionIdsPayload
+      ): Promise<OusiaAppStateTransactionResult>
       renameSession(
         payload: OusiaAppStateRenameSessionPayload
       ): Promise<OusiaAppStateTransactionResult>
@@ -110,14 +124,18 @@ declare global {
       getChatToolPayload(
         payload: OusiaChatToolPayloadPayload
       ): Promise<OusiaChatToolPayloadResult>
-      branchChat(payload: OusiaChatBranchPayload): Promise<OusiaChatBranchResult>
+      branchChat(
+        payload: OusiaChatBranchPayload
+      ): Promise<OusiaChatBranchResult>
       moveChatSession(
         payload: OusiaChatMovePayload
       ): Promise<OusiaChatMoveResult>
       getChatContextUsage(
         payload: OusiaChatContext
       ): Promise<OusiaChatContextUsageResult>
-      exportChat(payload: OusiaChatExportPayload): Promise<OusiaChatExportResult>
+      exportChat(
+        payload: OusiaChatExportPayload
+      ): Promise<OusiaChatExportResult>
       interruptChat(
         payload: OusiaChatInterruptPayload
       ): Promise<OusiaChatInterruptResult>

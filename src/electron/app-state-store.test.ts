@@ -80,9 +80,12 @@ vi.mock("./runtime-logger.js", () => ({
 }))
 
 import {
+  archiveAppStateSessions,
+  archiveAppStateProjectSessions,
   bindAppStateSessionAgentThread,
   createAppStateProject,
   createAppStateSession,
+  deleteAppStateSessions,
   deleteAppStateProject,
   deleteAppStateSession,
   loadAppState,
@@ -90,6 +93,7 @@ import {
   renameAppStateSession,
   reorderAppStateSessions,
   reorderAppStateProjects,
+  restoreAppStateSessions,
   resetAppStateStoreForTests,
   saveAppStateSelection,
   saveAppStateSettings,
@@ -943,6 +947,99 @@ describe("app state store", () => {
     expect(result.state.sessions).toHaveLength(1)
     expect(result.state.sessions[0].id).not.toBe(deletedSessionId)
     expect(result.state.selectedSessionId).toBe(result.state.sessions[0].id)
+  })
+
+  it("archives, restores, and permanently deletes sessions without losing active selection", async () => {
+    const initial = await loadAppState()
+    const archivedId = initial.selectedSessionId
+
+    const archived = await archiveAppStateSessions({ sessionIds: [archivedId] })
+    expect(archived.ok).toBe(true)
+    if (!archived.ok) return
+    expect(
+      archived.state.sessions.find((session) => session.id === archivedId)
+        ?.archivedAt
+    ).toBeTruthy()
+    expect(archived.state.selectedSessionId).not.toBe(archivedId)
+
+    const restored = await restoreAppStateSessions({ sessionIds: [archivedId] })
+    expect(restored.ok).toBe(true)
+    if (!restored.ok) return
+    expect(
+      restored.state.sessions.find((session) => session.id === archivedId)
+        ?.archivedAt
+    ).toBeUndefined()
+
+    const rejectsActiveDelete = await deleteAppStateSessions({
+      sessionIds: [archivedId],
+    })
+    expect(rejectsActiveDelete).toMatchObject({ ok: false })
+
+    await archiveAppStateSessions({ sessionIds: [archivedId] })
+    const deleted = await deleteAppStateSessions({ sessionIds: [archivedId] })
+    expect(deleted.ok).toBe(true)
+    if (!deleted.ok) return
+    expect(deleted.removedSessions?.map((session) => session.id)).toEqual([
+      archivedId,
+    ])
+    expect(
+      deleted.state.sessions.some((session) => session.id === archivedId)
+    ).toBe(false)
+  })
+
+  it("keeps the selected row position stable when archiving consecutive sessions", async () => {
+    const bottom = (await loadAppState()).sessions[0]
+    const middleResult = await createAppStateSession({ title: "Middle" })
+    const topResult = await createAppStateSession({ title: "Top" })
+    expect(middleResult.ok).toBe(true)
+    expect(topResult.ok).toBe(true)
+    if (!middleResult.ok || !topResult.ok || !middleResult.session) return
+
+    await saveAppStateSelection({ selectedSessionId: middleResult.session.id })
+    const archivedMiddle = await archiveAppStateSessions({
+      sessionIds: [middleResult.session.id],
+    })
+    expect(archivedMiddle.ok).toBe(true)
+    if (!archivedMiddle.ok) return
+    expect(archivedMiddle.state.selectedSessionId).toBe(bottom.id)
+
+    const archivedBottom = await archiveAppStateSessions({
+      sessionIds: [bottom.id],
+    })
+    expect(archivedBottom.ok).toBe(true)
+    if (!archivedBottom.ok) return
+    expect(archivedBottom.state.selectedSessionId).toBe(topResult.session?.id)
+  })
+
+  it("archives every active session in a project atomically", async () => {
+    const projectResult = await createAppStateProject({
+      path: "/tmp/archive-project",
+      sessionTitle: "First project session",
+    })
+    expect(projectResult.ok).toBe(true)
+    if (!projectResult.ok || !projectResult.project) return
+    const secondSession = await createAppStateSession({
+      projectId: projectResult.project.id,
+      title: "Second project session",
+    })
+    expect(secondSession.ok).toBe(true)
+
+    const archived = await archiveAppStateProjectSessions({
+      projectId: projectResult.project.id,
+    })
+    expect(archived.ok).toBe(true)
+    if (!archived.ok) return
+    const projectSessions = archived.state.sessions.filter(
+      (session) => session.projectId === projectResult.project?.id
+    )
+    expect(projectSessions).toHaveLength(2)
+    expect(projectSessions.every((session) => session.archivedAt)).toBe(true)
+    expect(archived.state.projects).toContainEqual(projectResult.project)
+    expect(
+      archived.state.sessions.find(
+        (session) => session.id === archived.state.selectedSessionId
+      )?.archivedAt
+    ).toBeUndefined()
   })
 
   it("renames, moves, reorders, and touches sessions inside their groups", async () => {

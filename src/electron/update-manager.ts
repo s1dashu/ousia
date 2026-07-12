@@ -58,6 +58,7 @@ export function createUpdateManager({
   let lastActivityAt = now()
   let checkTimer: ReturnType<typeof setInterval> | undefined
   let idleTimer: ReturnType<typeof setInterval> | undefined
+  let downloadInFlight: Promise<OusiaUpdateActionResult> | undefined
   const runningSessions = new Set<string>()
 
   function publish(next: OusiaUpdateStatus) {
@@ -167,8 +168,11 @@ export function createUpdateManager({
     }
   }
 
-  async function download(): Promise<OusiaUpdateActionResult> {
+  async function performDownload(): Promise<OusiaUpdateActionResult> {
     if (status.phase !== "available" && status.phase !== "error") {
+      writeRuntimeLog("update.download.rejected", "error", {
+        phase: status.phase,
+      })
       return {
         ok: false,
         error: `Cannot download from update phase: ${status.phase}`,
@@ -176,6 +180,7 @@ export function createUpdateManager({
     }
     let targetVersion = status.version
     if (!targetVersion) {
+      publish({ phase: "checking", currentVersion })
       await check("download-retry")
       const refreshedStatus: OusiaUpdateStatus = status
       if (refreshedStatus.phase !== "available") {
@@ -202,6 +207,22 @@ export function createUpdateManager({
       })
       return { ok: false, error: message }
     }
+  }
+
+  function download(): Promise<OusiaUpdateActionResult> {
+    if (downloadInFlight) {
+      writeRuntimeLog("update.download.joined", "info", {
+        phase: status.phase,
+      })
+      return downloadInFlight
+    }
+    const operation = performDownload()
+    downloadInFlight = operation
+    const clearOperation = () => {
+      if (downloadInFlight === operation) downloadInFlight = undefined
+    }
+    void operation.then(clearOperation, clearOperation)
+    return operation
   }
 
   function install(): OusiaUpdateActionResult {

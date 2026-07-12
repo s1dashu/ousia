@@ -1,7 +1,7 @@
 import "./pi-package-dir.js"
 import { mkdirSync, writeFileSync, type Stats } from "node:fs"
 import { stat, unlink } from "node:fs/promises"
-import { join } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import { homedir } from "node:os"
 import { ensurePiPackageDir } from "./pi-package-dir.js"
 import type { ImageContent } from "@earendil-works/pi-ai"
@@ -113,6 +113,8 @@ type AgentStreamState = {
   showThinking: boolean
   currentAssistantMessageId: string
   lastErrorText: string
+  pendingErrorText: string
+  reconnectStatusVisible: boolean
   toolDisplayIdsByContentIndex: Map<number, string>
   toolDisplayIdsByProviderId: Map<string, string>
   toolFilePreviewsById: Map<string, OusiaChatToolFilePreview>
@@ -179,6 +181,8 @@ function createStreamState(
     showThinking: shouldShowThinkingForLevel(thinkingLevel),
     currentAssistantMessageId: "",
     lastErrorText: "",
+    pendingErrorText: "",
+    reconnectStatusVisible: false,
     toolDisplayIdsByContentIndex: new Map(),
     toolDisplayIdsByProviderId: new Map(),
     toolFilePreviewsById: new Map(),
@@ -361,6 +365,35 @@ function getDefaultPiSessionDir(cwd: string) {
 async function findPiSessionByExactId(cwd: string, sessionId: string) {
   const sessions = await SessionManager.list(cwd)
   return sessions.find((session) => session.id === sessionId)
+}
+
+type DeletePersistedPiSessionFileDependencies = {
+  deleteFile?: (path: string) => Promise<void>
+  getSessionDir?: (cwd: string) => string
+  listSessions?: typeof SessionManager.list
+}
+
+export async function deletePersistedPiSessionFile(
+  cwd: string,
+  sessionId: string,
+  dependencies: DeletePersistedPiSessionFileDependencies = {}
+) {
+  const sessions = await (dependencies.listSessions ?? SessionManager.list)(cwd)
+  const persistedSession = sessions.find((session) => session.id === sessionId)
+  if (!persistedSession) {
+    return null
+  }
+  const sessionDir = resolve(
+    (dependencies.getSessionDir ?? getDefaultPiSessionDir)(cwd)
+  )
+  const sessionFile = resolve(persistedSession.path)
+  if (dirname(sessionFile) !== sessionDir) {
+    throw new Error(
+      `Refused to delete Pi session outside its canonical directory: ${sessionFile}`
+    )
+  }
+  await (dependencies.deleteFile ?? unlink)(sessionFile)
+  return sessionFile
 }
 
 async function openOrCreatePiSessionManager(cwd: string, sessionId: string) {
@@ -1324,6 +1357,23 @@ export function createAgentConversationModule({
         context
       )
     }
+    const reconnectStatusId = `pi-reconnect-${context.sessionId}`
+    const clearReconnectStatus = () => {
+      if (!state.reconnectStatusVisible) {
+        return
+      }
+      state.reconnectStatusVisible = false
+      emitChatEvent(
+        {
+          type: "status_message",
+          id: reconnectStatusId,
+          status: "removed",
+          text: "",
+          timestamp,
+        },
+        context
+      )
+    }
 
     if (event.type === "agent_start") {
       state.lastErrorText = ""
@@ -1359,6 +1409,17 @@ export function createAgentConversationModule({
           { type: "run_status", status: "running", timestamp },
           context
         )
+        return
+      }
+      clearReconnectStatus()
+      if (state.pendingErrorText) {
+        emitError(state.pendingErrorText)
+        state.pendingErrorText = ""
+        emitChatEvent(
+          { type: "run_status", status: "error", timestamp },
+          context
+        )
+        scheduleSessionCacheEnforcement()
         return
       }
       emitChatEvent(
@@ -1401,16 +1462,12 @@ export function createAgentConversationModule({
         finishActiveTools(state, context, emitChatEvent, timestamp)
       }
       if (message.role === "assistant" && message.stopReason === "error") {
-        emitError(
-          errorTextFromUnknown(
-            message.errorMessage ?? message.error ?? message,
-            "智能体响应失败。"
-          )
+        state.pendingErrorText = errorTextFromUnknown(
+          message.errorMessage ?? message.error ?? message,
+          "智能体响应失败。"
         )
-        emitChatEvent(
-          { type: "run_status", status: "error", timestamp },
-          context
-        )
+      } else if (message.role === "assistant") {
+        state.pendingErrorText = ""
       }
       return
     }
@@ -1511,7 +1568,45 @@ export function createAgentConversationModule({
       state.activeToolIds.delete(displayId)
       return
     }
+    if (event.type === "auto_retry_start") {
+      const retry = event as typeof event & {
+        attempt?: number
+        maxAttempts?: number
+        delayMs?: number
+        errorMessage?: string
+      }
+      state.reconnectStatusVisible = true
+      writeRuntimeLog("pi.retry", "warn", {
+        attempt: retry.attempt,
+        delayMs: retry.delayMs,
+        error: retry.errorMessage ?? state.pendingErrorText,
+        maxAttempts: retry.maxAttempts,
+        phase: "start",
+        sessionId: context.sessionId,
+      })
+      emitChatEvent(
+        {
+          type: "status_message",
+          id: reconnectStatusId,
+          status: "streaming",
+          text: "重新连接中…",
+          timestamp,
+        },
+        context
+      )
+      return
+    }
     if (event.type === "auto_retry_end") {
+      clearReconnectStatus()
+      writeRuntimeLog("pi.retry", event.success ? "info" : "error", {
+        attempt: event.attempt,
+        error: event.success
+          ? undefined
+          : errorTextFromUnknown(event.finalError),
+        phase: "end",
+        sessionId: context.sessionId,
+        success: event.success,
+      })
       if (!event.success) {
         const text = errorTextFromUnknown(event.finalError, "智能体响应失败。")
         if (text !== state.lastErrorText) {
@@ -1523,6 +1618,7 @@ export function createAgentConversationModule({
         )
       } else {
         state.lastErrorText = ""
+        state.pendingErrorText = ""
       }
       return
     }
@@ -1929,6 +2025,38 @@ export function createAgentConversationModule({
 
   async function releaseChatSession(context: OusiaChatContext) {
     await clearSessionRuntimeState(sessionKey(context))
+  }
+
+  async function deleteChatSession(context: OusiaChatContext) {
+    const key = sessionKey(context)
+    const sessionPromise = sessionPromises.get(key)
+    if (sessionPromise) {
+      const bundle = await sessionPromise
+      if (isSessionBusy(bundle)) {
+        throw new Error(`Cannot delete active Pi session: ${context.sessionId}`)
+      }
+    }
+
+    await clearSessionRuntimeState(key)
+    const cwd = expandHomePath(context.projectPath)
+    const sessionFile = await deletePersistedPiSessionFile(
+      cwd,
+      context.sessionId
+    )
+    if (!sessionFile) {
+      writeRuntimeLog("pi.session", "info", {
+        message:
+          "No persisted Pi session file existed during permanent deletion.",
+        sessionId: context.sessionId,
+      })
+      return
+    }
+
+    writeRuntimeLog("pi.session", "info", {
+      message: "Permanently deleted Pi session file.",
+      sessionFile,
+      sessionId: context.sessionId,
+    })
   }
 
   async function dispose() {
@@ -2357,6 +2485,7 @@ export function createAgentConversationModule({
     branchChat,
     clearChatQueue,
     compactChat,
+    deleteChatSession,
     exportChat,
     getContextUsage,
     getChatHistory,

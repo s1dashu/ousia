@@ -19,11 +19,13 @@ import {
   OUSIA_LEGACY_DEFAULT_WORK_DIR,
   OUSIA_APP_STATE_SCHEMA_VERSION,
   type OusiaAppStateCreateProjectPayload,
+  type OusiaAppStateArchiveProjectPayload,
   type OusiaAppStateCreateSessionPayload,
   type OusiaAppStateBindSessionAgentThreadPayload,
   type OusiaAppStateBindSessionAgentThreadResult,
   type OusiaAppStateDeleteProjectPayload,
   type OusiaAppStateDeleteSessionPayload,
+  type OusiaAppStateSessionIdsPayload,
   type OusiaAppStateMoveSessionPayload,
   type OusiaAppStateRenameSessionPayload,
   type OusiaAppStateReorderProjectsPayload,
@@ -262,6 +264,9 @@ function normalizeSessions(sessions: unknown): OusiaSessionRecord[] {
         session.agentThreadId.trim()
           ? { agentThreadId: session.agentThreadId }
           : {}),
+        ...(typeof session.archivedAt === "string" && session.archivedAt.trim()
+          ? { archivedAt: session.archivedAt }
+          : {}),
       },
     ]
   })
@@ -332,12 +337,22 @@ function normalizeAppState(value: unknown): OusiaAppState {
     normalizeSessions(value.sessions)
   )
   const projects = normalizedReferences.projects
-  const sessions = normalizedReferences.sessions
+  let sessions = normalizedReferences.sessions
+  let activeSessions = sessions.filter((session) => !session.archivedAt)
+  if (!activeSessions.length) {
+    const replacement = createSessionForProject(
+      undefined,
+      undefined,
+      settings.defaultAgentProvider
+    )
+    sessions = [replacement, ...sessions]
+    activeSessions = [replacement]
+  }
   const selectedSessionId =
     typeof value.selectedSessionId === "string" &&
-    sessions.some((session) => session.id === value.selectedSessionId)
+    activeSessions.some((session) => session.id === value.selectedSessionId)
       ? value.selectedSessionId
-      : sessions[0].id
+      : (activeSessions[0]?.id ?? "")
 
   return {
     schemaVersion: OUSIA_APP_STATE_SCHEMA_VERSION,
@@ -840,6 +855,168 @@ export async function deleteAppStateSession(
   })
 }
 
+function requireDistinctSessionIds(state: OusiaAppState, sessionIds: string[]) {
+  const ids = [...new Set(sessionIds)]
+  if (!ids.length) {
+    throw new Error("At least one session id is required.")
+  }
+  const sessionsById = new Map(
+    state.sessions.map((session) => [session.id, session])
+  )
+  return ids.map((sessionId) => {
+    const session = sessionsById.get(sessionId)
+    if (!session) {
+      throw new Error(`Unknown session: ${sessionId}`)
+    }
+    return session
+  })
+}
+
+export async function archiveAppStateSessions(
+  payload: OusiaAppStateSessionIdsPayload
+): Promise<OusiaAppStateTransactionResult> {
+  return updateAppState((state) =>
+    archiveSessionsInState(state, payload.sessionIds)
+  )
+}
+
+function archiveSessionsInState(state: OusiaAppState, sessionIds: string[]) {
+  const sessionsToArchive = requireDistinctSessionIds(state, sessionIds)
+  const alreadyArchived = sessionsToArchive.find(
+    (session) => session.archivedAt
+  )
+  if (alreadyArchived) {
+    throw new Error(`Session is already archived: ${alreadyArchived.id}`)
+  }
+
+  const archivedIds = new Set(sessionsToArchive.map((session) => session.id))
+  const selectedSession = state.sessions.find(
+    (session) => session.id === state.selectedSessionId
+  )
+  const selectedGroupSessions = selectedSession
+    ? state.sessions.filter(
+        (session) =>
+          !session.archivedAt && session.projectId === selectedSession.projectId
+      )
+    : []
+  const selectedGroupIndex = selectedGroupSessions.findIndex(
+    (session) => session.id === state.selectedSessionId
+  )
+  const nextGroupSession = selectedGroupSessions
+    .slice(selectedGroupIndex + 1)
+    .find((session) => !archivedIds.has(session.id))
+  const previousGroupSession = selectedGroupSessions
+    .slice(0, selectedGroupIndex)
+    .reverse()
+    .find((session) => !archivedIds.has(session.id))
+  const archivedAt = new Date().toISOString()
+  let sessions = state.sessions.map((session) =>
+    archivedIds.has(session.id) ? { ...session, archivedAt } : session
+  )
+  let activeSessions = sessions.filter((session) => !session.archivedAt)
+  if (!activeSessions.length) {
+    const replacement = createSessionForProject(
+      undefined,
+      undefined,
+      state.settings.defaultAgentProvider
+    )
+    sessions = [replacement, ...sessions]
+    activeSessions = [replacement]
+  }
+
+  return {
+    state: {
+      ...state,
+      selectedSessionId: archivedIds.has(state.selectedSessionId)
+        ? (nextGroupSession?.id ??
+          previousGroupSession?.id ??
+          activeSessions[0].id)
+        : state.selectedSessionId,
+      sessions,
+    },
+  }
+}
+
+export async function archiveAppStateProjectSessions(
+  payload: OusiaAppStateArchiveProjectPayload
+): Promise<OusiaAppStateTransactionResult> {
+  return updateAppState((state) => {
+    if (!state.projects.some((project) => project.id === payload.projectId)) {
+      throw new Error(`Unknown project: ${payload.projectId}`)
+    }
+    const sessionIds = state.sessions
+      .filter(
+        (session) =>
+          session.projectId === payload.projectId && !session.archivedAt
+      )
+      .map((session) => session.id)
+    if (!sessionIds.length) {
+      return { state }
+    }
+    return archiveSessionsInState(state, sessionIds)
+  })
+}
+
+export async function restoreAppStateSessions(
+  payload: OusiaAppStateSessionIdsPayload
+): Promise<OusiaAppStateTransactionResult> {
+  return updateAppState((state) => {
+    const sessionsToRestore = requireDistinctSessionIds(
+      state,
+      payload.sessionIds
+    )
+    const activeSession = sessionsToRestore.find(
+      (session) => !session.archivedAt
+    )
+    if (activeSession) {
+      throw new Error(`Session is not archived: ${activeSession.id}`)
+    }
+    const restoredIds = new Set(sessionsToRestore.map((session) => session.id))
+    return {
+      state: {
+        ...state,
+        sessions: state.sessions.map((session) => {
+          if (!restoredIds.has(session.id)) {
+            return session
+          }
+          const { archivedAt: _archivedAt, ...restoredSession } = session
+          void _archivedAt
+          return restoredSession
+        }),
+      },
+    }
+  })
+}
+
+export async function deleteAppStateSessions(
+  payload: OusiaAppStateSessionIdsPayload
+): Promise<OusiaAppStateTransactionResult> {
+  return updateAppState((state) => {
+    const sessionsToDelete = requireDistinctSessionIds(
+      state,
+      payload.sessionIds
+    )
+    const activeSession = sessionsToDelete.find(
+      (session) => !session.archivedAt
+    )
+    if (activeSession) {
+      throw new Error(
+        `Only archived sessions can be permanently deleted: ${activeSession.id}`
+      )
+    }
+    const deletedIds = new Set(sessionsToDelete.map((session) => session.id))
+    return {
+      metadata: { removedSessions: sessionsToDelete },
+      state: {
+        ...state,
+        sessions: state.sessions.filter(
+          (session) => !deletedIds.has(session.id)
+        ),
+      },
+    }
+  })
+}
+
 export async function renameAppStateSession(
   payload: OusiaAppStateRenameSessionPayload
 ): Promise<OusiaAppStateTransactionResult> {
@@ -1001,7 +1178,7 @@ export async function createAppStateProject(
     )
     const project = existingProject ?? createOusiaProject(path, payload.name)
     const existingSession = state.sessions.find(
-      (session) => session.projectId === project.id
+      (session) => session.projectId === project.id && !session.archivedAt
     )
     const shouldSelectSession = payload.selectOrCreateSession ?? true
     const createdSession =

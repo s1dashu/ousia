@@ -103,8 +103,21 @@ desktop agent client:
   only after five minutes without input, no focused Ousia window, and no running
   agent turn. Otherwise the button becomes Restart after the update finishes
   downloading.
+- Native application/context menus and manual-update dialogs follow the Ousia
+  interface language. A successful language-settings save rebuilds the native
+  menu immediately; restarting the app is not required.
 
 ## Persistence
+
+- Sidebar session removal is non-destructive archival. Archived sessions are
+  hidden from the sidebar and managed in the final Settings destination, which
+  supports multi-select restore and confirmed permanent deletion. Permanent
+  deletion also removes the provider-owned local session data: Pi JSONL through
+  an exact SDK session lookup and Codex threads through app-server
+  `thread/delete`; a provider failure keeps the corresponding Ousia record.
+- Project rows expose a `...` menu for folder reveal, project archival, and
+  deletion. Project archival atomically archives every active session in the
+  project while keeping the project itself registered.
 
 - App state persists settings, sessions, projects, shell layout, window state,
   expanded project ids, and current selection.

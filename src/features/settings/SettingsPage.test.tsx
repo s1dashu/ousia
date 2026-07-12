@@ -70,6 +70,42 @@ function renderConversationSettings() {
 }
 
 describe("SettingsPage provider isolation", () => {
+  it("renders archived chats in the final management section", () => {
+    const t = getMessages("en")
+    const html = renderToStaticMarkup(
+      <SettingsPage
+        activeSection="archivedSessions"
+        codexEnvironment={undefined}
+        codexEnvironmentLoading={false}
+        modelRegistry={undefined}
+        onDeleteArchivedSessions={async () => undefined}
+        onRefreshCodexEnvironment={async () => undefined}
+        onRefreshModelRegistry={async () => undefined}
+        onRestoreArchivedSessions={async () => undefined}
+        onSettingsChange={vi.fn()}
+        projects={[{ id: "project-1", name: "Ousia", path: "/tmp/ousia" }]}
+        sessions={[
+          {
+            agentProvider: "pi",
+            archivedAt: "2026-07-12T10:00:00.000Z",
+            id: "session-1",
+            projectId: "project-1",
+            time: "2026-07-12T09:00:00.000Z",
+            title: "Archived work",
+          },
+        ]}
+        settings={{ ...defaultSettings, language: "en" }}
+      />
+    )
+
+    expect(html).toContain(t.settings.archivedSessions)
+    expect(html).toContain("Archived work")
+    expect(html).toContain("Ousia")
+    expect(html).toContain(t.settings.restoreSelected)
+    expect(html).toContain(t.settings.deleteSelectedPermanently)
+    expect(html).toContain('data-slot="table"')
+  })
+
   it("shows the first-use Codex download state", () => {
     const t = getMessages("en")
     const html = renderProviderSettings("codex", true)

@@ -94,6 +94,7 @@ export type OusiaFontFamily = (typeof OUSIA_FONT_FAMILIES)[number]
 export type OusiaSessionRecord = {
   agentProvider: OusiaAgentProvider
   agentThreadId?: string
+  archivedAt?: string
   id: string
   projectId?: string
   title: string
@@ -278,6 +279,7 @@ export type OusiaWindowThemePayload = {
 export type OusiaUpdateStatus =
   | { phase: "disabled"; reason: string }
   | { phase: "idle"; currentVersion: string }
+  | { phase: "checking"; currentVersion: string }
   | {
       phase: "available"
       currentVersion: string
@@ -359,6 +361,14 @@ export type OusiaAppStateBindSessionAgentThreadResult =
 
 export type OusiaAppStateDeleteSessionPayload = {
   sessionId: string
+}
+
+export type OusiaAppStateSessionIdsPayload = {
+  sessionIds: string[]
+}
+
+export type OusiaAppStateArchiveProjectPayload = {
+  projectId: string
 }
 
 export type OusiaAppStateRenameSessionPayload = {
@@ -956,7 +966,7 @@ export type OusiaChatEvent = {
       type: "status_message"
       id: string
       role?: "system" | "error"
-      status: "streaming" | "finished"
+      status: "streaming" | "finished" | "removed"
       text: string
       timestamp: string
     }

@@ -328,6 +328,12 @@ export function applyChatEvent(
     return next ?? items
   } else if (event.type === "status_message") {
     const index = findItemIndexFromEnd(items, event.id)
+    if (event.status === "removed") {
+      if (index < 0) {
+        return items
+      }
+      return [...items.slice(0, index), ...items.slice(index + 1)]
+    }
     const role = event.role ?? "system"
     if (index >= 0) {
       const item = items[index]

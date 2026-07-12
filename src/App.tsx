@@ -330,7 +330,7 @@ function ResizeHandle({
     <div className="group/resize relative z-10 -mx-1.5 flex w-3 shrink-0 flex-col">
       <div
         aria-hidden="true"
-        className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 rounded-full transition-[width,background-color,opacity] ${
+        className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 transition-[width,background-color,opacity] ${
           isActive
             ? "w-1 bg-ring/80"
             : "w-px bg-transparent group-focus-within/resize:bg-ring/70 group-hover/resize:w-1 group-hover/resize:bg-ring/70"
@@ -501,7 +501,9 @@ export function App() {
     [projects, settings.defaultSessionDir]
   )
   const selectedSession =
-    sessions.find((session) => session.id === selectedSessionId) ?? sessions[0]
+    sessions.find(
+      (session) => session.id === selectedSessionId && !session.archivedAt
+    ) ?? sessions.find((session) => !session.archivedAt)
   const visibleSurfaceAgentProvider = isSettingsOpen
     ? settings.defaultAgentProvider
     : selectedSession?.agentProvider
@@ -1615,7 +1617,7 @@ export function App() {
 
   async function selectOrCreateProjectSession(project: ProjectRecord) {
     const existingSession = sessions.find(
-      (session) => session.projectId === project.id
+      (session) => session.projectId === project.id && !session.archivedAt
     )
     if (existingSession) {
       setExpandedProjectIds((current) =>
@@ -1744,9 +1746,126 @@ export function App() {
     })
 
     if (selectedSession?.projectId === projectId) {
-      const nextSession = remainingSessions[0]
+      const nextSession = remainingSessions.find(
+        (session) => !session.archivedAt
+      )
       setSelectedSessionId(nextSession?.id ?? "")
       setIsSettingsOpen(false)
+    }
+  }
+
+  async function handleArchiveProject(projectId: string) {
+    const project = projects.find((item) => item.id === projectId)
+    if (!project) {
+      return
+    }
+    const projectSessions = sessionsRef.current.filter(
+      (session) => session.projectId === projectId && !session.archivedAt
+    )
+    const workingSession = findWorkingChatSession(
+      projectSessions,
+      project.path,
+      runStatusBySessionRef.current
+    )
+    if (workingSession) {
+      console.warn(
+        `[app-state.archive] Blocked project archival because a session is running: ${JSON.stringify(
+          { projectId, sessionId: workingSession.id }
+        )}`
+      )
+      return
+    }
+    if (!projectSessions.length) {
+      return
+    }
+
+    if (window.ousia) {
+      const result = await window.ousia.archiveProjectSessions({ projectId })
+      applyAppStateTransaction(result)
+      if (result.ok) {
+        setUnreadCompletedSessionIds((current) => {
+          const next = new Set(current)
+          for (const session of projectSessions) next.delete(session.id)
+          return next
+        })
+      }
+      return
+    }
+
+    const archivedIds = new Set(projectSessions.map((session) => session.id))
+    const archivedAt = new Date().toISOString()
+    let nextSessions = sessionsRef.current.map((session) =>
+      archivedIds.has(session.id) ? { ...session, archivedAt } : session
+    )
+    let activeSessions = nextSessions.filter((session) => !session.archivedAt)
+    if (!activeSessions.length) {
+      const replacement = createSession(
+        t.app.newSession,
+        settings.defaultAgentProvider
+      )
+      nextSessions = [replacement, ...nextSessions]
+      activeSessions = [replacement]
+    }
+    sessionsRef.current = nextSessions
+    setSessions(nextSessions)
+    if (selectedSessionId && archivedIds.has(selectedSessionId)) {
+      setSelectedSessionId(activeSessions[0].id)
+    }
+    setUnreadCompletedSessionIds((current) => {
+      const next = new Set(current)
+      for (const session of projectSessions) next.delete(session.id)
+      return next
+    })
+  }
+
+  async function handleShowProjectInFolder(projectId: string) {
+    const project = projects.find((item) => item.id === projectId)
+    if (!project) {
+      return
+    }
+    if (!window.ousia) {
+      console.warn(t.sidebar.showProjectInFolderFailed)
+      return
+    }
+    try {
+      const result = await window.ousia.openDirectoryInFinder({
+        path: project.path,
+      })
+      if (!result.ok) {
+        console.warn(t.sidebar.showProjectInFolderFailed, result.error)
+      }
+    } catch (error) {
+      console.warn(t.sidebar.showProjectInFolderFailed, error)
+    }
+  }
+
+  async function handleShowDefaultSessionInFolder() {
+    const path = settings.defaultSessionDir
+    if (!window.ousia) {
+      console.error(
+        "[sidebar.default-session-folder] Electron API unavailable",
+        {
+          path,
+        }
+      )
+      return
+    }
+    try {
+      const result = await window.ousia.openDirectoryInFinder({ path })
+      if (!result.ok) {
+        console.error(
+          "[sidebar.default-session-folder] Failed to open folder",
+          {
+            path,
+            error: result.error,
+          }
+        )
+      }
+    } catch (error) {
+      console.error("[sidebar.default-session-folder] Failed to open folder", {
+        path,
+        error,
+      })
     }
   }
 
@@ -2101,7 +2220,7 @@ export function App() {
     setIsSettingsOpen(false)
   }
 
-  async function handleDeleteSession(sessionId: string) {
+  async function handleArchiveSession(sessionId: string) {
     const session = sessionsRef.current.find((item) => item.id === sessionId)
     if (!session) {
       return
@@ -2109,36 +2228,24 @@ export function App() {
     const targetKey = chatKey(projectPathForSession(session), sessionId)
     if (runStatusBySessionRef.current[targetKey] === "working") {
       console.warn(
-        `[app-state.delete] Blocked running session deletion: ${JSON.stringify({
-          sessionId,
-        })}`
+        `[app-state.archive] Blocked running session archival: ${JSON.stringify(
+          {
+            sessionId,
+          }
+        )}`
       )
       return
     }
 
     if (window.ousia) {
-      const result = await window.ousia.deleteSession({ sessionId })
+      const result = await window.ousia.archiveSessions({
+        sessionIds: [sessionId],
+      })
       if (!result.ok) {
         applyAppStateTransaction(result)
         return
       }
       applyAppStateTransaction(result)
-      setItemsBySession((current) => {
-        const next = { ...current }
-        delete next[targetKey]
-        return next
-      })
-      setHistoryPageStateBySession((current) => {
-        const next = { ...current }
-        delete next[targetKey]
-        return next
-      })
-      draftSessionKeysRef.current.delete(targetKey)
-      setRunStatusBySession((current) => {
-        const next = { ...current }
-        delete next[targetKey]
-        return next
-      })
       setUnreadCompletedSessionIds((current) => {
         if (!current.has(sessionId)) {
           return current
@@ -2150,27 +2257,28 @@ export function App() {
       return
     }
 
-    const remaining = sessionsRef.current.filter(
-      (item) => item.id !== sessionId
+    const activeGroupSessions = sessionsRef.current.filter(
+      (item) => !item.archivedAt && item.projectId === session.projectId
     )
+    const archivedGroupIndex = activeGroupSessions.findIndex(
+      (item) => item.id === sessionId
+    )
+    const adjacentSession =
+      activeGroupSessions[archivedGroupIndex + 1] ??
+      activeGroupSessions[archivedGroupIndex - 1]
+    const archivedAt = new Date().toISOString()
+    let remaining = sessionsRef.current.map((item) =>
+      item.id === sessionId ? { ...item, archivedAt } : item
+    )
+    const activeSessions = remaining.filter((item) => !item.archivedAt)
+    if (!activeSessions.length) {
+      remaining = [
+        createSession(t.app.newSession, settings.defaultAgentProvider),
+        ...remaining,
+      ]
+    }
     sessionsRef.current = remaining
     setSessions(remaining)
-    setItemsBySession((current) => {
-      const next = { ...current }
-      delete next[targetKey]
-      return next
-    })
-    setHistoryPageStateBySession((current) => {
-      const next = { ...current }
-      delete next[targetKey]
-      return next
-    })
-    draftSessionKeysRef.current.delete(targetKey)
-    setRunStatusBySession((current) => {
-      const next = { ...current }
-      delete next[targetKey]
-      return next
-    })
     setUnreadCompletedSessionIds((current) => {
       if (!current.has(sessionId)) {
         return current
@@ -2180,8 +2288,61 @@ export function App() {
       return next
     })
     if (selectedSessionId === sessionId) {
-      const nextSession = remaining[0]
+      const nextSession =
+        adjacentSession ?? remaining.find((item) => !item.archivedAt)
       setSelectedSessionId(nextSession?.id ?? "")
+    }
+  }
+
+  async function handleRestoreArchivedSessions(sessionIds: string[]) {
+    if (!window.ousia) {
+      const restoredIds = new Set(sessionIds)
+      const nextSessions = sessionsRef.current.map((session) => {
+        if (!restoredIds.has(session.id)) return session
+        const { archivedAt: _archivedAt, ...restoredSession } = session
+        void _archivedAt
+        return restoredSession
+      })
+      sessionsRef.current = nextSessions
+      setSessions(nextSessions)
+      return
+    }
+    const result = await window.ousia.restoreSessions({ sessionIds })
+    if (!applyAppStateTransaction(result)) {
+      throw new Error(result.ok ? "Failed to restore sessions." : result.error)
+    }
+  }
+
+  async function handleDeleteArchivedSessions(sessionIds: string[]) {
+    if (!window.ousia) {
+      const deletedIds = new Set(sessionIds)
+      const nextSessions = sessionsRef.current.filter(
+        (session) => !deletedIds.has(session.id)
+      )
+      sessionsRef.current = nextSessions
+      setSessions(nextSessions)
+      return
+    }
+    const sessionsToDelete = sessionsRef.current.filter((session) =>
+      sessionIds.includes(session.id)
+    )
+    const result = await window.ousia.deleteSessions({ sessionIds })
+    if (!applyAppStateTransaction(result)) {
+      throw new Error(result.ok ? "Failed to delete sessions." : result.error)
+    }
+    for (const session of sessionsToDelete) {
+      const targetKey = chatKey(projectPathForSession(session), session.id)
+      setItemsBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      setHistoryPageStateBySession((current) => {
+        const next = { ...current }
+        delete next[targetKey]
+        return next
+      })
+      draftSessionKeysRef.current.delete(targetKey)
     }
   }
 
@@ -2289,11 +2450,22 @@ export function App() {
 
   const stableCreateProjectSession = useStableEvent(createProjectSession)
   const stableCreateSession = useStableEvent(handleCreateSession)
+  const stableArchiveProject = useStableEvent(handleArchiveProject)
   const stableDeleteProject = useStableEvent(handleDeleteProject)
-  const stableDeleteSession = useStableEvent(handleDeleteSession)
+  const stableArchiveSession = useStableEvent(handleArchiveSession)
+  const stableRestoreArchivedSessions = useStableEvent(
+    handleRestoreArchivedSessions
+  )
+  const stableDeleteArchivedSessions = useStableEvent(
+    handleDeleteArchivedSessions
+  )
   const stableMoveSession = useStableEvent(handleMoveSession)
   const stableOpenProject = useStableEvent(handleOpenProject)
   const stableOpenSettings = useStableEvent(handleOpenSettings)
+  const stableShowProjectInFolder = useStableEvent(handleShowProjectInFolder)
+  const stableShowDefaultSessionInFolder = useStableEvent(
+    handleShowDefaultSessionInFolder
+  )
   const stableRenameSession = useStableEvent(handleRenameSession)
   const stableReorderProjects = useStableEvent(handleReorderProjects)
   const stableReorderSidebarSections = useStableEvent(
@@ -2363,13 +2535,16 @@ export function App() {
         >
           <div className={isSettingsOpen ? "hidden" : "flex min-h-0"}>
             <Sidebar
+              onArchiveProject={stableArchiveProject}
               onCreateProjectSession={stableCreateProjectSession}
               onCreateSession={stableCreateSession}
               onDeleteProject={stableDeleteProject}
-              onDeleteSession={stableDeleteSession}
+              onArchiveSession={stableArchiveSession}
               onMoveSession={stableMoveSession}
               onOpenProject={stableOpenProject}
               onOpenSettings={stableOpenSettings}
+              onShowDefaultSessionInFolder={stableShowDefaultSessionInFolder}
+              onShowProjectInFolder={stableShowProjectInFolder}
               onUpdateAction={handleUpdateAction}
               onRenameSession={stableRenameSession}
               onReorderProjects={stableReorderProjects}
@@ -2385,7 +2560,7 @@ export function App() {
               scrollTargetSessionId={sidebarScrollTargetSessionId}
               sessionRunStatusById={sidebarRunStatusBySessionId}
               unreadCompletedSessionIds={unreadCompletedSessionIdSet}
-              sessions={sessions}
+              sessions={sessions.filter((session) => !session.archivedAt)}
               language={settings.language}
               updateStatus={updateStatus}
               style={SIDEBAR_STYLE}
@@ -2416,10 +2591,14 @@ export function App() {
               codexEnvironment={codexEnvironment}
               codexEnvironmentLoading={codexEnvironmentLoading}
               modelRegistry={modelRegistry}
+              projects={projects}
+              sessions={sessions}
               settings={settings}
               onRefreshModelRegistry={refreshModelRegistry}
               onRefreshCodexEnvironment={refreshCodexEnvironment}
               onSettingsChange={handleSettingsChange}
+              onRestoreArchivedSessions={stableRestoreArchivedSessions}
+              onDeleteArchivedSessions={stableDeleteArchivedSessions}
             />
           ) : (
             <ChatArea

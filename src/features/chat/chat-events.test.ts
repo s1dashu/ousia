@@ -594,6 +594,27 @@ describe("applyChatEvent", () => {
     ])
   })
 
+  it("removes transient status messages without leaving chat history", () => {
+    const reconnecting = applyChatEvent([], {
+      id: "pi-reconnect-session-1",
+      role: "system",
+      status: "streaming",
+      text: "重新连接中…",
+      timestamp: "2026-07-12T00:00:00.000Z",
+      type: "status_message",
+    })
+
+    expect(
+      applyChatEvent(reconnecting, {
+        id: "pi-reconnect-session-1",
+        status: "removed",
+        text: "",
+        timestamp: "2026-07-12T00:00:01.000Z",
+        type: "status_message",
+      })
+    ).toEqual([])
+  })
+
   it("appends error events", () => {
     expect(
       applyChatEvent([], {

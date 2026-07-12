@@ -5,12 +5,15 @@ import { updateCheckDialogOptions } from "./update-dialog.js"
 describe("updateCheckDialogOptions", () => {
   it("describes available updates and where to download them", () => {
     expect(
-      updateCheckDialogOptions({
-        phase: "available",
-        currentVersion: "0.1.23",
-        version: "0.1.24",
-        releaseName: "Ousia 0.1.24",
-      })
+      updateCheckDialogOptions(
+        {
+          phase: "available",
+          currentVersion: "0.1.23",
+          version: "0.1.24",
+          releaseName: "Ousia 0.1.24",
+        },
+        "en"
+      )
     ).toMatchObject({
       title: "Update Available",
       message: "Ousia 0.1.24 is available.",
@@ -20,7 +23,10 @@ describe("updateCheckDialogOptions", () => {
 
   it("reports an up-to-date installation", () => {
     expect(
-      updateCheckDialogOptions({ phase: "idle", currentVersion: "0.1.23" })
+      updateCheckDialogOptions(
+        { phase: "idle", currentVersion: "0.1.23" },
+        "en"
+      )
     ).toMatchObject({
       title: "Ousia Is Up to Date",
       message: "Ousia 0.1.23 is the latest version.",
@@ -29,15 +35,36 @@ describe("updateCheckDialogOptions", () => {
 
   it("keeps update failures visible", () => {
     expect(
-      updateCheckDialogOptions({
-        phase: "error",
-        currentVersion: "0.1.23",
-        message: "fetch failed",
-      })
+      updateCheckDialogOptions(
+        {
+          phase: "error",
+          currentVersion: "0.1.23",
+          message: "fetch failed",
+        },
+        "en"
+      )
     ).toMatchObject({
       type: "error",
       title: "Unable to Check for Updates",
       detail: "fetch failed",
+    })
+  })
+
+  it("localizes native update dialogs in Chinese", () => {
+    expect(
+      updateCheckDialogOptions(
+        {
+          phase: "available",
+          currentVersion: "0.1.23",
+          version: "0.1.24",
+          releaseName: "Ousia 0.1.24",
+        },
+        "zh"
+      )
+    ).toMatchObject({
+      title: "有可用更新",
+      message: "Ousia 0.1.24 已发布。",
+      detail: "请使用侧边栏中的“更新”按钮下载。",
     })
   })
 })

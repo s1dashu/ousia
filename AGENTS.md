@@ -58,6 +58,10 @@ match the task.
 - Runtime logs are persisted at `~/.ousia/logs/ousia-desktop.log`; check this
   file first for Electron main errors, renderer console messages, renderer
   uncaught errors, and chat/title-generation failures.
+- Ousia-owned HTTP(S) and fetch-based Pi provider traffic use Electron's
+  Chromium network stack so they follow the operating system proxy/PAC policy.
+  Native Codex app-server traffic and provider SDKs with custom Node transports
+  remain separate process/transport boundaries; see `docs/technical-architecture.md`.
 - Remote Electron error monitoring is an optional Ousia-owned Sentry framework
   capability. Product builds must use separate projects/DSNs and preserve the
   sanitizer, source-map, and native-minidump rules in `docs/sentry.md`.
@@ -82,6 +86,11 @@ match the task.
 - Live Pi AgentSessions are capped with idle-only LRU eviction. Never evict a
   streaming, queued, or bash-running session; deletion must release provider
   state and unsubscribe/dispose Pi resources.
+- Settings permanent deletion removes provider-owned local history before the
+  canonical Ousia record: Pi deletes the exact SDK-listed session JSONL inside
+  its canonical directory, while Codex uses app-server `thread/delete`. Never
+  report success or remove the corresponding Ousia record when provider data
+  deletion fails.
 
 ## Important Source Entrypoints
 

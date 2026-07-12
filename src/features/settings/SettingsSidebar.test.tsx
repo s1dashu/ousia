@@ -6,7 +6,7 @@ import { getSettingsNavigationItems } from "@/features/settings/settings-navigat
 import { SettingsSidebar } from "@/features/settings/SettingsSidebar"
 
 describe("SettingsSidebar", () => {
-  it("uses a provider-specific final navigation item", () => {
+  it("uses a provider-specific item before the archived chats destination", () => {
     const t = getMessages("en")
 
     expect(
@@ -16,6 +16,7 @@ describe("SettingsSidebar", () => {
       t.settings.appearance,
       t.settings.conversationSettings,
       t.settings.piSettings,
+      t.settings.archivedSessions,
     ])
     expect(
       getSettingsNavigationItems("codex", t.settings).map((item) => item.label)
@@ -24,6 +25,7 @@ describe("SettingsSidebar", () => {
       t.settings.appearance,
       t.settings.conversationSettings,
       t.settings.codexSettings,
+      t.settings.archivedSessions,
     ])
   })
 

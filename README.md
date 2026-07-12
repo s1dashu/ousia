@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./ousia-logo.png">
-    <img src="./ousia-logo.png" alt="Ousia" width="96" />
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/media/ousia-logo.png">
+    <img src="./docs/media/ousia-logo.png" alt="Ousia" width="96" />
   </picture>
 </p>
 

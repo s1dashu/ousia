@@ -12,6 +12,7 @@ import { platform } from "node:process"
 import { join } from "node:path"
 
 import type {
+  OusiaLanguage,
   OusiaResolvedTheme,
   OusiaThemePreference,
   OusiaUpdateStatus,
@@ -19,6 +20,7 @@ import type {
   OusiaWindowState,
 } from "./chat-types.js"
 import { loadAppState, saveWindowState } from "./app-state-store.js"
+import { getNativeMessages } from "./native-i18n.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 import { updateCheckDialogOptions } from "./update-dialog.js"
 import {
@@ -158,13 +160,15 @@ function adjustWindowZoomLevel(
 
 function installApplicationMenu(
   getWindow: () => BrowserWindow | undefined,
-  onCheckForUpdates: () => Promise<OusiaUpdateStatus>
+  onCheckForUpdates: () => Promise<OusiaUpdateStatus>,
+  language: OusiaLanguage
 ) {
+  const t = getNativeMessages(language)
   function checkForUpdates() {
     void onCheckForUpdates()
       .then((status) => {
         const window = getWindow()
-        const options = updateCheckDialogOptions(status)
+        const options = updateCheckDialogOptions(status, language)
         return window && !window.isDestroyed()
           ? dialog.showMessageBox(window, options)
           : dialog.showMessageBox(options)
@@ -174,8 +178,8 @@ function installApplicationMenu(
         writeRuntimeLog("update.manual", "error", { message })
         const options: Electron.MessageBoxOptions = {
           type: "error",
-          title: "Unable to Check for Updates",
-          message: "Ousia could not check for updates.",
+          title: t.update.errorTitle,
+          message: t.update.errorMessage,
           detail: message,
         }
         const window = getWindow()
@@ -191,72 +195,75 @@ function installApplicationMenu(
           {
             label: app.name,
             submenu: [
-              { role: "about" as const },
+              { label: t.menu.about, role: "about" as const },
               {
-                label: "Check for Updates…",
+                label: t.menu.checkForUpdates,
                 click: checkForUpdates,
               },
               { type: "separator" as const },
-              { role: "services" as const },
+              { label: t.menu.services, role: "services" as const },
               { type: "separator" as const },
-              { role: "hide" as const },
-              { role: "hideOthers" as const },
-              { role: "unhide" as const },
+              { label: t.menu.hide, role: "hide" as const },
+              { label: t.menu.hideOthers, role: "hideOthers" as const },
+              { label: t.menu.unhide, role: "unhide" as const },
               { type: "separator" as const },
-              { role: "quit" as const },
+              { label: t.menu.quit, role: "quit" as const },
             ],
           },
         ]
       : []),
     {
-      label: "Edit",
+      label: t.menu.edit,
       submenu: [
-        { role: "undo" },
-        { role: "redo" },
+        { label: t.menu.undo, role: "undo" },
+        { label: t.menu.redo, role: "redo" },
         { type: "separator" },
-        { role: "cut" },
-        { role: "copy" },
-        { role: "paste" },
-        { role: "pasteAndMatchStyle" },
-        { role: "delete" },
+        { label: t.menu.cut, role: "cut" },
+        { label: t.menu.copy, role: "copy" },
+        { label: t.menu.paste, role: "paste" },
+        { label: t.menu.pasteAndMatchStyle, role: "pasteAndMatchStyle" },
+        { label: t.menu.delete, role: "delete" },
         { type: "separator" },
-        { role: "selectAll" },
+        { label: t.menu.selectAll, role: "selectAll" },
       ],
     },
     {
-      label: "View",
+      label: t.menu.view,
       submenu: [
-        { role: "reload" },
-        { role: "forceReload" },
-        { role: "toggleDevTools" },
+        { label: t.menu.reload, role: "reload" },
+        { label: t.menu.forceReload, role: "forceReload" },
+        { label: t.menu.toggleDevTools, role: "toggleDevTools" },
         { type: "separator" },
         {
-          label: "Actual Size",
+          label: t.menu.actualSize,
           accelerator: "CmdOrCtrl+0",
           click: () => setWindowZoomLevel(getWindow(), 0),
         },
         {
-          label: "Zoom In",
+          label: t.menu.zoomIn,
           accelerator: "CmdOrCtrl+Plus",
           click: () => adjustWindowZoomLevel(getWindow(), 0.5),
         },
         {
-          label: "Zoom Out",
+          label: t.menu.zoomOut,
           accelerator: "CmdOrCtrl+-",
           click: () => adjustWindowZoomLevel(getWindow(), -0.5),
         },
         { type: "separator" },
-        { role: "togglefullscreen" },
+        { label: t.menu.toggleFullscreen, role: "togglefullscreen" },
       ],
     },
     {
-      label: "Window",
+      label: t.menu.window,
       submenu: [
-        { role: "minimize" },
-        { role: "zoom" },
+        { label: t.menu.minimize, role: "minimize" },
+        { label: t.menu.zoom, role: "zoom" },
         ...(platform === "darwin"
-          ? [{ type: "separator" as const }, { role: "front" as const }]
-          : [{ role: "close" as const }]),
+          ? [
+              { type: "separator" as const },
+              { label: t.menu.front, role: "front" as const },
+            ]
+          : [{ label: t.menu.close, role: "close" as const }]),
       ],
     },
   ]
@@ -270,11 +277,23 @@ export function createWindowHost({
   onWindowChanged,
 }: WindowHostOptions) {
   let mainWindow: BrowserWindow | undefined
+  let language: OusiaLanguage = "zh"
+  let installedApplicationMenuLanguage: OusiaLanguage | undefined
   let lastEmittedFullscreen: boolean | undefined
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
 
   function getMainWindow() {
     return mainWindow
+  }
+
+  function setLanguage(nextLanguage: OusiaLanguage) {
+    language = nextLanguage
+    if (installedApplicationMenuLanguage === nextLanguage) {
+      return
+    }
+    installApplicationMenu(getMainWindow, onCheckForUpdates, language)
+    installedApplicationMenuLanguage = nextLanguage
+    writeRuntimeLog("window.menu", "info", { language: nextLanguage })
   }
 
   function emitWindowFullscreenState(
@@ -362,10 +381,10 @@ export function createWindowHost({
 
   async function createWindow() {
     const startupStartedAt = performance.now()
-    installApplicationMenu(getMainWindow, onCheckForUpdates)
     const appStateLoadStartedAt = performance.now()
     const appState = await loadAppState({ synchronizePiRetry: false })
     const appStateReadyAt = performance.now()
+    setLanguage(appState.settings.language)
     applyNativeThemePreference(appState.settings.theme)
     const initialBounds = resolveInitialWindowBounds(appState.windowState)
 
@@ -460,20 +479,21 @@ export function createWindowHost({
     })
 
     mainWindow.webContents.on("context-menu", (_event, params) => {
+      const menu = getNativeMessages(language).menu
       const menuTemplate: Electron.MenuItemConstructorOptions[] = []
       if (params.selectionText) {
-        menuTemplate.push({ role: "copy" })
+        menuTemplate.push({ label: menu.copy, role: "copy" })
       }
       if (params.isEditable) {
         if (menuTemplate.length) {
           menuTemplate.push({ type: "separator" })
         }
         menuTemplate.push(
-          { role: "cut" },
-          { role: "copy" },
-          { role: "paste" },
+          { label: menu.cut, role: "cut" },
+          { label: menu.copy, role: "copy" },
+          { label: menu.paste, role: "paste" },
           { type: "separator" },
-          { role: "selectAll" }
+          { label: menu.selectAll, role: "selectAll" }
         )
       }
       if (!menuTemplate.length) {
@@ -562,5 +582,6 @@ export function createWindowHost({
     getWindowFullscreenState,
     getWindowZoomState,
     getMainWindow,
+    setLanguage,
   }
 }

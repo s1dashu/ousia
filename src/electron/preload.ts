@@ -1,9 +1,11 @@
 import type {
   OusiaAppState,
   OusiaAppStateCreateProjectPayload,
+  OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
   OusiaAppStateDeleteProjectPayload,
   OusiaAppStateDeleteSessionPayload,
+  OusiaAppStateSessionIdsPayload,
   OusiaAppStateMoveSessionPayload,
   OusiaAppStateRenameSessionPayload,
   OusiaAppStateReorderProjectsPayload,
@@ -140,6 +142,26 @@ const api = {
   ): Promise<OusiaAppStateTransactionResult> {
     return ipcRenderer.invoke("ousia:app-state:session:delete", payload)
   },
+  archiveSessions(
+    payload: OusiaAppStateSessionIdsPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:sessions:archive", payload)
+  },
+  archiveProjectSessions(
+    payload: OusiaAppStateArchiveProjectPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:project:archive", payload)
+  },
+  restoreSessions(
+    payload: OusiaAppStateSessionIdsPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:sessions:restore", payload)
+  },
+  deleteSessions(
+    payload: OusiaAppStateSessionIdsPayload
+  ): Promise<OusiaAppStateTransactionResult> {
+    return ipcRenderer.invoke("ousia:app-state:sessions:delete", payload)
+  },
   renameSession(
     payload: OusiaAppStateRenameSessionPayload
   ): Promise<OusiaAppStateTransactionResult> {
@@ -212,7 +234,9 @@ const api = {
   ): Promise<OusiaChatInterruptResult> {
     return ipcRenderer.invoke("ousia:chat:interrupt", payload)
   },
-  clearChatQueue(payload: OusiaChatContext): Promise<OusiaChatClearQueueResult> {
+  clearChatQueue(
+    payload: OusiaChatContext
+  ): Promise<OusiaChatClearQueueResult> {
     return ipcRenderer.invoke("ousia:chat:clear-queue", payload)
   },
   compactChat(
@@ -317,8 +341,10 @@ const api = {
   onWindowZoomChange(
     callback: (event: OusiaWindowZoomEvent) => void
   ): () => void {
-    const listener = (_event: IpcRendererEvent, payload: OusiaWindowZoomEvent) =>
-      callback(payload)
+    const listener = (
+      _event: IpcRendererEvent,
+      payload: OusiaWindowZoomEvent
+    ) => callback(payload)
     ipcRenderer.on("ousia:window:zoom", listener)
     return () => {
       ipcRenderer.off("ousia:window:zoom", listener)

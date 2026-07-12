@@ -101,4 +101,48 @@ describe("createUpdateManager", () => {
       expect.objectContaining({ message: "fetch failed" })
     )
   })
+
+  it("publishes progress and joins repeated retries after a failed check", async () => {
+    let resolveRelease: ((response: Response) => void) | undefined
+    const fetchRelease = vi.fn<typeof fetch>(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRelease = resolve
+        })
+    )
+    const manager = createManager(fetchRelease)
+
+    const failedCheck = manager.check("startup")
+    resolveRelease?.(new Response(null, { status: 503 }))
+    await failedCheck
+
+    const firstRetry = manager.download()
+    const secondRetry = manager.download()
+
+    expect(manager.getStatus()).toEqual({
+      phase: "checking",
+      currentVersion: "0.1.23",
+    })
+    expect(firstRetry).toBe(secondRetry)
+    expect(fetchRelease).toHaveBeenCalledTimes(2)
+    expect(writeRuntimeLog).toHaveBeenCalledWith(
+      "update.download.joined",
+      "info",
+      { phase: "checking" }
+    )
+
+    resolveRelease?.(
+      new Response(
+        JSON.stringify({
+          version: "0.1.23",
+          releaseName: "Ousia 0.1.23",
+        }),
+        { status: 200 }
+      )
+    )
+    await expect(firstRetry).resolves.toEqual({
+      ok: false,
+      error: "No update is currently available.",
+    })
+  })
 })

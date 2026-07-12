@@ -1222,6 +1222,39 @@ export function createCodexAgentProvider({
   const unsubscribeServerRequest = client.onServerRequest(serverRequestHandler)
 
   const conversations: AgentConversationProvider = {
+    async deleteChatSession(context: OusiaChatContext) {
+      const session = await canonicalSession(context)
+      const hasActiveTurn = [...activeBySessionKey.values()].some(
+        (active) => active.context.sessionId === context.sessionId
+      )
+      const hasPendingStart = [...pendingStartContextByThreadId.values()].some(
+        (pending) => pending.sessionId === context.sessionId
+      )
+      if (hasActiveTurn || hasPendingStart) {
+        throw new Error(
+          `Cannot delete active Codex session: ${context.sessionId}`
+        )
+      }
+
+      if (session.agentThreadId) {
+        await client.request("thread/delete", {
+          threadId: session.agentThreadId,
+        })
+        log("info", "Permanently deleted Codex thread", {
+          sessionId: context.sessionId,
+          threadId: session.agentThreadId,
+        })
+      } else {
+        log(
+          "info",
+          "No persisted Codex thread existed during permanent deletion",
+          {
+            sessionId: context.sessionId,
+          }
+        )
+      }
+      await conversations.releaseChatSession?.(context)
+    },
     async sendChatMessage(payload) {
       const sendStartedAt = performance.now()
       const context = {

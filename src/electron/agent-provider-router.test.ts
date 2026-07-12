@@ -30,6 +30,7 @@ function createProvider(): AgentConversationProvider {
     branchChat: vi.fn(async () => ({ ok: true as const, items: [] })),
     clearChatQueue: vi.fn(async () => ({ ok: true })),
     compactChat: vi.fn(async () => ({ ok: true })),
+    deleteChatSession: vi.fn(async () => undefined),
     exportChat: vi.fn(async (_payload, outputPath) => ({
       ok: true,
       path: outputPath,
@@ -134,6 +135,54 @@ describe("agent provider router", () => {
         sessionId: session.id,
       })
     )
+  })
+
+  it("rejects archived sessions before invoking a provider", async () => {
+    const state = createDefaultOusiaAppState()
+    const session = withSession(state, {
+      archivedAt: "2026-07-12T10:00:00.000Z",
+    })
+    mocks.loadAppState.mockResolvedValue(state)
+    const pi = createProvider()
+
+    await expect(
+      createAgentProviderRouter({ codex: createProvider(), pi }).getChatHistory(
+        {
+          projectPath: state.settings.defaultSessionDir,
+          sessionId: session.id,
+        }
+      )
+    ).rejects.toThrow(`Archived session cannot run: ${session.id}`)
+
+    expect(pi.getChatHistory).not.toHaveBeenCalled()
+    expect(mocks.writeRuntimeLog).toHaveBeenCalledWith(
+      "agent.context",
+      "warn",
+      expect.objectContaining({
+        message: "Rejected agent context for archived session",
+        sessionId: session.id,
+      })
+    )
+  })
+
+  it("routes archived sessions through the dedicated permanent deletion boundary", async () => {
+    const state = createDefaultOusiaAppState()
+    const session = withSession(state, {
+      archivedAt: "2026-07-12T10:00:00.000Z",
+    })
+    mocks.loadAppState.mockResolvedValue(state)
+    const pi = createProvider()
+    const router = createAgentProviderRouter({ codex: createProvider(), pi })
+
+    await router.deleteChatSession({
+      projectPath: state.settings.defaultSessionDir,
+      sessionId: session.id,
+    })
+
+    expect(pi.deleteChatSession).toHaveBeenCalledWith({
+      projectPath: state.settings.defaultSessionDir,
+      sessionId: session.id,
+    })
   })
 
   it("rejects an invalid client message id before routing to a provider", async () => {

@@ -147,6 +147,46 @@ describe("Codex agent provider", () => {
     vi.clearAllMocks()
   })
 
+  it("permanently deletes a persisted thread through the app-server protocol", async () => {
+    const state = codexState()
+    state.sessions[0] = {
+      ...state.sessions[0],
+      agentThreadId: "thread-delete-me",
+      archivedAt: "2026-07-12T10:00:00.000Z",
+    }
+    mocks.loadAppState.mockResolvedValue(state)
+    const client = new FakeCodexClient()
+    const provider = createCodexAgentProvider({
+      client: client as unknown as CodexAppServerClient,
+      emitChatEvent: vi.fn(),
+      nativeBinaryResolver: () => ({
+        binaryPath: "/tmp/codex",
+        packageName: "@openai/codex-test",
+        pathDirs: [],
+        targetTriple: "test",
+      }),
+    })
+
+    await provider.deleteChatSession({
+      projectPath: "/tmp/project",
+      sessionId: state.sessions[0].id,
+    })
+
+    expect(client.requests).toContainEqual({
+      method: "thread/delete",
+      params: { threadId: "thread-delete-me" },
+    })
+    expect(mocks.writeRuntimeLog).toHaveBeenCalledWith(
+      "codex.provider",
+      "info",
+      "Permanently deleted Codex thread",
+      expect.objectContaining({
+        sessionId: state.sessions[0].id,
+        threadId: "thread-delete-me",
+      })
+    )
+  })
+
   it("maps persisted Codex turns into canonical Ousia history", () => {
     const history = codexThreadToHistory(
       {
