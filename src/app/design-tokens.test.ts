@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs"
 import path from "node:path"
 import { describe, expect, it } from "vitest"
 
+import {
+  defaultOusiaAppSettings,
+  OUSIA_APPEARANCE_COLOR_SCALES,
+} from "@/electron/chat-types"
+
 const css = readFileSync(path.resolve(process.cwd(), "src/index.css"), "utf8")
 
 function readSource(relativePath: string) {
@@ -35,6 +40,22 @@ describe("design token boundaries", () => {
     }
     expect(css).toContain("--ousia-app-background")
     expect(css).toContain("--ousia-app-sidebar-accent")
+  })
+
+  it("includes Mist as the default sidebar-only palette", () => {
+    const settingsPage = readSource("src/features/settings/SettingsPage.tsx")
+
+    expect(OUSIA_APPEARANCE_COLOR_SCALES).toContain("mist")
+    expect(defaultOusiaAppSettings.appearanceColorScale).toBe("mist")
+    expect(settingsPage).toContain('label: "Mist"')
+    expect(settingsPage).toContain('value: "mist"')
+    expect(settingsPage).toContain("near-white sidebar")
+    expect(css).toContain(':root[data-radix-color-scale="mist"]')
+    expect(css).toContain('.dark[data-radix-color-scale="mist"]')
+    expect(css).toContain("--ousia-app-background: #fdfefe")
+    expect(css).toContain("--ousia-app-sidebar: #f7f9fa")
+    expect(css).toContain("--ousia-app-sidebar-accent: #edf1f4")
+    expect(css).toContain("--ousia-app-sidebar: #15191c")
   })
 
   it("applies the product palette only to the session sidebar", () => {

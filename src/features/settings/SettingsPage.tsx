@@ -74,6 +74,11 @@ const appearanceColorScales: Array<{
   value: OusiaAppearanceColorScale
   description: string
 }> = [
+  {
+    label: "Mist",
+    value: "mist",
+    description: "Default · near-white sidebar with a soft sky-blue slate tint",
+  },
   { label: "Tea", value: "tea", description: "" },
   { label: "Paper", value: "paper", description: "#FAFAF8 paper surfaces" },
   { label: "Sand", value: "sand", description: "" },

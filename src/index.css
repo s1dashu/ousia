@@ -327,6 +327,39 @@
     }
 }
 
+:root[data-radix-color-scale="mist"] {
+    --ousia-app-background: #fdfefe;
+    --ousia-app-foreground: #22272c;
+    --ousia-app-card: #f8f9fa;
+    --ousia-app-card-foreground: #22272c;
+    --ousia-app-popover: #fcfdfd;
+    --ousia-app-popover-foreground: #22272c;
+    --ousia-app-primary: #22272c;
+    --ousia-app-primary-foreground: #fdfefe;
+    --ousia-app-secondary: #f3f5f7;
+    --ousia-app-secondary-foreground: #22272c;
+    --ousia-app-muted: #f3f5f7;
+    --ousia-app-muted-foreground: #697277;
+    --ousia-app-accent: #eff3f6;
+    --ousia-app-accent-foreground: #22272c;
+    --ousia-app-border: color-mix(in srgb, #96a4ad 20%, transparent);
+    --ousia-app-input: #e9edef;
+    --ousia-app-ring: #8c999f;
+    --ousia-app-chart-1: #e7ecef;
+    --ousia-app-chart-2: #8c999f;
+    --ousia-app-chart-3: #697277;
+    --ousia-app-chart-4: #3e464b;
+    --ousia-app-chart-5: #22272c;
+    --ousia-app-sidebar: #f7f9fa;
+    --ousia-app-sidebar-foreground: #22272c;
+    --ousia-app-sidebar-primary: #22272c;
+    --ousia-app-sidebar-primary-foreground: #fdfefe;
+    --ousia-app-sidebar-accent: #edf1f4;
+    --ousia-app-sidebar-accent-foreground: #22272c;
+    --ousia-app-sidebar-border: color-mix(in srgb, #96a4ad 18%, transparent);
+    --ousia-app-sidebar-ring: #8c999f;
+}
+
 :root[data-radix-color-scale="paper"] {
     --ousia-app-background: #fffefb;
     --ousia-app-foreground: #1f1f1b;
@@ -991,6 +1024,34 @@
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
     --ousia-sidebar-row-selected-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2), 0 5px 12px -10px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.018);
     --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
+}
+
+.dark[data-radix-color-scale="mist"] {
+    --ousia-app-background: #111315;
+    --ousia-app-foreground: #f0f2f3;
+    --ousia-app-card: #1b1f22;
+    --ousia-app-card-foreground: #f0f2f3;
+    --ousia-app-popover: #181c1f;
+    --ousia-app-popover-foreground: #f0f2f3;
+    --ousia-app-primary: #f0f2f3;
+    --ousia-app-primary-foreground: #181c1f;
+    --ousia-app-secondary: #242a2e;
+    --ousia-app-secondary-foreground: #f0f2f3;
+    --ousia-app-muted: #242a2e;
+    --ousia-app-muted-foreground: #adb5ba;
+    --ousia-app-accent: #2b3237;
+    --ousia-app-accent-foreground: #f4f6f7;
+    --ousia-app-border: color-mix(in srgb, #e7ecef 12%, transparent);
+    --ousia-app-input: color-mix(in srgb, #e7ecef 16%, transparent);
+    --ousia-app-ring: #8c999f;
+    --ousia-app-sidebar: #15191c;
+    --ousia-app-sidebar-foreground: #f0f2f3;
+    --ousia-app-sidebar-primary: #f0f2f3;
+    --ousia-app-sidebar-primary-foreground: #15191c;
+    --ousia-app-sidebar-accent: #242a2e;
+    --ousia-app-sidebar-accent-foreground: #f4f6f7;
+    --ousia-app-sidebar-border: color-mix(in srgb, #e7ecef 12%, transparent);
+    --ousia-app-sidebar-ring: #8c999f;
 }
 
 .dark[data-radix-color-scale="paper"] {

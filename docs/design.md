@@ -146,9 +146,12 @@ New generic components may depend on these without any Ousia wrapper.
 
 ### Ousia palette values
 
-Paper, Tea, and other appearance scales are optional Sidebar palettes. They
-are not alternative shadcn foundations and must not tint Chat, Composer,
-Settings, forms, or portaled controls.
+Mist is Ousia's default Sidebar palette. It uses a near-white slate surface
+with a restrained sky-blue tint in light mode and a dark slate surface in dark
+mode. Paper, Tea, and the other appearance scales remain optional Sidebar
+palettes. None of these palettes are alternative shadcn foundations, and they
+must not tint Chat, messages, Markdown code, Composer, Settings, forms, or
+portaled controls.
 
 An appearance selector may set only Ousia-prefixed values:
 
@@ -478,7 +481,10 @@ Migrate them incrementally, one visually reviewed product surface at a time:
 
 The Sidebar-only palette boundary was backported from Miki commit
 `5949ecc7d9a3f87aff755e12e6b69935d967ddb8`; Ousia keeps its own shell geometry
-and fixed neutral Chat/Settings implementation.
+and fixed neutral Chat/Settings implementation. The Mist palette and new-state
+default were adapted from Miki commit
+`9ad986812f151b6a5c2811e7544efcaa4fdea27b` without its Canvas media-generator,
+account, or other Miki product changes.
 
 Do not perform a blind global replacement. Preserve the existing tuned visual
 result and verify each surface before removing its migration scope.

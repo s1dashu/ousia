@@ -32,6 +32,7 @@ export function isOusiaCodexReasoningEffort(
 export type OusiaAgentProvider = "pi" | "codex"
 
 export const OUSIA_APPEARANCE_COLOR_SCALES = [
+  "mist",
   "tea",
   "paper",
   "sand",
@@ -416,7 +417,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   defaultAgentProvider: "pi",
   codexModelId: "",
   codexReasoningEffort: null,
-  appearanceColorScale: "paper",
+  appearanceColorScale: "mist",
   theme: "light",
   appFontFamily: "system",
   chatFontFamily: "system",
