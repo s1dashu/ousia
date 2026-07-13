@@ -1850,7 +1850,7 @@ function ChatAreaComponent({
   return (
     <section
       className={cn(
-        "ousia-main-panel ousia-chat-theme @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card",
+        "ousia-main-panel @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card",
         MAIN_PANEL_LEFT_CORNERS_CLASS
       )}
       style={style}

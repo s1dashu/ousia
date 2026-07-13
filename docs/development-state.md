@@ -92,8 +92,10 @@ desktop agent client:
   Creation Paths; the two creation-path settings stay together.
 - Global shadcn semantic tokens match the neutral `bIkeymG` Vega preset.
   Appearance palettes are isolated as `--ousia-app-*` tokens and are mapped
-  back only inside the tuned chat and session-sidebar roots. Settings remains
-  outside those product scopes and uses Vega tokens directly.
+  back only inside the session/project Sidebar. Chat, Composer, Settings,
+  forms, and portaled controls use fixed neutral Vega surfaces. This boundary
+  was backported from Miki commit
+  `5949ecc7d9a3f87aff755e12e6b69935d967ddb8`.
 - Sortable top-level sidebar sections: `会话` and `项目`.
 - Packaged macOS builds check the private analytics service for releases. An
   available release adds an Update button to the sidebar footer; download is

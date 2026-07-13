@@ -31,12 +31,13 @@ describe("design token boundaries", () => {
       expect(block).not.toMatch(
         /--(?:background|foreground|card|popover|primary|secondary|muted|accent|border|input|ring|sidebar)(?:-[a-z]+)*\s*:/
       )
+      expect(block).not.toMatch(/--ousia-(?:message|inline-code|code-block)-/)
     }
     expect(css).toContain("--ousia-app-background")
     expect(css).toContain("--ousia-app-sidebar-accent")
   })
 
-  it("applies the product palette only at the tuned chat and sidebar roots", () => {
+  it("applies the product palette only to the session sidebar", () => {
     const sidebar = readSource("src/features/sidebar/Sidebar.tsx")
     const chat = readSource("src/features/chat/ChatArea.tsx")
     const settingsSidebar = readSource(
@@ -44,10 +45,11 @@ describe("design token boundaries", () => {
     )
     const settingsPage = readSource("src/features/settings/SettingsPage.tsx")
 
-    expect(css).toContain(".ousia-chat-theme")
+    expect(css).not.toContain(".ousia-chat-theme")
     expect(css).toContain(".ousia-sidebar-theme")
     expect(sidebar).toContain("ousia-sidebar-theme")
-    expect(chat).toContain("ousia-chat-theme")
+    expect(chat).not.toContain("ousia-chat-theme")
+    expect(chat).toContain("ousia-main-panel")
     expect(settingsSidebar).not.toContain("ousia-sidebar-theme")
     expect(settingsPage).not.toContain("ousia-chat-theme")
     expect(settingsSidebar).toContain("SETTINGS_SIDEBAR_SURFACE_CLASS")
@@ -58,12 +60,26 @@ describe("design token boundaries", () => {
     const chat = readSource("src/features/chat/ChatArea.tsx")
 
     expect(css).toContain("--ousia-composer-surface: #fff")
-    expect(css).toContain(
-      "--ousia-composer-surface: color-mix(in srgb, var(--ousia-app-card) 97%, white)"
-    )
+    expect(css).toContain(".dark .ousia-main-panel")
+    expect(css).toContain("--ousia-composer-surface: oklch(0.205 0 0)")
     expect(chat).toContain("bg-[var(--ousia-composer-surface)]")
     expect(chat).not.toContain(
       "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-sidebar)]"
     )
+  })
+
+  it("keeps chat message and Markdown code surfaces on fixed gray steps", () => {
+    const chatMessages = readSource("src/features/chat/ChatMessageList.tsx")
+
+    expect(css).toContain("--ousia-message-user-surface: oklch(0.955 0 0)")
+    expect(css).toContain("--ousia-inline-code-surface: oklch(0.975 0 0)")
+    expect(css).toContain("--ousia-code-block-surface: oklch(0.985 0 0)")
+    expect(css).toContain(
+      '.ousia-chat-markdown [data-streamdown="code-block-body"]'
+    )
+    expect(chatMessages).toContain("ousia-chat-user-message")
+    expect(css.match(/--ousia-message-user-surface:/g)).toHaveLength(2)
+    expect(css.match(/--ousia-inline-code-surface:/g)).toHaveLength(2)
+    expect(css.match(/--ousia-code-block-surface:/g)).toHaveLength(2)
   })
 })

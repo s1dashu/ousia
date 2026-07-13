@@ -333,7 +333,7 @@ const ChatItemView = memo(function ChatItemView({
       className={[
         "group/message ousia-chat-message-text text-sm leading-5 select-text",
         chatItem.role === "user"
-          ? "ousia-squircle-corners ml-auto w-fit rounded-[18px] bg-card px-3 py-2 text-card-foreground dark:bg-muted dark:text-foreground"
+          ? "ousia-chat-user-message ousia-squircle-corners ml-auto w-fit rounded-[18px] px-3 py-2"
           : "text-foreground",
       ].join(" ")}
     >

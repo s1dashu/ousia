@@ -145,8 +145,8 @@ export const messages = {
       fontSystem: "系统字体",
       fontZhuqueFangsong: "朱雀仿宋",
       fontLxgwWenkai: "霞鹜文楷",
-      colorScale: "色彩主题",
-      colorScaleHelp: "选择会话侧边栏和对话区的中性颜色与表面色调。",
+      colorScale: "侧边栏配色",
+      colorScaleHelp: "选择会话侧边栏的颜色与表面色调。",
       model: "Pi 模型供应商",
       piModelProvidersHelp:
         "这些模型和 API Key 仅供 Pi agent 使用，并由 Pi 管理。",
@@ -458,9 +458,9 @@ export const messages = {
       fontSystem: "System font",
       fontZhuqueFangsong: "Zhuque Fangsong",
       fontLxgwWenkai: "LXGW WenKai",
-      colorScale: "Color theme",
+      colorScale: "Sidebar palette",
       colorScaleHelp:
-        "Choose the neutral palette and surface tint for the session sidebar and chat.",
+        "Choose the color and surface tint for the session sidebar.",
       model: "Pi Model Providers",
       piModelProvidersHelp:
         "These models and API keys are used only by the Pi agent and managed through Pi.",

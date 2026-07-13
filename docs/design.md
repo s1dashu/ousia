@@ -146,8 +146,9 @@ New generic components may depend on these without any Ousia wrapper.
 
 ### Ousia palette values
 
-Paper, Tea, and other appearance scales are optional product palettes. They are
-not alternative shadcn foundations.
+Paper, Tea, and other appearance scales are optional Sidebar palettes. They
+are not alternative shadcn foundations and must not tint Chat, Composer,
+Settings, forms, or portaled controls.
 
 An appearance selector may set only Ousia-prefixed values:
 
@@ -155,8 +156,6 @@ An appearance selector may set only Ousia-prefixed values:
 :root[data-radix-color-scale="tea"] {
   --ousia-sidebar-surface: ...;
   --ousia-sidebar-hover-surface: ...;
-  --ousia-composer-surface: ...;
-  --ousia-message-user-surface: ...;
 }
 ```
 
@@ -467,18 +466,19 @@ changes.
 
 ## Migration Direction
 
-The repository may temporarily contain `.ousia-chat-theme` or
-`.ousia-sidebar-theme` mappings that rebind broad shadcn semantics. These are
-migration adapters, not the desired final design system.
+The repository may temporarily contain the `.ousia-sidebar-theme` mapping that
+rebinds broad shadcn semantics inside the session/project Sidebar. It is a
+migration adapter, not the desired final design system. Chat no longer has a
+broad appearance scope and inherits fixed global Vega semantics.
 
 Migrate them incrementally, one visually reviewed product surface at a time:
 
 1. Sidebar to `--ousia-sidebar-*`;
-2. Composer to `--ousia-composer-*`;
-3. user messages to `--ousia-message-user-*`;
-4. streaming and tool output to `--ousia-stream-*` and `--ousia-tool-*`;
-5. Diff to `--ousia-diff-*`;
-6. remove each broad shadcn token remapping after its consumers are migrated.
+2. remove the remaining Sidebar broad mapping after its consumers are migrated.
+
+The Sidebar-only palette boundary was backported from Miki commit
+`5949ecc7d9a3f87aff755e12e6b69935d967ddb8`; Ousia keeps its own shell geometry
+and fixed neutral Chat/Settings implementation.
 
 Do not perform a blind global replacement. Preserve the existing tuned visual
 result and verify each surface before removing its migration scope.

@@ -114,6 +114,14 @@
     --ousia-chat-panel-radius: 24px;
     --ousia-chat-composer-radius: 36px;
     --ousia-composer-surface: #fff;
+    --ousia-message-user-surface: oklch(0.955 0 0);
+    --ousia-message-user-foreground: oklch(0.2 0 0);
+    --ousia-inline-code-surface: oklch(0.975 0 0);
+    --ousia-inline-code-foreground: oklch(0.26 0 0);
+    --ousia-code-block-surface: oklch(0.985 0 0);
+    --ousia-code-block-border: oklch(0.9 0 0);
+    --ousia-code-block-foreground: oklch(0.24 0 0);
+    --ousia-code-block-muted-foreground: oklch(0.62 0 0);
     --ousia-chat-composer-ring-size: 3px;
     --ousia-chat-composer-ring-color: rgba(36, 31, 27, 0.055);
     --ousia-chat-composer-border: rgba(36, 31, 27, 0.1);
@@ -218,11 +226,7 @@
   --ousia-chat-spacing-default: 2rem;
 }
 
-/*
- * Product scopes preserve the tuned Ousia chat/sidebar palette without
- * changing the default Vega semantics used by Settings and new UI.
- */
-.ousia-chat-theme,
+/* The product color scale is intentionally scoped to the session Sidebar. */
 .ousia-sidebar-theme {
     --background: var(--ousia-app-background);
     --foreground: var(--ousia-app-foreground);
@@ -255,6 +259,43 @@
     --sidebar-accent-foreground: var(--ousia-app-sidebar-accent-foreground);
     --sidebar-border: var(--ousia-sidebar-border);
     --sidebar-ring: var(--ousia-sidebar-ring);
+}
+
+/* Chat, Settings, Composer, and their controls stay on a fixed neutral
+   surface system. Product color scales must not override these values. */
+.ousia-main-panel {
+    --ousia-composer-surface: #fff;
+    --ousia-chat-composer-ring-color: rgba(24, 24, 27, 0.055);
+    --ousia-chat-composer-border: rgba(24, 24, 27, 0.1);
+    --ousia-chat-composer-border-focus: rgba(24, 24, 27, 0.16);
+    --ousia-main-panel-shadow: 0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.56);
+    --ousia-chat-composer-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+    --ousia-chat-composer-shadow-focus: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+    --ousia-floating-panel-border: rgba(24, 24, 27, 0.1);
+    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(24, 24, 27, 0.08), 0 2px 7px -5px rgba(24, 24, 27, 0.1), 0 12px 28px -18px rgba(24, 24, 27, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.56);
+}
+
+:root.dark {
+    --ousia-message-user-surface: oklch(0.245 0 0);
+    --ousia-message-user-foreground: oklch(0.93 0 0);
+    --ousia-inline-code-surface: oklch(0.28 0 0);
+    --ousia-inline-code-foreground: oklch(0.93 0 0);
+    --ousia-code-block-surface: oklch(0.19 0 0);
+    --ousia-code-block-border: oklch(0.32 0 0);
+    --ousia-code-block-foreground: oklch(0.92 0 0);
+    --ousia-code-block-muted-foreground: oklch(0.65 0 0);
+}
+
+.dark .ousia-main-panel {
+    --ousia-composer-surface: oklch(0.205 0 0);
+    --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
+    --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
+    --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
+    --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
+    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
+    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
+    --ousia-floating-panel-border: rgba(255, 255, 255, 0.04);
+    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
 }
 
 @media (max-width: 560px) {
@@ -1575,6 +1616,23 @@
 
 .ousia-chat-markdown :where(pre) {
   margin-block: 0.5rem;
+}
+
+.ousia-chat-user-message {
+  background: var(--ousia-message-user-surface);
+  color: var(--ousia-message-user-foreground);
+}
+
+.ousia-chat-markdown [data-streamdown="inline-code"] {
+  background: var(--ousia-inline-code-surface);
+  color: var(--ousia-inline-code-foreground);
+}
+
+.ousia-chat-markdown [data-streamdown="code-block-body"] {
+  --muted-foreground: var(--ousia-code-block-muted-foreground);
+  border-color: var(--ousia-code-block-border);
+  background: var(--ousia-code-block-surface);
+  color: var(--ousia-code-block-foreground);
 }
 
 .ousia-chat-markdown [data-streamdown="code-block"],
