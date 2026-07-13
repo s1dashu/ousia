@@ -26,6 +26,9 @@ import { cn } from "@/lib/utils"
 export const CHAT_COMPOSER_INPUT_CLASS =
   "ousia-chat-composer-input ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] resize-none rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 shadow-none placeholder:text-muted-foreground/55 focus-visible:ring-0 dark:bg-transparent"
 
+export const CHAT_COMPOSER_SHELL_CLASS =
+  "shrink-0 bg-white pb-4 dark:bg-card"
+
 export type QueuedChatMessage = {
   id: string
   text: string

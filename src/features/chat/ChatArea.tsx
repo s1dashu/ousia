@@ -89,6 +89,7 @@ import { getMessages } from "@/app/i18n"
 import {
   AttachmentStrip,
   CHAT_COMPOSER_INPUT_CLASS,
+  CHAT_COMPOSER_SHELL_CLASS,
   QueuedMessageList,
   type QueuedChatMessage,
 } from "@/features/chat/ChatComposerParts"
@@ -1933,7 +1934,7 @@ function ChatAreaComponent({
 
       <form
         className={cn(
-          "shrink-0 bg-white pt-2 pb-4 dark:bg-card",
+          CHAT_COMPOSER_SHELL_CLASS,
           CHAT_HORIZONTAL_PADDING_CLASS
         )}
         onSubmit={handleSubmit}
