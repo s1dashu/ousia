@@ -6,208 +6,201 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@font-face {
-  font-family: "Ousia LXGW WenKai";
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url("./assets/fonts/debug/lxgw-wenkai/LXGWWenKai-Light.woff2")
-    format("woff2");
-}
-
-@font-face {
-  font-family: "Ousia LXGW WenKai";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("./assets/fonts/debug/lxgw-wenkai/LXGWWenKai-Medium.woff2")
-    format("woff2");
-}
-
-@font-face {
-  font-family: "Ousia LXGW WenKai";
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url("./assets/fonts/debug/lxgw-wenkai/LXGWWenKai-Bold.woff2")
-    format("woff2");
-}
-
-@font-face {
-  font-family: "Ousia Zhuque Fangsong";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("./assets/fonts/debug/zhuque-fangsong/ZhuqueFangsong-Regular.ttf")
-    format("truetype");
-}
-
 @theme inline {
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans-default);
-    --font-mono: var(--font-mono-default);
-    --color-sidebar-ring: var(--sidebar-ring);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar: var(--sidebar);
-    --color-chart-5: var(--chart-5);
-    --color-chart-4: var(--chart-4);
-    --color-chart-3: var(--chart-3);
-    --color-chart-2: var(--chart-2);
-    --color-chart-1: var(--chart-1);
-    --color-ring: var(--ring);
-    --color-input: var(--input);
-    --color-border: var(--border);
-    --color-destructive: var(--destructive);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-accent: var(--accent);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-muted: var(--muted);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-secondary: var(--secondary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-primary: var(--primary);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-popover: var(--popover);
-    --color-card-foreground: var(--card-foreground);
-    --color-card: var(--card);
-    --color-foreground: var(--foreground);
-    --color-background: var(--background);
-    --radius-sm: calc(var(--radius) * 0.6);
-    --radius-md: calc(var(--radius) * 0.8);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans-default);
+  --font-mono: var(--font-mono-default);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
 :root {
-    --font-sans-default: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --font-mono-default: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-    --ousia-chat-font-family: var(--font-sans-default);
-    --ousia-chat-font-size: 14px;
-    --ousia-chat-line-height: 1.5;
-    --font-weight-light: 300;
-    --font-weight-regular: 400;
-    --font-weight-medium: 500;
-    --font-weight-bold: 700;
-    --ousia-window-radius: 14px;
-    --ousia-titlebar-height: 40px;
-    --ousia-titlebar-traffic-light-slot-width: 70px;
-    --ousia-titlebar-sidebar-offset: 108px;
-    --ousia-panel-radius: 12px;
-    --ousia-grid-unit: 4px;
-    --ousia-baseline: 8px;
-    --ousia-leading: 24px;
-    --ousia-chat-content-max-width: 48rem;
-    --ousia-chat-spacing-tool-consecutive: 0.125rem;
-    --ousia-chat-spacing-before-tool: 1rem;
-    --ousia-chat-spacing-after-tool: 1.25rem;
-    --ousia-chat-spacing-user-after-assistant: 0.5rem;
-    --ousia-chat-spacing-default: 1.5rem;
-    --ousia-chat-gutter: 20px;
-    --ousia-chat-panel-radius: 24px;
-    --ousia-chat-composer-radius: 36px;
-    --ousia-composer-surface: #fff;
-    --ousia-message-user-surface: oklch(0.955 0 0);
-    --ousia-message-user-foreground: oklch(0.2 0 0);
-    --ousia-inline-code-surface: oklch(0.975 0 0);
-    --ousia-inline-code-foreground: oklch(0.26 0 0);
-    --ousia-code-block-surface: oklch(0.985 0 0);
-    --ousia-code-block-border: oklch(0.9 0 0);
-    --ousia-code-block-foreground: oklch(0.24 0 0);
-    --ousia-code-block-muted-foreground: oklch(0.62 0 0);
-    --ousia-chat-composer-ring-size: 3px;
-    --ousia-chat-composer-ring-color: rgba(36, 31, 27, 0.055);
-    --ousia-chat-composer-border: rgba(36, 31, 27, 0.1);
-    --ousia-chat-composer-border-focus: rgba(36, 31, 27, 0.16);
-    --ousia-main-panel-shadow: 0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.56);
-    --ousia-chat-composer-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
-    --ousia-chat-composer-shadow-focus: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
-    --ousia-floating-panel-border: rgba(36, 31, 27, 0.1);
-    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(24, 24, 27, 0.08), 0 2px 7px -5px rgba(24, 24, 27, 0.1), 0 12px 28px -18px rgba(24, 24, 27, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.56);
-    --ousia-sidebar-selected-radius: 16px;
-    --ousia-sidebar-row-selected-shadow: 0 0 0 0.5px rgba(24, 24, 27, 0.035), 0 1px 2px rgba(24, 24, 27, 0.035), 0 4px 10px -8px rgba(24, 24, 27, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.62);
-    --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
-    --ousia-settings-content-max-width: 44rem;
-    --ousia-settings-gutter: 32px;
-    /* shadcn/ui bIkeymG Vega foundation: keep these global tokens source-aligned. */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-    --ousia-app-background: #fdfbf9;
-    --ousia-app-foreground: #241f1b;
-    --ousia-app-card: #f2ebe7;
-    --ousia-app-card-foreground: #241f1b;
-    --ousia-app-popover: #fbf8f6;
-    --ousia-app-popover-foreground: #241f1b;
-    --ousia-app-primary: #241f1b;
-    --ousia-app-primary-foreground: #fdfbf9;
-    --ousia-app-secondary: #eee7e2;
-    --ousia-app-secondary-foreground: #241f1b;
-    --ousia-app-muted: #eee7e2;
-    --ousia-app-muted-foreground: #6f645e;
-    --ousia-app-accent: #eee7e2;
-    --ousia-app-accent-foreground: #241f1b;
-    --ousia-app-destructive: oklch(0.577 0.245 27.325);
-    --ousia-tool-warning: #8a6f3f;
-    --ousia-tool-warning-strong: #75591e;
-    --ousia-tool-warning-bg: color-mix(in srgb, #c9912b 11%, transparent);
-    --ousia-diff-card-bg: color-mix(in srgb, #f4f4ef 42%, #fffefb);
-    --ousia-app-border: color-mix(in srgb, #b7aaa2 34%, transparent);
-    --ousia-app-input: #ded6d0;
-    --ousia-app-ring: #9b8f87;
-    --ousia-app-chart-1: #eee7e2;
-    --ousia-app-chart-2: #9b8f87;
-    --ousia-app-chart-3: #6f645e;
-    --ousia-app-chart-4: #463d37;
-    --ousia-app-chart-5: #241f1b;
-    --ousia-app-sidebar: #f8f4f1;
-    --ousia-app-sidebar-foreground: #241f1b;
-    --ousia-app-sidebar-primary: #241f1b;
-    --ousia-app-sidebar-primary-foreground: #fdfbf9;
-    --ousia-app-sidebar-accent: #f2ebe7;
-    --ousia-app-sidebar-accent-foreground: #241f1b;
-    --ousia-app-sidebar-border: color-mix(in srgb, #b7aaa2 34%, transparent);
-    --ousia-app-sidebar-ring: #9b8f87;
-    --ousia-sidebar: color-mix(in srgb, var(--ousia-app-sidebar) 72%, var(--ousia-app-background));
-    --ousia-sidebar-accent: color-mix(in srgb, var(--ousia-app-sidebar-accent) 68%, var(--ousia-app-sidebar));
-    --ousia-sidebar-border: color-mix(in srgb, var(--ousia-app-sidebar-border) 72%, transparent);
-    --ousia-sidebar-ring: color-mix(in srgb, var(--ousia-app-sidebar-ring) 78%, var(--ousia-app-sidebar));
+  --font-sans-default:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono-default:
+    ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+  --ousia-chat-font-family: var(--font-sans-default);
+  --ousia-chat-font-size: 14px;
+  --ousia-chat-line-height: 1.5;
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  --ousia-window-radius: 14px;
+  --ousia-titlebar-height: 40px;
+  --ousia-titlebar-traffic-light-slot-width: 70px;
+  --ousia-titlebar-sidebar-offset: 108px;
+  --ousia-panel-radius: 12px;
+  --ousia-grid-unit: 4px;
+  --ousia-baseline: 8px;
+  --ousia-leading: 24px;
+  --ousia-chat-content-max-width: 48rem;
+  --ousia-chat-spacing-tool-consecutive: 0.125rem;
+  --ousia-chat-spacing-before-tool: 1rem;
+  --ousia-chat-spacing-after-tool: 1.25rem;
+  --ousia-chat-spacing-user-after-assistant: 0.5rem;
+  --ousia-chat-spacing-default: 1.5rem;
+  --ousia-chat-gutter: 20px;
+  --ousia-chat-panel-radius: var(--radius-xl);
+  --ousia-chat-composer-radius: var(--radius-2xl);
+  --ousia-composer-surface: #fff;
+  --ousia-message-user-surface: oklch(0.955 0 0);
+  --ousia-message-user-foreground: oklch(0.2 0 0);
+  --ousia-inline-code-surface: oklch(0.975 0 0);
+  --ousia-inline-code-foreground: oklch(0.26 0 0);
+  --ousia-code-block-surface: oklch(0.985 0 0);
+  --ousia-code-block-border: oklch(0.9 0 0);
+  --ousia-code-block-foreground: oklch(0.24 0 0);
+  --ousia-code-block-muted-foreground: oklch(0.62 0 0);
+  --ousia-chat-composer-ring-size: 3px;
+  --ousia-chat-composer-ring-color: rgba(36, 31, 27, 0.055);
+  --ousia-chat-composer-border: rgba(36, 31, 27, 0.1);
+  --ousia-chat-composer-border-focus: rgba(36, 31, 27, 0.16);
+  --ousia-main-panel-shadow:
+    0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  --ousia-chat-composer-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+  --ousia-chat-composer-shadow-focus:
+    0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+  --ousia-floating-panel-border: rgba(36, 31, 27, 0.1);
+  --ousia-floating-panel-shadow:
+    0 -2px 10px -8px rgba(24, 24, 27, 0.08),
+    0 2px 7px -5px rgba(24, 24, 27, 0.1),
+    0 12px 28px -18px rgba(24, 24, 27, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  --ousia-sidebar-selected-radius: var(--radius-md);
+  --ousia-sidebar-row-selected-shadow:
+    0 0 0 0.5px rgba(24, 24, 27, 0.035), 0 1px 2px rgba(24, 24, 27, 0.035),
+    0 4px 10px -8px rgba(24, 24, 27, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
+  --ousia-settings-content-max-width: 44rem;
+  --ousia-settings-gutter: 32px;
+  /* shadcn/ui bIkeymG Vega foundation: keep these global tokens source-aligned. */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --ousia-app-background: #fdfbf9;
+  --ousia-app-foreground: #241f1b;
+  --ousia-app-card: #f2ebe7;
+  --ousia-app-card-foreground: #241f1b;
+  --ousia-app-popover: #fbf8f6;
+  --ousia-app-popover-foreground: #241f1b;
+  --ousia-app-primary: #241f1b;
+  --ousia-app-primary-foreground: #fdfbf9;
+  --ousia-app-secondary: #eee7e2;
+  --ousia-app-secondary-foreground: #241f1b;
+  --ousia-app-muted: #eee7e2;
+  --ousia-app-muted-foreground: #6f645e;
+  --ousia-app-accent: #eee7e2;
+  --ousia-app-accent-foreground: #241f1b;
+  --ousia-app-destructive: oklch(0.577 0.245 27.325);
+  --ousia-tool-warning: #8a6f3f;
+  --ousia-tool-warning-strong: #75591e;
+  --ousia-tool-warning-bg: color-mix(in srgb, #c9912b 11%, transparent);
+  --ousia-app-border: color-mix(in srgb, #b7aaa2 34%, transparent);
+  --ousia-app-input: #ded6d0;
+  --ousia-app-ring: #9b8f87;
+  --ousia-app-chart-1: #eee7e2;
+  --ousia-app-chart-2: #9b8f87;
+  --ousia-app-chart-3: #6f645e;
+  --ousia-app-chart-4: #463d37;
+  --ousia-app-chart-5: #241f1b;
+  --ousia-app-sidebar: #f8f4f1;
+  --ousia-app-sidebar-foreground: #241f1b;
+  --ousia-app-sidebar-primary: #241f1b;
+  --ousia-app-sidebar-primary-foreground: #fdfbf9;
+  --ousia-app-sidebar-accent: #f2ebe7;
+  --ousia-app-sidebar-accent-foreground: #241f1b;
+  --ousia-app-sidebar-border: color-mix(in srgb, #b7aaa2 34%, transparent);
+  --ousia-app-sidebar-ring: #9b8f87;
+  --ousia-sidebar: color-mix(
+    in srgb,
+    var(--ousia-app-sidebar) 72%,
+    var(--ousia-app-background)
+  );
+  --ousia-sidebar-accent: color-mix(
+    in srgb,
+    var(--ousia-app-sidebar-accent) 68%,
+    var(--ousia-app-sidebar)
+  );
+  --ousia-sidebar-border: color-mix(
+    in srgb,
+    var(--ousia-app-sidebar-border) 72%,
+    transparent
+  );
+  --ousia-sidebar-ring: color-mix(
+    in srgb,
+    var(--ousia-app-sidebar-ring) 78%,
+    var(--ousia-app-sidebar)
+  );
 }
 
 :root[data-chat-message-spacing="compact"] {
@@ -228,368 +221,408 @@
 
 /* The product color scale is intentionally scoped to the session Sidebar. */
 .ousia-sidebar-theme {
-    --background: var(--ousia-app-background);
-    --foreground: var(--ousia-app-foreground);
-    --card: var(--ousia-app-card);
-    --card-foreground: var(--ousia-app-card-foreground);
-    --popover: var(--ousia-app-popover);
-    --popover-foreground: var(--ousia-app-popover-foreground);
-    --primary: var(--ousia-app-primary);
-    --primary-foreground: var(--ousia-app-primary-foreground);
-    --secondary: var(--ousia-app-secondary);
-    --secondary-foreground: var(--ousia-app-secondary-foreground);
-    --muted: var(--ousia-app-muted);
-    --muted-foreground: var(--ousia-app-muted-foreground);
-    --accent: var(--ousia-app-accent);
-    --accent-foreground: var(--ousia-app-accent-foreground);
-    --destructive: var(--ousia-app-destructive);
-    --border: var(--ousia-app-border);
-    --input: var(--ousia-app-input);
-    --ring: var(--ousia-app-ring);
-    --chart-1: var(--ousia-app-chart-1);
-    --chart-2: var(--ousia-app-chart-2);
-    --chart-3: var(--ousia-app-chart-3);
-    --chart-4: var(--ousia-app-chart-4);
-    --chart-5: var(--ousia-app-chart-5);
-    --sidebar: var(--ousia-sidebar);
-    --sidebar-foreground: var(--ousia-app-sidebar-foreground);
-    --sidebar-primary: var(--ousia-app-sidebar-primary);
-    --sidebar-primary-foreground: var(--ousia-app-sidebar-primary-foreground);
-    --sidebar-accent: var(--ousia-sidebar-accent);
-    --sidebar-accent-foreground: var(--ousia-app-sidebar-accent-foreground);
-    --sidebar-border: var(--ousia-sidebar-border);
-    --sidebar-ring: var(--ousia-sidebar-ring);
+  --background: var(--ousia-app-background);
+  --foreground: var(--ousia-app-foreground);
+  --card: var(--ousia-app-card);
+  --card-foreground: var(--ousia-app-card-foreground);
+  --popover: var(--ousia-app-popover);
+  --popover-foreground: var(--ousia-app-popover-foreground);
+  --primary: var(--ousia-app-primary);
+  --primary-foreground: var(--ousia-app-primary-foreground);
+  --secondary: var(--ousia-app-secondary);
+  --secondary-foreground: var(--ousia-app-secondary-foreground);
+  --muted: var(--ousia-app-muted);
+  --muted-foreground: var(--ousia-app-muted-foreground);
+  --accent: var(--ousia-app-accent);
+  --accent-foreground: var(--ousia-app-accent-foreground);
+  --destructive: var(--ousia-app-destructive);
+  --border: var(--ousia-app-border);
+  --input: var(--ousia-app-input);
+  --ring: var(--ousia-app-ring);
+  --chart-1: var(--ousia-app-chart-1);
+  --chart-2: var(--ousia-app-chart-2);
+  --chart-3: var(--ousia-app-chart-3);
+  --chart-4: var(--ousia-app-chart-4);
+  --chart-5: var(--ousia-app-chart-5);
+  --sidebar: var(--ousia-sidebar);
+  --sidebar-foreground: var(--ousia-app-sidebar-foreground);
+  --sidebar-primary: var(--ousia-app-sidebar-primary);
+  --sidebar-primary-foreground: var(--ousia-app-sidebar-primary-foreground);
+  --sidebar-accent: var(--ousia-sidebar-accent);
+  --sidebar-accent-foreground: var(--ousia-app-sidebar-accent-foreground);
+  --sidebar-border: var(--ousia-sidebar-border);
+  --sidebar-ring: var(--ousia-sidebar-ring);
 }
 
 /* Chat, Settings, Composer, and their controls stay on a fixed neutral
    surface system. Product color scales must not override these values. */
 .ousia-main-panel {
-    --ousia-composer-surface: #fff;
-    --ousia-chat-composer-ring-color: rgba(24, 24, 27, 0.055);
-    --ousia-chat-composer-border: rgba(24, 24, 27, 0.1);
-    --ousia-chat-composer-border-focus: rgba(24, 24, 27, 0.16);
-    --ousia-main-panel-shadow: 0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.56);
-    --ousia-chat-composer-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
-    --ousia-chat-composer-shadow-focus: 0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
-    --ousia-floating-panel-border: rgba(24, 24, 27, 0.1);
-    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(24, 24, 27, 0.08), 0 2px 7px -5px rgba(24, 24, 27, 0.1), 0 12px 28px -18px rgba(24, 24, 27, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  --ousia-composer-surface: #fff;
+  --ousia-diff-header-surface: color-mix(
+    in srgb,
+    var(--muted) 72%,
+    var(--background)
+  );
+  --ousia-diff-header-divider: color-mix(
+    in srgb,
+    var(--foreground) 8%,
+    transparent
+  );
+  --ousia-chat-composer-ring-color: rgba(24, 24, 27, 0.055);
+  --ousia-chat-composer-border: rgba(24, 24, 27, 0.1);
+  --ousia-chat-composer-border-focus: rgba(24, 24, 27, 0.16);
+  --ousia-main-panel-shadow:
+    0 1px 2px rgba(24, 24, 27, 0.035), 0 8px 18px -15px rgba(24, 24, 27, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56);
+  --ousia-chat-composer-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+  --ousia-chat-composer-shadow-focus:
+    0 1px 2px 0 rgb(0 0 0 / 0.025), 0 4px 14px 0 rgb(0 0 0 / 0.065);
+  --ousia-floating-panel-border: rgba(24, 24, 27, 0.1);
+  --ousia-floating-panel-shadow:
+    0 -2px 10px -8px rgba(24, 24, 27, 0.08),
+    0 2px 7px -5px rgba(24, 24, 27, 0.1),
+    0 12px 28px -18px rgba(24, 24, 27, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.56);
 }
 
 :root.dark {
-    --ousia-message-user-surface: oklch(0.245 0 0);
-    --ousia-message-user-foreground: oklch(0.93 0 0);
-    --ousia-inline-code-surface: oklch(0.28 0 0);
-    --ousia-inline-code-foreground: oklch(0.93 0 0);
-    --ousia-code-block-surface: oklch(0.19 0 0);
-    --ousia-code-block-border: oklch(0.32 0 0);
-    --ousia-code-block-foreground: oklch(0.92 0 0);
-    --ousia-code-block-muted-foreground: oklch(0.65 0 0);
+  --ousia-message-user-surface: oklch(0.245 0 0);
+  --ousia-message-user-foreground: oklch(0.93 0 0);
+  --ousia-inline-code-surface: oklch(0.28 0 0);
+  --ousia-inline-code-foreground: oklch(0.93 0 0);
+  --ousia-code-block-surface: oklch(0.19 0 0);
+  --ousia-code-block-border: oklch(0.32 0 0);
+  --ousia-code-block-foreground: oklch(0.92 0 0);
+  --ousia-code-block-muted-foreground: oklch(0.65 0 0);
 }
 
 .dark .ousia-main-panel {
-    --ousia-composer-surface: oklch(0.205 0 0);
-    --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
-    --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
-    --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
-    --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
-    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
-    --ousia-floating-panel-border: rgba(255, 255, 255, 0.04);
-    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
+  --ousia-composer-surface: color-mix(
+    in srgb,
+    var(--ousia-app-card) 97%,
+    white
+  );
+  --ousia-diff-header-surface: color-mix(
+    in srgb,
+    var(--card) 78%,
+    var(--background)
+  );
+  --ousia-diff-header-divider: color-mix(
+    in srgb,
+    var(--foreground) 7%,
+    transparent
+  );
+  --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
+  --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
+  --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
+  --ousia-main-panel-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.018),
+    0 8px 18px -15px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.012);
+  --ousia-chat-composer-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.28), 0 6px 18px -6px rgb(0 0 0 / 0.72),
+    0 20px 44px -18px rgb(0 0 0 / 0.86), inset 0 1px 0 rgb(255 255 255 / 0.025);
+  --ousia-chat-composer-shadow-focus:
+    0 0 0 1px rgb(0 0 0 / 0.34), 0 8px 22px -6px rgb(0 0 0 / 0.78),
+    0 24px 52px -18px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.035);
+  --ousia-floating-panel-border: rgba(255, 255, 255, 0.04);
+  --ousia-floating-panel-shadow:
+    0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5),
+    0 12px 28px -18px rgba(0, 0, 0, 0.72);
 }
 
 @media (max-width: 560px) {
-    :root {
-        --ousia-chat-gutter: 16px;
-        --ousia-settings-gutter: 16px;
-    }
+  :root {
+    --ousia-chat-gutter: 16px;
+    --ousia-settings-gutter: 16px;
+  }
 }
 
 @media (min-width: 920px) {
-    :root {
-        --ousia-chat-gutter: 32px;
-    }
+  :root {
+    --ousia-chat-gutter: 32px;
+  }
 }
 
 .ousia-chat-horizontal-padding {
-    padding-inline: var(--ousia-chat-gutter);
+  padding-inline: var(--ousia-chat-gutter);
 }
 
 @container chat (max-width: 640px) {
-    .ousia-chat-horizontal-padding {
-        padding-inline: 16px;
-    }
+  .ousia-chat-horizontal-padding {
+    padding-inline: 16px;
+  }
 }
 
 @container chat (max-width: 520px) {
-    .ousia-chat-horizontal-padding {
-        padding-inline: 12px;
-    }
+  .ousia-chat-horizontal-padding {
+    padding-inline: 12px;
+  }
 }
 
 :root[data-radix-color-scale="mist"] {
-    --ousia-app-background: #fdfefe;
-    --ousia-app-foreground: #22272c;
-    --ousia-app-card: #f8f9fa;
-    --ousia-app-card-foreground: #22272c;
-    --ousia-app-popover: #fcfdfd;
-    --ousia-app-popover-foreground: #22272c;
-    --ousia-app-primary: #22272c;
-    --ousia-app-primary-foreground: #fdfefe;
-    --ousia-app-secondary: #f3f5f7;
-    --ousia-app-secondary-foreground: #22272c;
-    --ousia-app-muted: #f3f5f7;
-    --ousia-app-muted-foreground: #697277;
-    --ousia-app-accent: #eff3f6;
-    --ousia-app-accent-foreground: #22272c;
-    --ousia-app-border: color-mix(in srgb, #96a4ad 20%, transparent);
-    --ousia-app-input: #e9edef;
-    --ousia-app-ring: #8c999f;
-    --ousia-app-chart-1: #e7ecef;
-    --ousia-app-chart-2: #8c999f;
-    --ousia-app-chart-3: #697277;
-    --ousia-app-chart-4: #3e464b;
-    --ousia-app-chart-5: #22272c;
-    --ousia-app-sidebar: #f7f9fa;
-    --ousia-app-sidebar-foreground: #22272c;
-    --ousia-app-sidebar-primary: #22272c;
-    --ousia-app-sidebar-primary-foreground: #fdfefe;
-    --ousia-app-sidebar-accent: #edf1f4;
-    --ousia-app-sidebar-accent-foreground: #22272c;
-    --ousia-app-sidebar-border: color-mix(in srgb, #96a4ad 18%, transparent);
-    --ousia-app-sidebar-ring: #8c999f;
+  --ousia-app-background: #fdfefe;
+  --ousia-app-foreground: #22272c;
+  --ousia-app-card: #f8f9fa;
+  --ousia-app-card-foreground: #22272c;
+  --ousia-app-popover: #fcfdfd;
+  --ousia-app-popover-foreground: #22272c;
+  --ousia-app-primary: #22272c;
+  --ousia-app-primary-foreground: #fdfefe;
+  --ousia-app-secondary: #f3f5f7;
+  --ousia-app-secondary-foreground: #22272c;
+  --ousia-app-muted: #f3f5f7;
+  --ousia-app-muted-foreground: #697277;
+  --ousia-app-accent: #eff3f6;
+  --ousia-app-accent-foreground: #22272c;
+  --ousia-app-border: color-mix(in srgb, #96a4ad 20%, transparent);
+  --ousia-app-input: #e9edef;
+  --ousia-app-ring: #8c999f;
+  --ousia-app-chart-1: #e7ecef;
+  --ousia-app-chart-2: #8c999f;
+  --ousia-app-chart-3: #697277;
+  --ousia-app-chart-4: #3e464b;
+  --ousia-app-chart-5: #22272c;
+  --ousia-app-sidebar: #f7f9fa;
+  --ousia-app-sidebar-foreground: #22272c;
+  --ousia-app-sidebar-primary: #22272c;
+  --ousia-app-sidebar-primary-foreground: #fdfefe;
+  --ousia-app-sidebar-accent: #edf1f4;
+  --ousia-app-sidebar-accent-foreground: #22272c;
+  --ousia-app-sidebar-border: color-mix(in srgb, #96a4ad 18%, transparent);
+  --ousia-app-sidebar-ring: #8c999f;
 }
 
 :root[data-radix-color-scale="paper"] {
-    --ousia-app-background: #fffefb;
-    --ousia-app-foreground: #1f1f1b;
-    --ousia-app-card: #f4f4ef;
-    --ousia-app-card-foreground: #1f1f1b;
-    --ousia-app-popover: #fbfbf7;
-    --ousia-app-popover-foreground: #1f1f1b;
-    --ousia-app-primary: #1f1f1b;
-    --ousia-app-primary-foreground: #fffefb;
-    --ousia-app-secondary: #ecece6;
-    --ousia-app-secondary-foreground: #1f1f1b;
-    --ousia-app-muted: #ecece6;
-    --ousia-app-muted-foreground: #68685f;
-    --ousia-app-accent: #ecece6;
-    --ousia-app-accent-foreground: #1f1f1b;
-    --ousia-app-border: color-mix(in srgb, #a8a89a 30%, transparent);
-    --ousia-app-input: #e3e3dd;
-    --ousia-app-ring: #8c8c80;
-    --ousia-diff-card-bg: color-mix(in srgb, var(--ousia-app-card) 42%, var(--ousia-app-background));
-    --ousia-app-chart-1: #ecece6;
-    --ousia-app-chart-2: #8c8c80;
-    --ousia-app-chart-3: #68685f;
-    --ousia-app-chart-4: #3b3b34;
-    --ousia-app-chart-5: #1f1f1b;
-    --ousia-app-sidebar: #fafaf8;
-    --ousia-app-sidebar-foreground: #1f1f1b;
-    --ousia-app-sidebar-primary: #1f1f1b;
-    --ousia-app-sidebar-primary-foreground: #fffefb;
-    --ousia-app-sidebar-accent: #eeeeea;
-    --ousia-app-sidebar-accent-foreground: #1f1f1b;
-    --ousia-app-sidebar-border: color-mix(in srgb, #a8a89a 26%, transparent);
-    --ousia-app-sidebar-ring: #8c8c80;
+  --ousia-app-background: #fffefb;
+  --ousia-app-foreground: #1f1f1b;
+  --ousia-app-card: #f4f4ef;
+  --ousia-app-card-foreground: #1f1f1b;
+  --ousia-app-popover: #fbfbf7;
+  --ousia-app-popover-foreground: #1f1f1b;
+  --ousia-app-primary: #1f1f1b;
+  --ousia-app-primary-foreground: #fffefb;
+  --ousia-app-secondary: #ecece6;
+  --ousia-app-secondary-foreground: #1f1f1b;
+  --ousia-app-muted: #ecece6;
+  --ousia-app-muted-foreground: #68685f;
+  --ousia-app-accent: #ecece6;
+  --ousia-app-accent-foreground: #1f1f1b;
+  --ousia-app-border: color-mix(in srgb, #a8a89a 30%, transparent);
+  --ousia-app-input: #e3e3dd;
+  --ousia-app-ring: #8c8c80;
+  --ousia-app-chart-1: #ecece6;
+  --ousia-app-chart-2: #8c8c80;
+  --ousia-app-chart-3: #68685f;
+  --ousia-app-chart-4: #3b3b34;
+  --ousia-app-chart-5: #1f1f1b;
+  --ousia-app-sidebar: #fafaf8;
+  --ousia-app-sidebar-foreground: #1f1f1b;
+  --ousia-app-sidebar-primary: #1f1f1b;
+  --ousia-app-sidebar-primary-foreground: #fffefb;
+  --ousia-app-sidebar-accent: #eeeeea;
+  --ousia-app-sidebar-accent-foreground: #1f1f1b;
+  --ousia-app-sidebar-border: color-mix(in srgb, #a8a89a 26%, transparent);
+  --ousia-app-sidebar-ring: #8c8c80;
 }
 
 :root[data-radix-color-scale="sand"] {
-    --ousia-app-background: #fdfdfc;
-    --ousia-app-foreground: #21201c;
-    --ousia-app-card: #f1f0ef;
-    --ousia-app-card-foreground: #21201c;
-    --ousia-app-popover: #f9f9f8;
-    --ousia-app-popover-foreground: #21201c;
-    --ousia-app-primary: #21201c;
-    --ousia-app-primary-foreground: #fdfdfc;
-    --ousia-app-secondary: #e9e8e6;
-    --ousia-app-secondary-foreground: #21201c;
-    --ousia-app-muted: #e9e8e6;
-    --ousia-app-muted-foreground: #63635e;
-    --ousia-app-accent: #e9e8e6;
-    --ousia-app-accent-foreground: #21201c;
-    --ousia-app-border: color-mix(in srgb, #a9a8a2 32%, transparent);
-    --ousia-app-input: #dad9d6;
-    --ousia-app-ring: #8d8d86;
-    --ousia-app-chart-1: #e2e1de;
-    --ousia-app-chart-2: #8d8d86;
-    --ousia-app-chart-3: #63635e;
-    --ousia-app-chart-4: #3b3931;
-    --ousia-app-chart-5: #21201c;
-    --ousia-app-sidebar: #f1f0ef;
-    --ousia-app-sidebar-foreground: #21201c;
-    --ousia-app-sidebar-primary: #21201c;
-    --ousia-app-sidebar-primary-foreground: #fdfdfc;
-    --ousia-app-sidebar-accent: #e9e8e6;
-    --ousia-app-sidebar-accent-foreground: #21201c;
-    --ousia-app-sidebar-border: color-mix(in srgb, #a9a8a2 32%, transparent);
-    --ousia-app-sidebar-ring: #8d8d86;
+  --ousia-app-background: #fdfdfc;
+  --ousia-app-foreground: #21201c;
+  --ousia-app-card: #f1f0ef;
+  --ousia-app-card-foreground: #21201c;
+  --ousia-app-popover: #f9f9f8;
+  --ousia-app-popover-foreground: #21201c;
+  --ousia-app-primary: #21201c;
+  --ousia-app-primary-foreground: #fdfdfc;
+  --ousia-app-secondary: #e9e8e6;
+  --ousia-app-secondary-foreground: #21201c;
+  --ousia-app-muted: #e9e8e6;
+  --ousia-app-muted-foreground: #63635e;
+  --ousia-app-accent: #e9e8e6;
+  --ousia-app-accent-foreground: #21201c;
+  --ousia-app-border: color-mix(in srgb, #a9a8a2 32%, transparent);
+  --ousia-app-input: #dad9d6;
+  --ousia-app-ring: #8d8d86;
+  --ousia-app-chart-1: #e2e1de;
+  --ousia-app-chart-2: #8d8d86;
+  --ousia-app-chart-3: #63635e;
+  --ousia-app-chart-4: #3b3931;
+  --ousia-app-chart-5: #21201c;
+  --ousia-app-sidebar: #f1f0ef;
+  --ousia-app-sidebar-foreground: #21201c;
+  --ousia-app-sidebar-primary: #21201c;
+  --ousia-app-sidebar-primary-foreground: #fdfdfc;
+  --ousia-app-sidebar-accent: #e9e8e6;
+  --ousia-app-sidebar-accent-foreground: #21201c;
+  --ousia-app-sidebar-border: color-mix(in srgb, #a9a8a2 32%, transparent);
+  --ousia-app-sidebar-ring: #8d8d86;
 }
 
 :root[data-radix-color-scale="gray"] {
-    --ousia-app-background: #fcfcfc;
-    --ousia-app-foreground: #202020;
-    --ousia-app-card: #f0f0f0;
-    --ousia-app-card-foreground: #202020;
-    --ousia-app-popover: #f9f9f9;
-    --ousia-app-popover-foreground: #202020;
-    --ousia-app-primary: #202020;
-    --ousia-app-primary-foreground: #fcfcfc;
-    --ousia-app-secondary: #e8e8e8;
-    --ousia-app-secondary-foreground: #202020;
-    --ousia-app-muted: #e8e8e8;
-    --ousia-app-muted-foreground: #646464;
-    --ousia-app-accent: #e8e8e8;
-    --ousia-app-accent-foreground: #202020;
-    --ousia-app-border: color-mix(in srgb, #a6a6a6 32%, transparent);
-    --ousia-app-input: #d9d9d9;
-    --ousia-app-ring: #8d8d8d;
-    --ousia-app-chart-1: #e0e0e0;
-    --ousia-app-chart-2: #8d8d8d;
-    --ousia-app-chart-3: #646464;
-    --ousia-app-chart-4: #383838;
-    --ousia-app-chart-5: #202020;
-    --ousia-app-sidebar: #f0f0f0;
-    --ousia-app-sidebar-foreground: #202020;
-    --ousia-app-sidebar-primary: #202020;
-    --ousia-app-sidebar-primary-foreground: #fcfcfc;
-    --ousia-app-sidebar-accent: #e8e8e8;
-    --ousia-app-sidebar-accent-foreground: #202020;
-    --ousia-app-sidebar-border: color-mix(in srgb, #a6a6a6 32%, transparent);
-    --ousia-app-sidebar-ring: #8d8d8d;
+  --ousia-app-background: #fcfcfc;
+  --ousia-app-foreground: #202020;
+  --ousia-app-card: #f0f0f0;
+  --ousia-app-card-foreground: #202020;
+  --ousia-app-popover: #f9f9f9;
+  --ousia-app-popover-foreground: #202020;
+  --ousia-app-primary: #202020;
+  --ousia-app-primary-foreground: #fcfcfc;
+  --ousia-app-secondary: #e8e8e8;
+  --ousia-app-secondary-foreground: #202020;
+  --ousia-app-muted: #e8e8e8;
+  --ousia-app-muted-foreground: #646464;
+  --ousia-app-accent: #e8e8e8;
+  --ousia-app-accent-foreground: #202020;
+  --ousia-app-border: color-mix(in srgb, #a6a6a6 32%, transparent);
+  --ousia-app-input: #d9d9d9;
+  --ousia-app-ring: #8d8d8d;
+  --ousia-app-chart-1: #e0e0e0;
+  --ousia-app-chart-2: #8d8d8d;
+  --ousia-app-chart-3: #646464;
+  --ousia-app-chart-4: #383838;
+  --ousia-app-chart-5: #202020;
+  --ousia-app-sidebar: #f0f0f0;
+  --ousia-app-sidebar-foreground: #202020;
+  --ousia-app-sidebar-primary: #202020;
+  --ousia-app-sidebar-primary-foreground: #fcfcfc;
+  --ousia-app-sidebar-accent: #e8e8e8;
+  --ousia-app-sidebar-accent-foreground: #202020;
+  --ousia-app-sidebar-border: color-mix(in srgb, #a6a6a6 32%, transparent);
+  --ousia-app-sidebar-ring: #8d8d8d;
 }
 
 :root[data-radix-color-scale="slate"] {
-    --ousia-app-background: #fcfcfd;
-    --ousia-app-foreground: #1c2024;
-    --ousia-app-card: #f0f0f3;
-    --ousia-app-card-foreground: #1c2024;
-    --ousia-app-popover: #f9f9fb;
-    --ousia-app-popover-foreground: #1c2024;
-    --ousia-app-primary: #1c2024;
-    --ousia-app-primary-foreground: #fcfcfd;
-    --ousia-app-secondary: #e8e8ec;
-    --ousia-app-secondary-foreground: #1c2024;
-    --ousia-app-muted: #e8e8ec;
-    --ousia-app-muted-foreground: #60646c;
-    --ousia-app-accent: #e8e8ec;
-    --ousia-app-accent-foreground: #1c2024;
-    --ousia-app-border: color-mix(in srgb, #a4a6b0 32%, transparent);
-    --ousia-app-input: #d9d9e0;
-    --ousia-app-ring: #8b8d98;
-    --ousia-app-chart-1: #e0e1e6;
-    --ousia-app-chart-2: #8b8d98;
-    --ousia-app-chart-3: #60646c;
-    --ousia-app-chart-4: #363a3f;
-    --ousia-app-chart-5: #1c2024;
-    --ousia-app-sidebar: #f0f0f3;
-    --ousia-app-sidebar-foreground: #1c2024;
-    --ousia-app-sidebar-primary: #1c2024;
-    --ousia-app-sidebar-primary-foreground: #fcfcfd;
-    --ousia-app-sidebar-accent: #e8e8ec;
-    --ousia-app-sidebar-accent-foreground: #1c2024;
-    --ousia-app-sidebar-border: color-mix(in srgb, #a4a6b0 32%, transparent);
-    --ousia-app-sidebar-ring: #8b8d98;
+  --ousia-app-background: #fcfcfd;
+  --ousia-app-foreground: #1c2024;
+  --ousia-app-card: #f0f0f3;
+  --ousia-app-card-foreground: #1c2024;
+  --ousia-app-popover: #f9f9fb;
+  --ousia-app-popover-foreground: #1c2024;
+  --ousia-app-primary: #1c2024;
+  --ousia-app-primary-foreground: #fcfcfd;
+  --ousia-app-secondary: #e8e8ec;
+  --ousia-app-secondary-foreground: #1c2024;
+  --ousia-app-muted: #e8e8ec;
+  --ousia-app-muted-foreground: #60646c;
+  --ousia-app-accent: #e8e8ec;
+  --ousia-app-accent-foreground: #1c2024;
+  --ousia-app-border: color-mix(in srgb, #a4a6b0 32%, transparent);
+  --ousia-app-input: #d9d9e0;
+  --ousia-app-ring: #8b8d98;
+  --ousia-app-chart-1: #e0e1e6;
+  --ousia-app-chart-2: #8b8d98;
+  --ousia-app-chart-3: #60646c;
+  --ousia-app-chart-4: #363a3f;
+  --ousia-app-chart-5: #1c2024;
+  --ousia-app-sidebar: #f0f0f3;
+  --ousia-app-sidebar-foreground: #1c2024;
+  --ousia-app-sidebar-primary: #1c2024;
+  --ousia-app-sidebar-primary-foreground: #fcfcfd;
+  --ousia-app-sidebar-accent: #e8e8ec;
+  --ousia-app-sidebar-accent-foreground: #1c2024;
+  --ousia-app-sidebar-border: color-mix(in srgb, #a4a6b0 32%, transparent);
+  --ousia-app-sidebar-ring: #8b8d98;
 }
 
 :root[data-radix-color-scale="mauve"] {
-    --ousia-app-background: #fdfcfd;
-    --ousia-app-foreground: #211f26;
-    --ousia-app-card: #f2eff3;
-    --ousia-app-card-foreground: #211f26;
-    --ousia-app-popover: #faf9fb;
-    --ousia-app-popover-foreground: #211f26;
-    --ousia-app-primary: #211f26;
-    --ousia-app-primary-foreground: #fdfcfd;
-    --ousia-app-secondary: #eae7ec;
-    --ousia-app-secondary-foreground: #211f26;
-    --ousia-app-muted: #eae7ec;
-    --ousia-app-muted-foreground: #65636d;
-    --ousia-app-accent: #eae7ec;
-    --ousia-app-accent-foreground: #211f26;
-    --ousia-app-border: color-mix(in srgb, #aaa4b0 32%, transparent);
-    --ousia-app-input: #dbd8e0;
-    --ousia-app-ring: #8e8c99;
-    --ousia-app-chart-1: #e3dfe6;
-    --ousia-app-chart-2: #8e8c99;
-    --ousia-app-chart-3: #65636d;
-    --ousia-app-chart-4: #3c393f;
-    --ousia-app-chart-5: #211f26;
-    --ousia-app-sidebar: #f2eff3;
-    --ousia-app-sidebar-foreground: #211f26;
-    --ousia-app-sidebar-primary: #211f26;
-    --ousia-app-sidebar-primary-foreground: #fdfcfd;
-    --ousia-app-sidebar-accent: #eae7ec;
-    --ousia-app-sidebar-accent-foreground: #211f26;
-    --ousia-app-sidebar-border: color-mix(in srgb, #aaa4b0 32%, transparent);
-    --ousia-app-sidebar-ring: #8e8c99;
+  --ousia-app-background: #fdfcfd;
+  --ousia-app-foreground: #211f26;
+  --ousia-app-card: #f2eff3;
+  --ousia-app-card-foreground: #211f26;
+  --ousia-app-popover: #faf9fb;
+  --ousia-app-popover-foreground: #211f26;
+  --ousia-app-primary: #211f26;
+  --ousia-app-primary-foreground: #fdfcfd;
+  --ousia-app-secondary: #eae7ec;
+  --ousia-app-secondary-foreground: #211f26;
+  --ousia-app-muted: #eae7ec;
+  --ousia-app-muted-foreground: #65636d;
+  --ousia-app-accent: #eae7ec;
+  --ousia-app-accent-foreground: #211f26;
+  --ousia-app-border: color-mix(in srgb, #aaa4b0 32%, transparent);
+  --ousia-app-input: #dbd8e0;
+  --ousia-app-ring: #8e8c99;
+  --ousia-app-chart-1: #e3dfe6;
+  --ousia-app-chart-2: #8e8c99;
+  --ousia-app-chart-3: #65636d;
+  --ousia-app-chart-4: #3c393f;
+  --ousia-app-chart-5: #211f26;
+  --ousia-app-sidebar: #f2eff3;
+  --ousia-app-sidebar-foreground: #211f26;
+  --ousia-app-sidebar-primary: #211f26;
+  --ousia-app-sidebar-primary-foreground: #fdfcfd;
+  --ousia-app-sidebar-accent: #eae7ec;
+  --ousia-app-sidebar-accent-foreground: #211f26;
+  --ousia-app-sidebar-border: color-mix(in srgb, #aaa4b0 32%, transparent);
+  --ousia-app-sidebar-ring: #8e8c99;
 }
 
 :root[data-radix-color-scale="sage"] {
-    --ousia-app-background: #fbfdfc;
-    --ousia-app-foreground: #1a211e;
-    --ousia-app-card: #eef1f0;
-    --ousia-app-card-foreground: #1a211e;
-    --ousia-app-popover: #f7f9f8;
-    --ousia-app-popover-foreground: #1a211e;
-    --ousia-app-primary: #1a211e;
-    --ousia-app-primary-foreground: #fbfdfc;
-    --ousia-app-secondary: #e6e9e8;
-    --ousia-app-secondary-foreground: #1a211e;
-    --ousia-app-muted: #e6e9e8;
-    --ousia-app-muted-foreground: #5f6563;
-    --ousia-app-accent: #e6e9e8;
-    --ousia-app-accent-foreground: #1a211e;
-    --ousia-app-border: color-mix(in srgb, #9fa8a5 32%, transparent);
-    --ousia-app-input: #d7dad9;
-    --ousia-app-ring: #868e8b;
-    --ousia-app-chart-1: #dfe2e0;
-    --ousia-app-chart-2: #868e8b;
-    --ousia-app-chart-3: #5f6563;
-    --ousia-app-chart-4: #343b38;
-    --ousia-app-chart-5: #1a211e;
-    --ousia-app-sidebar: #eef1f0;
-    --ousia-app-sidebar-foreground: #1a211e;
-    --ousia-app-sidebar-primary: #1a211e;
-    --ousia-app-sidebar-primary-foreground: #fbfdfc;
-    --ousia-app-sidebar-accent: #e6e9e8;
-    --ousia-app-sidebar-accent-foreground: #1a211e;
-    --ousia-app-sidebar-border: color-mix(in srgb, #9fa8a5 32%, transparent);
-    --ousia-app-sidebar-ring: #868e8b;
+  --ousia-app-background: #fbfdfc;
+  --ousia-app-foreground: #1a211e;
+  --ousia-app-card: #eef1f0;
+  --ousia-app-card-foreground: #1a211e;
+  --ousia-app-popover: #f7f9f8;
+  --ousia-app-popover-foreground: #1a211e;
+  --ousia-app-primary: #1a211e;
+  --ousia-app-primary-foreground: #fbfdfc;
+  --ousia-app-secondary: #e6e9e8;
+  --ousia-app-secondary-foreground: #1a211e;
+  --ousia-app-muted: #e6e9e8;
+  --ousia-app-muted-foreground: #5f6563;
+  --ousia-app-accent: #e6e9e8;
+  --ousia-app-accent-foreground: #1a211e;
+  --ousia-app-border: color-mix(in srgb, #9fa8a5 32%, transparent);
+  --ousia-app-input: #d7dad9;
+  --ousia-app-ring: #868e8b;
+  --ousia-app-chart-1: #dfe2e0;
+  --ousia-app-chart-2: #868e8b;
+  --ousia-app-chart-3: #5f6563;
+  --ousia-app-chart-4: #343b38;
+  --ousia-app-chart-5: #1a211e;
+  --ousia-app-sidebar: #eef1f0;
+  --ousia-app-sidebar-foreground: #1a211e;
+  --ousia-app-sidebar-primary: #1a211e;
+  --ousia-app-sidebar-primary-foreground: #fbfdfc;
+  --ousia-app-sidebar-accent: #e6e9e8;
+  --ousia-app-sidebar-accent-foreground: #1a211e;
+  --ousia-app-sidebar-border: color-mix(in srgb, #9fa8a5 32%, transparent);
+  --ousia-app-sidebar-ring: #868e8b;
 }
 
 :root[data-radix-color-scale="olive"] {
-    --ousia-app-background: #fcfdfc;
-    --ousia-app-foreground: #1d211c;
-    --ousia-app-card: #eff1ef;
-    --ousia-app-card-foreground: #1d211c;
-    --ousia-app-popover: #f8faf8;
-    --ousia-app-popover-foreground: #1d211c;
-    --ousia-app-primary: #1d211c;
-    --ousia-app-primary-foreground: #fcfdfc;
-    --ousia-app-secondary: #e7e9e7;
-    --ousia-app-secondary-foreground: #1d211c;
-    --ousia-app-muted: #e7e9e7;
-    --ousia-app-muted-foreground: #60655f;
-    --ousia-app-accent: #e7e9e7;
-    --ousia-app-accent-foreground: #1d211c;
-    --ousia-app-border: color-mix(in srgb, #a2a89f 32%, transparent);
-    --ousia-app-input: #d7dad7;
-    --ousia-app-ring: #898e87;
-    --ousia-app-chart-1: #dfe2df;
-    --ousia-app-chart-2: #898e87;
-    --ousia-app-chart-3: #60655f;
-    --ousia-app-chart-4: #383d37;
-    --ousia-app-chart-5: #1d211c;
-    --ousia-app-sidebar: #eff1ef;
-    --ousia-app-sidebar-foreground: #1d211c;
-    --ousia-app-sidebar-primary: #1d211c;
-    --ousia-app-sidebar-primary-foreground: #fcfdfc;
-    --ousia-app-sidebar-accent: #e7e9e7;
-    --ousia-app-sidebar-accent-foreground: #1d211c;
-    --ousia-app-sidebar-border: color-mix(in srgb, #a2a89f 32%, transparent);
-    --ousia-app-sidebar-ring: #898e87;
+  --ousia-app-background: #fcfdfc;
+  --ousia-app-foreground: #1d211c;
+  --ousia-app-card: #eff1ef;
+  --ousia-app-card-foreground: #1d211c;
+  --ousia-app-popover: #f8faf8;
+  --ousia-app-popover-foreground: #1d211c;
+  --ousia-app-primary: #1d211c;
+  --ousia-app-primary-foreground: #fcfdfc;
+  --ousia-app-secondary: #e7e9e7;
+  --ousia-app-secondary-foreground: #1d211c;
+  --ousia-app-muted: #e7e9e7;
+  --ousia-app-muted-foreground: #60655f;
+  --ousia-app-accent: #e7e9e7;
+  --ousia-app-accent-foreground: #1d211c;
+  --ousia-app-border: color-mix(in srgb, #a2a89f 32%, transparent);
+  --ousia-app-input: #d7dad7;
+  --ousia-app-ring: #898e87;
+  --ousia-app-chart-1: #dfe2df;
+  --ousia-app-chart-2: #898e87;
+  --ousia-app-chart-3: #60655f;
+  --ousia-app-chart-4: #383d37;
+  --ousia-app-chart-5: #1d211c;
+  --ousia-app-sidebar: #eff1ef;
+  --ousia-app-sidebar-foreground: #1d211c;
+  --ousia-app-sidebar-primary: #1d211c;
+  --ousia-app-sidebar-primary-foreground: #fcfdfc;
+  --ousia-app-sidebar-accent: #e7e9e7;
+  --ousia-app-sidebar-accent-foreground: #1d211c;
+  --ousia-app-sidebar-border: color-mix(in srgb, #a2a89f 32%, transparent);
+  --ousia-app-sidebar-ring: #898e87;
 }
 
 :root[data-radix-color-scale="tomato"],
@@ -615,645 +648,663 @@
 :root[data-radix-color-scale="lime"],
 :root[data-radix-color-scale="mint"],
 :root[data-radix-color-scale="sky"] {
-    --ousia-app-background: var(--radix-scale-1);
-    --ousia-app-foreground: #241f1b;
-    --ousia-app-card: var(--radix-scale-2);
-    --ousia-app-card-foreground: #241f1b;
-    --ousia-app-popover: var(--radix-scale-2);
-    --ousia-app-popover-foreground: #241f1b;
-    --ousia-app-primary: #241f1b;
-    --ousia-app-primary-foreground: var(--radix-scale-1);
-    --ousia-app-secondary: var(--radix-scale-2);
-    --ousia-app-secondary-foreground: #241f1b;
-    --ousia-app-muted: var(--radix-scale-2);
-    --ousia-app-muted-foreground: #6f645e;
-    --ousia-app-accent: var(--radix-scale-2);
-    --ousia-app-accent-foreground: #241f1b;
-    --ousia-app-border: color-mix(in srgb, #b7aaa2 28%, transparent);
-    --ousia-app-input: color-mix(in srgb, var(--radix-scale-8) 22%, transparent);
-    --ousia-app-ring: color-mix(in srgb, var(--radix-scale-9) 72%, transparent);
-    --ousia-diff-card-bg: color-mix(in srgb, var(--radix-scale-3) 18%, var(--ousia-app-background));
-    --ousia-app-chart-1: var(--radix-scale-5);
-    --ousia-app-chart-2: var(--radix-scale-9);
-    --ousia-app-chart-3: var(--radix-scale-11);
-    --ousia-app-chart-4: var(--radix-scale-12);
-    --ousia-app-chart-5: var(--radix-scale-8);
-    --ousia-app-sidebar: var(--radix-scale-1);
-    --ousia-app-sidebar-foreground: #241f1b;
-    --ousia-app-sidebar-primary: #241f1b;
-    --ousia-app-sidebar-primary-foreground: var(--radix-scale-1);
-    --ousia-app-sidebar-accent: var(--radix-scale-2);
-    --ousia-app-sidebar-accent-foreground: #241f1b;
-    --ousia-app-sidebar-border: color-mix(in srgb, #b7aaa2 28%, transparent);
-    --ousia-app-sidebar-ring: var(--radix-scale-9);
+  --ousia-app-background: var(--radix-scale-1);
+  --ousia-app-foreground: #241f1b;
+  --ousia-app-card: var(--radix-scale-2);
+  --ousia-app-card-foreground: #241f1b;
+  --ousia-app-popover: var(--radix-scale-2);
+  --ousia-app-popover-foreground: #241f1b;
+  --ousia-app-primary: #241f1b;
+  --ousia-app-primary-foreground: var(--radix-scale-1);
+  --ousia-app-secondary: var(--radix-scale-2);
+  --ousia-app-secondary-foreground: #241f1b;
+  --ousia-app-muted: var(--radix-scale-2);
+  --ousia-app-muted-foreground: #6f645e;
+  --ousia-app-accent: var(--radix-scale-2);
+  --ousia-app-accent-foreground: #241f1b;
+  --ousia-app-border: color-mix(in srgb, #b7aaa2 28%, transparent);
+  --ousia-app-input: color-mix(in srgb, var(--radix-scale-8) 22%, transparent);
+  --ousia-app-ring: color-mix(in srgb, var(--radix-scale-9) 72%, transparent);
+  --ousia-app-chart-1: var(--radix-scale-5);
+  --ousia-app-chart-2: var(--radix-scale-9);
+  --ousia-app-chart-3: var(--radix-scale-11);
+  --ousia-app-chart-4: var(--radix-scale-12);
+  --ousia-app-chart-5: var(--radix-scale-8);
+  --ousia-app-sidebar: var(--radix-scale-1);
+  --ousia-app-sidebar-foreground: #241f1b;
+  --ousia-app-sidebar-primary: #241f1b;
+  --ousia-app-sidebar-primary-foreground: var(--radix-scale-1);
+  --ousia-app-sidebar-accent: var(--radix-scale-2);
+  --ousia-app-sidebar-accent-foreground: #241f1b;
+  --ousia-app-sidebar-border: color-mix(in srgb, #b7aaa2 28%, transparent);
+  --ousia-app-sidebar-ring: var(--radix-scale-9);
 }
 
 :root[data-radix-color-scale="tomato"] {
-    --radix-scale-1: #fffcfc;
-    --radix-scale-2: #fff8f7;
-    --radix-scale-3: #feebe7;
-    --radix-scale-4: #ffdcd3;
-    --radix-scale-5: #ffcdc2;
-    --radix-scale-6: #fdbdaf;
-    --radix-scale-8: #ec8e7b;
-    --radix-scale-9: #e54d2e;
-    --radix-scale-11: #d13415;
-    --radix-scale-12: #5c271f;
+  --radix-scale-1: #fffcfc;
+  --radix-scale-2: #fff8f7;
+  --radix-scale-3: #feebe7;
+  --radix-scale-4: #ffdcd3;
+  --radix-scale-5: #ffcdc2;
+  --radix-scale-6: #fdbdaf;
+  --radix-scale-8: #ec8e7b;
+  --radix-scale-9: #e54d2e;
+  --radix-scale-11: #d13415;
+  --radix-scale-12: #5c271f;
 }
 
 :root[data-radix-color-scale="red"] {
-    --radix-scale-1: #fffcfc;
-    --radix-scale-2: #fff7f7;
-    --radix-scale-3: #feebec;
-    --radix-scale-4: #ffdbdc;
-    --radix-scale-5: #ffcdce;
-    --radix-scale-6: #fdbdbe;
-    --radix-scale-8: #eb8e90;
-    --radix-scale-9: #e5484d;
-    --radix-scale-11: #ce2c31;
-    --radix-scale-12: #641723;
+  --radix-scale-1: #fffcfc;
+  --radix-scale-2: #fff7f7;
+  --radix-scale-3: #feebec;
+  --radix-scale-4: #ffdbdc;
+  --radix-scale-5: #ffcdce;
+  --radix-scale-6: #fdbdbe;
+  --radix-scale-8: #eb8e90;
+  --radix-scale-9: #e5484d;
+  --radix-scale-11: #ce2c31;
+  --radix-scale-12: #641723;
 }
 
 :root[data-radix-color-scale="ruby"] {
-    --radix-scale-1: #fffcfd;
-    --radix-scale-2: #fff7f8;
-    --radix-scale-3: #feeaed;
-    --radix-scale-4: #ffdce1;
-    --radix-scale-5: #ffced6;
-    --radix-scale-6: #f8bfc8;
-    --radix-scale-8: #e592a3;
-    --radix-scale-9: #e54666;
-    --radix-scale-11: #ca244d;
-    --radix-scale-12: #64172b;
+  --radix-scale-1: #fffcfd;
+  --radix-scale-2: #fff7f8;
+  --radix-scale-3: #feeaed;
+  --radix-scale-4: #ffdce1;
+  --radix-scale-5: #ffced6;
+  --radix-scale-6: #f8bfc8;
+  --radix-scale-8: #e592a3;
+  --radix-scale-9: #e54666;
+  --radix-scale-11: #ca244d;
+  --radix-scale-12: #64172b;
 }
 
 :root[data-radix-color-scale="crimson"] {
-    --radix-scale-1: #fffcfd;
-    --radix-scale-2: #fef7f9;
-    --radix-scale-3: #ffe9f0;
-    --radix-scale-4: #fedce7;
-    --radix-scale-5: #facedd;
-    --radix-scale-6: #f3bed1;
-    --radix-scale-8: #e093b2;
-    --radix-scale-9: #e93d82;
-    --radix-scale-11: #cb1d63;
-    --radix-scale-12: #621639;
+  --radix-scale-1: #fffcfd;
+  --radix-scale-2: #fef7f9;
+  --radix-scale-3: #ffe9f0;
+  --radix-scale-4: #fedce7;
+  --radix-scale-5: #facedd;
+  --radix-scale-6: #f3bed1;
+  --radix-scale-8: #e093b2;
+  --radix-scale-9: #e93d82;
+  --radix-scale-11: #cb1d63;
+  --radix-scale-12: #621639;
 }
 
 :root[data-radix-color-scale="pink"] {
-    --radix-scale-1: #fffcfe;
-    --radix-scale-2: #fef7fb;
-    --radix-scale-3: #fee9f5;
-    --radix-scale-4: #fbdcef;
-    --radix-scale-5: #f6cee7;
-    --radix-scale-6: #efbfdd;
-    --radix-scale-8: #dd93c2;
-    --radix-scale-9: #d6409f;
-    --radix-scale-11: #c2298a;
-    --radix-scale-12: #651249;
+  --radix-scale-1: #fffcfe;
+  --radix-scale-2: #fef7fb;
+  --radix-scale-3: #fee9f5;
+  --radix-scale-4: #fbdcef;
+  --radix-scale-5: #f6cee7;
+  --radix-scale-6: #efbfdd;
+  --radix-scale-8: #dd93c2;
+  --radix-scale-9: #d6409f;
+  --radix-scale-11: #c2298a;
+  --radix-scale-12: #651249;
 }
 
 :root[data-radix-color-scale="plum"] {
-    --radix-scale-1: #fefcff;
-    --radix-scale-2: #fdf7fd;
-    --radix-scale-3: #fbebfb;
-    --radix-scale-4: #f7def8;
-    --radix-scale-5: #f2d1f3;
-    --radix-scale-6: #e9c2ec;
-    --radix-scale-8: #cf91d8;
-    --radix-scale-9: #ab4aba;
-    --radix-scale-11: #953ea3;
-    --radix-scale-12: #53195d;
+  --radix-scale-1: #fefcff;
+  --radix-scale-2: #fdf7fd;
+  --radix-scale-3: #fbebfb;
+  --radix-scale-4: #f7def8;
+  --radix-scale-5: #f2d1f3;
+  --radix-scale-6: #e9c2ec;
+  --radix-scale-8: #cf91d8;
+  --radix-scale-9: #ab4aba;
+  --radix-scale-11: #953ea3;
+  --radix-scale-12: #53195d;
 }
 
 :root[data-radix-color-scale="purple"] {
-    --radix-scale-1: #fefcfe;
-    --radix-scale-2: #fbf7fe;
-    --radix-scale-3: #f7edfe;
-    --radix-scale-4: #f2e2fc;
-    --radix-scale-5: #ead5f9;
-    --radix-scale-6: #e0c4f4;
-    --radix-scale-8: #be93e4;
-    --radix-scale-9: #8e4ec6;
-    --radix-scale-11: #8145b5;
-    --radix-scale-12: #402060;
+  --radix-scale-1: #fefcfe;
+  --radix-scale-2: #fbf7fe;
+  --radix-scale-3: #f7edfe;
+  --radix-scale-4: #f2e2fc;
+  --radix-scale-5: #ead5f9;
+  --radix-scale-6: #e0c4f4;
+  --radix-scale-8: #be93e4;
+  --radix-scale-9: #8e4ec6;
+  --radix-scale-11: #8145b5;
+  --radix-scale-12: #402060;
 }
 
 :root[data-radix-color-scale="violet"] {
-    --radix-scale-1: #fdfcfe;
-    --radix-scale-2: #faf8ff;
-    --radix-scale-3: #f4f0fe;
-    --radix-scale-4: #ebe4ff;
-    --radix-scale-5: #e1d9ff;
-    --radix-scale-6: #d4cafe;
-    --radix-scale-8: #aa99ec;
-    --radix-scale-9: #6e56cf;
-    --radix-scale-11: #6550b9;
-    --radix-scale-12: #2f265f;
+  --radix-scale-1: #fdfcfe;
+  --radix-scale-2: #faf8ff;
+  --radix-scale-3: #f4f0fe;
+  --radix-scale-4: #ebe4ff;
+  --radix-scale-5: #e1d9ff;
+  --radix-scale-6: #d4cafe;
+  --radix-scale-8: #aa99ec;
+  --radix-scale-9: #6e56cf;
+  --radix-scale-11: #6550b9;
+  --radix-scale-12: #2f265f;
 }
 
 :root[data-radix-color-scale="iris"] {
-    --radix-scale-1: #fdfdff;
-    --radix-scale-2: #f8f8ff;
-    --radix-scale-3: #f0f1fe;
-    --radix-scale-4: #e6e7ff;
-    --radix-scale-5: #dadcff;
-    --radix-scale-6: #cbcdff;
-    --radix-scale-8: #9b9ef0;
-    --radix-scale-9: #5b5bd6;
-    --radix-scale-11: #5753c6;
-    --radix-scale-12: #272962;
+  --radix-scale-1: #fdfdff;
+  --radix-scale-2: #f8f8ff;
+  --radix-scale-3: #f0f1fe;
+  --radix-scale-4: #e6e7ff;
+  --radix-scale-5: #dadcff;
+  --radix-scale-6: #cbcdff;
+  --radix-scale-8: #9b9ef0;
+  --radix-scale-9: #5b5bd6;
+  --radix-scale-11: #5753c6;
+  --radix-scale-12: #272962;
 }
 
 :root[data-radix-color-scale="indigo"] {
-    --radix-scale-1: #fdfdfe;
-    --radix-scale-2: #f7f9ff;
-    --radix-scale-3: #edf2fe;
-    --radix-scale-4: #e1e9ff;
-    --radix-scale-5: #d2deff;
-    --radix-scale-6: #c1d0ff;
-    --radix-scale-8: #8da4ef;
-    --radix-scale-9: #3e63dd;
-    --radix-scale-11: #3a5bc7;
-    --radix-scale-12: #1f2d5c;
+  --radix-scale-1: #fdfdfe;
+  --radix-scale-2: #f7f9ff;
+  --radix-scale-3: #edf2fe;
+  --radix-scale-4: #e1e9ff;
+  --radix-scale-5: #d2deff;
+  --radix-scale-6: #c1d0ff;
+  --radix-scale-8: #8da4ef;
+  --radix-scale-9: #3e63dd;
+  --radix-scale-11: #3a5bc7;
+  --radix-scale-12: #1f2d5c;
 }
 
 :root[data-radix-color-scale="blue"] {
-    --radix-scale-1: #fbfdff;
-    --radix-scale-2: #f4faff;
-    --radix-scale-3: #e6f4fe;
-    --radix-scale-4: #d5efff;
-    --radix-scale-5: #c2e5ff;
-    --radix-scale-6: #acd8fc;
-    --radix-scale-8: #5eb1ef;
-    --radix-scale-9: #0090ff;
-    --radix-scale-11: #0d74ce;
-    --radix-scale-12: #113264;
+  --radix-scale-1: #fbfdff;
+  --radix-scale-2: #f4faff;
+  --radix-scale-3: #e6f4fe;
+  --radix-scale-4: #d5efff;
+  --radix-scale-5: #c2e5ff;
+  --radix-scale-6: #acd8fc;
+  --radix-scale-8: #5eb1ef;
+  --radix-scale-9: #0090ff;
+  --radix-scale-11: #0d74ce;
+  --radix-scale-12: #113264;
 }
 
 :root[data-radix-color-scale="cyan"] {
-    --radix-scale-1: #fafdfe;
-    --radix-scale-2: #f2fafb;
-    --radix-scale-3: #def7f9;
-    --radix-scale-4: #caf1f6;
-    --radix-scale-5: #b5e9f0;
-    --radix-scale-6: #9ddde7;
-    --radix-scale-8: #3db9cf;
-    --radix-scale-9: #00a2c7;
-    --radix-scale-11: #107d98;
-    --radix-scale-12: #0d3c48;
+  --radix-scale-1: #fafdfe;
+  --radix-scale-2: #f2fafb;
+  --radix-scale-3: #def7f9;
+  --radix-scale-4: #caf1f6;
+  --radix-scale-5: #b5e9f0;
+  --radix-scale-6: #9ddde7;
+  --radix-scale-8: #3db9cf;
+  --radix-scale-9: #00a2c7;
+  --radix-scale-11: #107d98;
+  --radix-scale-12: #0d3c48;
 }
 
 :root[data-radix-color-scale="teal"] {
-    --radix-scale-1: #fafefd;
-    --radix-scale-2: #f3fbf9;
-    --radix-scale-3: #e0f8f3;
-    --radix-scale-4: #ccf3ea;
-    --radix-scale-5: #b8eae0;
-    --radix-scale-6: #a1ded2;
-    --radix-scale-8: #53b9ab;
-    --radix-scale-9: #12a594;
-    --radix-scale-11: #008573;
-    --radix-scale-12: #0d3d38;
+  --radix-scale-1: #fafefd;
+  --radix-scale-2: #f3fbf9;
+  --radix-scale-3: #e0f8f3;
+  --radix-scale-4: #ccf3ea;
+  --radix-scale-5: #b8eae0;
+  --radix-scale-6: #a1ded2;
+  --radix-scale-8: #53b9ab;
+  --radix-scale-9: #12a594;
+  --radix-scale-11: #008573;
+  --radix-scale-12: #0d3d38;
 }
 
 :root[data-radix-color-scale="jade"] {
-    --radix-scale-1: #fbfefd;
-    --radix-scale-2: #f4fbf7;
-    --radix-scale-3: #e6f7ed;
-    --radix-scale-4: #d6f1e3;
-    --radix-scale-5: #c3e9d7;
-    --radix-scale-6: #acdec8;
-    --radix-scale-8: #56ba9f;
-    --radix-scale-9: #29a383;
-    --radix-scale-11: #208368;
-    --radix-scale-12: #1d3b31;
+  --radix-scale-1: #fbfefd;
+  --radix-scale-2: #f4fbf7;
+  --radix-scale-3: #e6f7ed;
+  --radix-scale-4: #d6f1e3;
+  --radix-scale-5: #c3e9d7;
+  --radix-scale-6: #acdec8;
+  --radix-scale-8: #56ba9f;
+  --radix-scale-9: #29a383;
+  --radix-scale-11: #208368;
+  --radix-scale-12: #1d3b31;
 }
 
 :root[data-radix-color-scale="green"] {
-    --radix-scale-1: #fbfefc;
-    --radix-scale-2: #f4fbf6;
-    --radix-scale-3: #e6f6eb;
-    --radix-scale-4: #d6f1df;
-    --radix-scale-5: #c4e8d1;
-    --radix-scale-6: #adddc0;
-    --radix-scale-8: #5bb98b;
-    --radix-scale-9: #30a46c;
-    --radix-scale-11: #218358;
-    --radix-scale-12: #193b2d;
+  --radix-scale-1: #fbfefc;
+  --radix-scale-2: #f4fbf6;
+  --radix-scale-3: #e6f6eb;
+  --radix-scale-4: #d6f1df;
+  --radix-scale-5: #c4e8d1;
+  --radix-scale-6: #adddc0;
+  --radix-scale-8: #5bb98b;
+  --radix-scale-9: #30a46c;
+  --radix-scale-11: #218358;
+  --radix-scale-12: #193b2d;
 }
 
 :root[data-radix-color-scale="grass"] {
-    --radix-scale-1: #fbfefb;
-    --radix-scale-2: #f5fbf5;
-    --radix-scale-3: #e9f6e9;
-    --radix-scale-4: #daf1db;
-    --radix-scale-5: #c9e8ca;
-    --radix-scale-6: #b2ddb5;
-    --radix-scale-8: #65ba74;
-    --radix-scale-9: #46a758;
-    --radix-scale-11: #2a7e3b;
-    --radix-scale-12: #203c25;
+  --radix-scale-1: #fbfefb;
+  --radix-scale-2: #f5fbf5;
+  --radix-scale-3: #e9f6e9;
+  --radix-scale-4: #daf1db;
+  --radix-scale-5: #c9e8ca;
+  --radix-scale-6: #b2ddb5;
+  --radix-scale-8: #65ba74;
+  --radix-scale-9: #46a758;
+  --radix-scale-11: #2a7e3b;
+  --radix-scale-12: #203c25;
 }
 
 :root[data-radix-color-scale="brown"] {
-    --radix-scale-1: #fefdfc;
-    --radix-scale-2: #fcf9f6;
-    --radix-scale-3: #f6eee7;
-    --radix-scale-4: #f0e4d9;
-    --radix-scale-5: #ebdaca;
-    --radix-scale-6: #e4cdb7;
-    --radix-scale-8: #cea37e;
-    --radix-scale-9: #ad7f58;
-    --radix-scale-11: #815e46;
-    --radix-scale-12: #3e332e;
+  --radix-scale-1: #fefdfc;
+  --radix-scale-2: #fcf9f6;
+  --radix-scale-3: #f6eee7;
+  --radix-scale-4: #f0e4d9;
+  --radix-scale-5: #ebdaca;
+  --radix-scale-6: #e4cdb7;
+  --radix-scale-8: #cea37e;
+  --radix-scale-9: #ad7f58;
+  --radix-scale-11: #815e46;
+  --radix-scale-12: #3e332e;
 }
 
 :root[data-radix-color-scale="orange"] {
-    --radix-scale-1: #fefcfb;
-    --radix-scale-2: #fff7ed;
-    --radix-scale-3: #ffefd6;
-    --radix-scale-4: #ffdfb5;
-    --radix-scale-5: #ffd19a;
-    --radix-scale-6: #ffc182;
-    --radix-scale-8: #ec9455;
-    --radix-scale-9: #f76b15;
-    --radix-scale-11: #cc4e00;
-    --radix-scale-12: #582d1d;
+  --radix-scale-1: #fefcfb;
+  --radix-scale-2: #fff7ed;
+  --radix-scale-3: #ffefd6;
+  --radix-scale-4: #ffdfb5;
+  --radix-scale-5: #ffd19a;
+  --radix-scale-6: #ffc182;
+  --radix-scale-8: #ec9455;
+  --radix-scale-9: #f76b15;
+  --radix-scale-11: #cc4e00;
+  --radix-scale-12: #582d1d;
 }
 
 :root[data-radix-color-scale="amber"] {
-    --radix-scale-1: #fefdfb;
-    --radix-scale-2: #fefbe9;
-    --radix-scale-3: #fff7c2;
-    --radix-scale-4: #ffee9c;
-    --radix-scale-5: #fbe577;
-    --radix-scale-6: #f3d673;
-    --radix-scale-8: #e2a336;
-    --radix-scale-9: #ffc53d;
-    --radix-scale-11: #ab6400;
-    --radix-scale-12: #4f3422;
+  --radix-scale-1: #fefdfb;
+  --radix-scale-2: #fefbe9;
+  --radix-scale-3: #fff7c2;
+  --radix-scale-4: #ffee9c;
+  --radix-scale-5: #fbe577;
+  --radix-scale-6: #f3d673;
+  --radix-scale-8: #e2a336;
+  --radix-scale-9: #ffc53d;
+  --radix-scale-11: #ab6400;
+  --radix-scale-12: #4f3422;
 }
 
 :root[data-radix-color-scale="yellow"] {
-    --radix-scale-1: #fdfdf9;
-    --radix-scale-2: #fefce9;
-    --radix-scale-3: #fffab8;
-    --radix-scale-4: #fff394;
-    --radix-scale-5: #ffe770;
-    --radix-scale-6: #f3d768;
-    --radix-scale-8: #d5ae39;
-    --radix-scale-9: #ffe629;
-    --radix-scale-11: #9e6c00;
-    --radix-scale-12: #473b1f;
+  --radix-scale-1: #fdfdf9;
+  --radix-scale-2: #fefce9;
+  --radix-scale-3: #fffab8;
+  --radix-scale-4: #fff394;
+  --radix-scale-5: #ffe770;
+  --radix-scale-6: #f3d768;
+  --radix-scale-8: #d5ae39;
+  --radix-scale-9: #ffe629;
+  --radix-scale-11: #9e6c00;
+  --radix-scale-12: #473b1f;
 }
 
 :root[data-radix-color-scale="lime"] {
-    --radix-scale-1: #fcfdfa;
-    --radix-scale-2: #f8faf3;
-    --radix-scale-3: #eef6d6;
-    --radix-scale-4: #e2f0bd;
-    --radix-scale-5: #d3e7a6;
-    --radix-scale-6: #c2da91;
-    --radix-scale-8: #8db654;
-    --radix-scale-9: #bdee63;
-    --radix-scale-11: #5c7c2f;
-    --radix-scale-12: #37401c;
+  --radix-scale-1: #fcfdfa;
+  --radix-scale-2: #f8faf3;
+  --radix-scale-3: #eef6d6;
+  --radix-scale-4: #e2f0bd;
+  --radix-scale-5: #d3e7a6;
+  --radix-scale-6: #c2da91;
+  --radix-scale-8: #8db654;
+  --radix-scale-9: #bdee63;
+  --radix-scale-11: #5c7c2f;
+  --radix-scale-12: #37401c;
 }
 
 :root[data-radix-color-scale="mint"] {
-    --radix-scale-1: #f9fefd;
-    --radix-scale-2: #f2fbf9;
-    --radix-scale-3: #ddf9f2;
-    --radix-scale-4: #c8f4e9;
-    --radix-scale-5: #b3ecde;
-    --radix-scale-6: #9ce0d0;
-    --radix-scale-8: #4cbba5;
-    --radix-scale-9: #86ead4;
-    --radix-scale-11: #027864;
-    --radix-scale-12: #16433c;
+  --radix-scale-1: #f9fefd;
+  --radix-scale-2: #f2fbf9;
+  --radix-scale-3: #ddf9f2;
+  --radix-scale-4: #c8f4e9;
+  --radix-scale-5: #b3ecde;
+  --radix-scale-6: #9ce0d0;
+  --radix-scale-8: #4cbba5;
+  --radix-scale-9: #86ead4;
+  --radix-scale-11: #027864;
+  --radix-scale-12: #16433c;
 }
 
 :root[data-radix-color-scale="sky"] {
-    --radix-scale-1: #f9feff;
-    --radix-scale-2: #f1fafd;
-    --radix-scale-3: #e1f6fd;
-    --radix-scale-4: #d1f0fa;
-    --radix-scale-5: #bee7f5;
-    --radix-scale-6: #a9daed;
-    --radix-scale-8: #60b3d7;
-    --radix-scale-9: #7ce2fe;
-    --radix-scale-11: #00749e;
-    --radix-scale-12: #1d3e56;
+  --radix-scale-1: #f9feff;
+  --radix-scale-2: #f1fafd;
+  --radix-scale-3: #e1f6fd;
+  --radix-scale-4: #d1f0fa;
+  --radix-scale-5: #bee7f5;
+  --radix-scale-6: #a9daed;
+  --radix-scale-8: #60b3d7;
+  --radix-scale-9: #7ce2fe;
+  --radix-scale-11: #00749e;
+  --radix-scale-12: #1d3e56;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-    --ousia-app-background: #11100f;
-    --ousia-app-foreground: #f4f0ec;
-    --ousia-app-card: #1e1b19;
-    --ousia-app-card-foreground: #f4f0ec;
-    --ousia-composer-surface: color-mix(in srgb, var(--ousia-app-card) 97%, white);
-    --ousia-app-popover: #1b1917;
-    --ousia-app-popover-foreground: #f4f0ec;
-    --ousia-app-primary: #f4f0ec;
-    --ousia-app-primary-foreground: #1b1917;
-    --ousia-app-secondary: #292522;
-    --ousia-app-secondary-foreground: #f4f0ec;
-    --ousia-app-muted: #292522;
-    --ousia-app-muted-foreground: #b4aaa2;
-    --ousia-app-accent: #302a26;
-    --ousia-app-accent-foreground: #f6f1ed;
-    --ousia-app-destructive: #ff8c8c;
-    --ousia-tool-warning: #c7ab72;
-    --ousia-tool-warning-strong: #dec48a;
-    --ousia-tool-warning-bg: color-mix(in srgb, #d6a84a 16%, transparent);
-    --ousia-app-border: color-mix(in srgb, #f0e8e0 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #f0e8e0 16%, transparent);
-    --ousia-app-ring: #8f8177;
-    --ousia-app-chart-1: #eee7e2;
-    --ousia-app-chart-2: #a99386;
-    --ousia-app-chart-3: #7a6c63;
-    --ousia-app-chart-4: #463d37;
-    --ousia-app-chart-5: #292522;
-    --ousia-app-sidebar: #171513;
-    --ousia-app-sidebar-foreground: #f4f0ec;
-    --ousia-app-sidebar-primary: #f4f0ec;
-    --ousia-app-sidebar-primary-foreground: #171513;
-    --ousia-app-sidebar-accent: #28231f;
-    --ousia-app-sidebar-accent-foreground: #f6f1ed;
-    --ousia-app-sidebar-border: color-mix(in srgb, #f0e8e0 12%, transparent);
-    --ousia-app-sidebar-ring: #8f8177;
-    --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
-    --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
-    --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
-    --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
-    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
-    --ousia-floating-panel-border: color-mix(in srgb, var(--ousia-app-popover) 72%, black);
-    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
-    --ousia-sidebar-row-selected-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2), 0 5px 12px -10px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.018);
-    --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+  --ousia-app-background: #11100f;
+  --ousia-app-foreground: #f4f0ec;
+  --ousia-app-card: #1e1b19;
+  --ousia-app-card-foreground: #f4f0ec;
+  --ousia-composer-surface: color-mix(
+    in srgb,
+    var(--ousia-app-card) 97%,
+    white
+  );
+  --ousia-app-popover: #1b1917;
+  --ousia-app-popover-foreground: #f4f0ec;
+  --ousia-app-primary: #f4f0ec;
+  --ousia-app-primary-foreground: #1b1917;
+  --ousia-app-secondary: #292522;
+  --ousia-app-secondary-foreground: #f4f0ec;
+  --ousia-app-muted: #292522;
+  --ousia-app-muted-foreground: #b4aaa2;
+  --ousia-app-accent: #302a26;
+  --ousia-app-accent-foreground: #f6f1ed;
+  --ousia-app-destructive: #ff8c8c;
+  --ousia-tool-warning: #c7ab72;
+  --ousia-tool-warning-strong: #dec48a;
+  --ousia-tool-warning-bg: color-mix(in srgb, #d6a84a 16%, transparent);
+  --ousia-app-border: color-mix(in srgb, #f0e8e0 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #f0e8e0 16%, transparent);
+  --ousia-app-ring: #8f8177;
+  --ousia-app-chart-1: #eee7e2;
+  --ousia-app-chart-2: #a99386;
+  --ousia-app-chart-3: #7a6c63;
+  --ousia-app-chart-4: #463d37;
+  --ousia-app-chart-5: #292522;
+  --ousia-app-sidebar: #171513;
+  --ousia-app-sidebar-foreground: #f4f0ec;
+  --ousia-app-sidebar-primary: #f4f0ec;
+  --ousia-app-sidebar-primary-foreground: #171513;
+  --ousia-app-sidebar-accent: #28231f;
+  --ousia-app-sidebar-accent-foreground: #f6f1ed;
+  --ousia-app-sidebar-border: color-mix(in srgb, #f0e8e0 12%, transparent);
+  --ousia-app-sidebar-ring: #8f8177;
+  --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
+  --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
+  --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
+  --ousia-main-panel-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.018),
+    0 8px 18px -15px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.012);
+  --ousia-chat-composer-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.28), 0 6px 18px -6px rgb(0 0 0 / 0.72),
+    0 20px 44px -18px rgb(0 0 0 / 0.86), inset 0 1px 0 rgb(255 255 255 / 0.025);
+  --ousia-chat-composer-shadow-focus:
+    0 0 0 1px rgb(0 0 0 / 0.34), 0 8px 22px -6px rgb(0 0 0 / 0.78),
+    0 24px 52px -18px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.035);
+  --ousia-floating-panel-border: color-mix(
+    in srgb,
+    var(--ousia-app-popover) 72%,
+    black
+  );
+  --ousia-floating-panel-shadow:
+    0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5),
+    0 12px 28px -18px rgba(0, 0, 0, 0.72);
+  --ousia-sidebar-row-selected-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2),
+    0 5px 12px -10px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.018);
+  --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
 }
 
 .dark[data-radix-color-scale="mist"] {
-    --ousia-app-background: #111315;
-    --ousia-app-foreground: #f0f2f3;
-    --ousia-app-card: #1b1f22;
-    --ousia-app-card-foreground: #f0f2f3;
-    --ousia-app-popover: #181c1f;
-    --ousia-app-popover-foreground: #f0f2f3;
-    --ousia-app-primary: #f0f2f3;
-    --ousia-app-primary-foreground: #181c1f;
-    --ousia-app-secondary: #242a2e;
-    --ousia-app-secondary-foreground: #f0f2f3;
-    --ousia-app-muted: #242a2e;
-    --ousia-app-muted-foreground: #adb5ba;
-    --ousia-app-accent: #2b3237;
-    --ousia-app-accent-foreground: #f4f6f7;
-    --ousia-app-border: color-mix(in srgb, #e7ecef 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #e7ecef 16%, transparent);
-    --ousia-app-ring: #8c999f;
-    --ousia-app-sidebar: #15191c;
-    --ousia-app-sidebar-foreground: #f0f2f3;
-    --ousia-app-sidebar-primary: #f0f2f3;
-    --ousia-app-sidebar-primary-foreground: #15191c;
-    --ousia-app-sidebar-accent: #242a2e;
-    --ousia-app-sidebar-accent-foreground: #f4f6f7;
-    --ousia-app-sidebar-border: color-mix(in srgb, #e7ecef 12%, transparent);
-    --ousia-app-sidebar-ring: #8c999f;
+  --ousia-app-background: #111315;
+  --ousia-app-foreground: #f0f2f3;
+  --ousia-app-card: #1b1f22;
+  --ousia-app-card-foreground: #f0f2f3;
+  --ousia-app-popover: #181c1f;
+  --ousia-app-popover-foreground: #f0f2f3;
+  --ousia-app-primary: #f0f2f3;
+  --ousia-app-primary-foreground: #181c1f;
+  --ousia-app-secondary: #242a2e;
+  --ousia-app-secondary-foreground: #f0f2f3;
+  --ousia-app-muted: #242a2e;
+  --ousia-app-muted-foreground: #adb5ba;
+  --ousia-app-accent: #2b3237;
+  --ousia-app-accent-foreground: #f4f6f7;
+  --ousia-app-border: color-mix(in srgb, #e7ecef 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #e7ecef 16%, transparent);
+  --ousia-app-ring: #8c999f;
+  --ousia-app-sidebar: #15191c;
+  --ousia-app-sidebar-foreground: #f0f2f3;
+  --ousia-app-sidebar-primary: #f0f2f3;
+  --ousia-app-sidebar-primary-foreground: #15191c;
+  --ousia-app-sidebar-accent: #242a2e;
+  --ousia-app-sidebar-accent-foreground: #f4f6f7;
+  --ousia-app-sidebar-border: color-mix(in srgb, #e7ecef 12%, transparent);
+  --ousia-app-sidebar-ring: #8c999f;
 }
 
 .dark[data-radix-color-scale="paper"] {
-    --ousia-app-background: #111110;
-    --ousia-app-foreground: #f2f2ee;
-    --ousia-app-card: #1d1d1b;
-    --ousia-app-card-foreground: #f2f2ee;
-    --ousia-app-popover: #1b1b19;
-    --ousia-app-popover-foreground: #f2f2ee;
-    --ousia-app-primary: #f2f2ee;
-    --ousia-app-primary-foreground: #1b1b19;
-    --ousia-app-secondary: #282824;
-    --ousia-app-secondary-foreground: #f2f2ee;
-    --ousia-app-muted: #282824;
-    --ousia-app-muted-foreground: #b2b2aa;
-    --ousia-app-accent: #30302b;
-    --ousia-app-accent-foreground: #f4f4ef;
-    --ousia-app-border: color-mix(in srgb, #eeeee6 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #eeeee6 16%, transparent);
-    --ousia-app-ring: #8c8c82;
-    --ousia-diff-card-bg: color-mix(in srgb, var(--ousia-app-card) 72%, var(--ousia-app-background));
-    --ousia-app-chart-1: #eeeeea;
-    --ousia-app-chart-2: #a0a096;
-    --ousia-app-chart-3: #73736b;
-    --ousia-app-chart-4: #46463f;
-    --ousia-app-chart-5: #292926;
-    --ousia-app-sidebar: #161614;
-    --ousia-app-sidebar-foreground: #f4f4ef;
-    --ousia-app-sidebar-primary: #f4f4ef;
-    --ousia-app-sidebar-primary-foreground: #161614;
-    --ousia-app-sidebar-accent: #252521;
-    --ousia-app-sidebar-accent-foreground: #f4f4ef;
-    --ousia-app-sidebar-border: color-mix(in srgb, #eeeee6 12%, transparent);
-    --ousia-app-sidebar-ring: #8c8c82;
+  --ousia-app-background: #111110;
+  --ousia-app-foreground: #f2f2ee;
+  --ousia-app-card: #1d1d1b;
+  --ousia-app-card-foreground: #f2f2ee;
+  --ousia-app-popover: #1b1b19;
+  --ousia-app-popover-foreground: #f2f2ee;
+  --ousia-app-primary: #f2f2ee;
+  --ousia-app-primary-foreground: #1b1b19;
+  --ousia-app-secondary: #282824;
+  --ousia-app-secondary-foreground: #f2f2ee;
+  --ousia-app-muted: #282824;
+  --ousia-app-muted-foreground: #b2b2aa;
+  --ousia-app-accent: #30302b;
+  --ousia-app-accent-foreground: #f4f4ef;
+  --ousia-app-border: color-mix(in srgb, #eeeee6 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #eeeee6 16%, transparent);
+  --ousia-app-ring: #8c8c82;
+  --ousia-app-chart-1: #eeeeea;
+  --ousia-app-chart-2: #a0a096;
+  --ousia-app-chart-3: #73736b;
+  --ousia-app-chart-4: #46463f;
+  --ousia-app-chart-5: #292926;
+  --ousia-app-sidebar: #161614;
+  --ousia-app-sidebar-foreground: #f4f4ef;
+  --ousia-app-sidebar-primary: #f4f4ef;
+  --ousia-app-sidebar-primary-foreground: #161614;
+  --ousia-app-sidebar-accent: #252521;
+  --ousia-app-sidebar-accent-foreground: #f4f4ef;
+  --ousia-app-sidebar-border: color-mix(in srgb, #eeeee6 12%, transparent);
+  --ousia-app-sidebar-ring: #8c8c82;
 }
 
 .dark[data-radix-color-scale="sand"] {
-    --ousia-app-background: #11110f;
-    --ousia-app-foreground: #f2f0ea;
-    --ousia-app-card: #1d1c1a;
-    --ousia-app-card-foreground: #f2f0ea;
-    --ousia-app-popover: #1b1a18;
-    --ousia-app-popover-foreground: #f2f0ea;
-    --ousia-app-primary: #f2f0ea;
-    --ousia-app-primary-foreground: #1b1a18;
-    --ousia-app-secondary: #282724;
-    --ousia-app-secondary-foreground: #f2f0ea;
-    --ousia-app-muted: #282724;
-    --ousia-app-muted-foreground: #b1aea8;
-    --ousia-app-accent: #302f2b;
-    --ousia-app-accent-foreground: #f4f2ed;
-    --ousia-app-border: color-mix(in srgb, #eeeee6 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #eeeee6 16%, transparent);
-    --ousia-app-ring: #8d8d86;
-    --ousia-app-sidebar: #161512;
-    --ousia-app-sidebar-foreground: #f2f0ea;
-    --ousia-app-sidebar-primary: #f2f0ea;
-    --ousia-app-sidebar-primary-foreground: #161512;
-    --ousia-app-sidebar-accent: #282724;
-    --ousia-app-sidebar-accent-foreground: #f4f2ed;
-    --ousia-app-sidebar-border: color-mix(in srgb, #eeeee6 12%, transparent);
-    --ousia-app-sidebar-ring: #8d8d86;
+  --ousia-app-background: #11110f;
+  --ousia-app-foreground: #f2f0ea;
+  --ousia-app-card: #1d1c1a;
+  --ousia-app-card-foreground: #f2f0ea;
+  --ousia-app-popover: #1b1a18;
+  --ousia-app-popover-foreground: #f2f0ea;
+  --ousia-app-primary: #f2f0ea;
+  --ousia-app-primary-foreground: #1b1a18;
+  --ousia-app-secondary: #282724;
+  --ousia-app-secondary-foreground: #f2f0ea;
+  --ousia-app-muted: #282724;
+  --ousia-app-muted-foreground: #b1aea8;
+  --ousia-app-accent: #302f2b;
+  --ousia-app-accent-foreground: #f4f2ed;
+  --ousia-app-border: color-mix(in srgb, #eeeee6 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #eeeee6 16%, transparent);
+  --ousia-app-ring: #8d8d86;
+  --ousia-app-sidebar: #161512;
+  --ousia-app-sidebar-foreground: #f2f0ea;
+  --ousia-app-sidebar-primary: #f2f0ea;
+  --ousia-app-sidebar-primary-foreground: #161512;
+  --ousia-app-sidebar-accent: #282724;
+  --ousia-app-sidebar-accent-foreground: #f4f2ed;
+  --ousia-app-sidebar-border: color-mix(in srgb, #eeeee6 12%, transparent);
+  --ousia-app-sidebar-ring: #8d8d86;
 }
 
 .dark[data-radix-color-scale="gray"] {
-    --ousia-app-background: #101010;
-    --ousia-app-foreground: #f1f1f1;
-    --ousia-app-card: #1d1d1d;
-    --ousia-app-card-foreground: #f1f1f1;
-    --ousia-app-popover: #1a1a1a;
-    --ousia-app-popover-foreground: #f1f1f1;
-    --ousia-app-primary: #f1f1f1;
-    --ousia-app-primary-foreground: #1a1a1a;
-    --ousia-app-secondary: #272727;
-    --ousia-app-secondary-foreground: #f1f1f1;
-    --ousia-app-muted: #272727;
-    --ousia-app-muted-foreground: #b0b0b0;
-    --ousia-app-accent: #303030;
-    --ousia-app-accent-foreground: #f4f4f4;
-    --ousia-app-border: color-mix(in srgb, #eeeeee 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #eeeeee 16%, transparent);
-    --ousia-app-ring: #8d8d8d;
-    --ousia-app-sidebar: #151515;
-    --ousia-app-sidebar-foreground: #f1f1f1;
-    --ousia-app-sidebar-primary: #f1f1f1;
-    --ousia-app-sidebar-primary-foreground: #151515;
-    --ousia-app-sidebar-accent: #272727;
-    --ousia-app-sidebar-accent-foreground: #f4f4f4;
-    --ousia-app-sidebar-border: color-mix(in srgb, #eeeeee 12%, transparent);
-    --ousia-app-sidebar-ring: #8d8d8d;
+  --ousia-app-background: #101010;
+  --ousia-app-foreground: #f1f1f1;
+  --ousia-app-card: #1d1d1d;
+  --ousia-app-card-foreground: #f1f1f1;
+  --ousia-app-popover: #1a1a1a;
+  --ousia-app-popover-foreground: #f1f1f1;
+  --ousia-app-primary: #f1f1f1;
+  --ousia-app-primary-foreground: #1a1a1a;
+  --ousia-app-secondary: #272727;
+  --ousia-app-secondary-foreground: #f1f1f1;
+  --ousia-app-muted: #272727;
+  --ousia-app-muted-foreground: #b0b0b0;
+  --ousia-app-accent: #303030;
+  --ousia-app-accent-foreground: #f4f4f4;
+  --ousia-app-border: color-mix(in srgb, #eeeeee 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #eeeeee 16%, transparent);
+  --ousia-app-ring: #8d8d8d;
+  --ousia-app-sidebar: #151515;
+  --ousia-app-sidebar-foreground: #f1f1f1;
+  --ousia-app-sidebar-primary: #f1f1f1;
+  --ousia-app-sidebar-primary-foreground: #151515;
+  --ousia-app-sidebar-accent: #272727;
+  --ousia-app-sidebar-accent-foreground: #f4f4f4;
+  --ousia-app-sidebar-border: color-mix(in srgb, #eeeeee 12%, transparent);
+  --ousia-app-sidebar-ring: #8d8d8d;
 }
 
 .dark[data-radix-color-scale="slate"] {
-    --ousia-app-background: #101114;
-    --ousia-app-foreground: #f0f1f3;
-    --ousia-app-card: #1b1d22;
-    --ousia-app-card-foreground: #f0f1f3;
-    --ousia-app-popover: #181a1f;
-    --ousia-app-popover-foreground: #f0f1f3;
-    --ousia-app-primary: #f0f1f3;
-    --ousia-app-primary-foreground: #181a1f;
-    --ousia-app-secondary: #24272e;
-    --ousia-app-secondary-foreground: #f0f1f3;
-    --ousia-app-muted: #24272e;
-    --ousia-app-muted-foreground: #adb1ba;
-    --ousia-app-accent: #2b2f37;
-    --ousia-app-accent-foreground: #f3f4f6;
-    --ousia-app-border: color-mix(in srgb, #e7e9f0 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #e7e9f0 16%, transparent);
-    --ousia-app-ring: #8b8d98;
-    --ousia-app-sidebar: #14161a;
-    --ousia-app-sidebar-foreground: #f0f1f3;
-    --ousia-app-sidebar-primary: #f0f1f3;
-    --ousia-app-sidebar-primary-foreground: #14161a;
-    --ousia-app-sidebar-accent: #24272e;
-    --ousia-app-sidebar-accent-foreground: #f3f4f6;
-    --ousia-app-sidebar-border: color-mix(in srgb, #e7e9f0 12%, transparent);
-    --ousia-app-sidebar-ring: #8b8d98;
+  --ousia-app-background: #101114;
+  --ousia-app-foreground: #f0f1f3;
+  --ousia-app-card: #1b1d22;
+  --ousia-app-card-foreground: #f0f1f3;
+  --ousia-app-popover: #181a1f;
+  --ousia-app-popover-foreground: #f0f1f3;
+  --ousia-app-primary: #f0f1f3;
+  --ousia-app-primary-foreground: #181a1f;
+  --ousia-app-secondary: #24272e;
+  --ousia-app-secondary-foreground: #f0f1f3;
+  --ousia-app-muted: #24272e;
+  --ousia-app-muted-foreground: #adb1ba;
+  --ousia-app-accent: #2b2f37;
+  --ousia-app-accent-foreground: #f3f4f6;
+  --ousia-app-border: color-mix(in srgb, #e7e9f0 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #e7e9f0 16%, transparent);
+  --ousia-app-ring: #8b8d98;
+  --ousia-app-sidebar: #14161a;
+  --ousia-app-sidebar-foreground: #f0f1f3;
+  --ousia-app-sidebar-primary: #f0f1f3;
+  --ousia-app-sidebar-primary-foreground: #14161a;
+  --ousia-app-sidebar-accent: #24272e;
+  --ousia-app-sidebar-accent-foreground: #f3f4f6;
+  --ousia-app-sidebar-border: color-mix(in srgb, #e7e9f0 12%, transparent);
+  --ousia-app-sidebar-ring: #8b8d98;
 }
 
 .dark[data-radix-color-scale="mauve"] {
-    --ousia-app-background: #111012;
-    --ousia-app-foreground: #f2eff4;
-    --ousia-app-card: #1e1b20;
-    --ousia-app-card-foreground: #f2eff4;
-    --ousia-app-popover: #1b191d;
-    --ousia-app-popover-foreground: #f2eff4;
-    --ousia-app-primary: #f2eff4;
-    --ousia-app-primary-foreground: #1b191d;
-    --ousia-app-secondary: #29262d;
-    --ousia-app-secondary-foreground: #f2eff4;
-    --ousia-app-muted: #29262d;
-    --ousia-app-muted-foreground: #b2acb8;
-    --ousia-app-accent: #312d35;
-    --ousia-app-accent-foreground: #f5f2f7;
-    --ousia-app-border: color-mix(in srgb, #eee8f2 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #eee8f2 16%, transparent);
-    --ousia-app-ring: #8e8c99;
-    --ousia-app-sidebar: #161417;
-    --ousia-app-sidebar-foreground: #f2eff4;
-    --ousia-app-sidebar-primary: #f2eff4;
-    --ousia-app-sidebar-primary-foreground: #161417;
-    --ousia-app-sidebar-accent: #29262d;
-    --ousia-app-sidebar-accent-foreground: #f5f2f7;
-    --ousia-app-sidebar-border: color-mix(in srgb, #eee8f2 12%, transparent);
-    --ousia-app-sidebar-ring: #8e8c99;
+  --ousia-app-background: #111012;
+  --ousia-app-foreground: #f2eff4;
+  --ousia-app-card: #1e1b20;
+  --ousia-app-card-foreground: #f2eff4;
+  --ousia-app-popover: #1b191d;
+  --ousia-app-popover-foreground: #f2eff4;
+  --ousia-app-primary: #f2eff4;
+  --ousia-app-primary-foreground: #1b191d;
+  --ousia-app-secondary: #29262d;
+  --ousia-app-secondary-foreground: #f2eff4;
+  --ousia-app-muted: #29262d;
+  --ousia-app-muted-foreground: #b2acb8;
+  --ousia-app-accent: #312d35;
+  --ousia-app-accent-foreground: #f5f2f7;
+  --ousia-app-border: color-mix(in srgb, #eee8f2 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #eee8f2 16%, transparent);
+  --ousia-app-ring: #8e8c99;
+  --ousia-app-sidebar: #161417;
+  --ousia-app-sidebar-foreground: #f2eff4;
+  --ousia-app-sidebar-primary: #f2eff4;
+  --ousia-app-sidebar-primary-foreground: #161417;
+  --ousia-app-sidebar-accent: #29262d;
+  --ousia-app-sidebar-accent-foreground: #f5f2f7;
+  --ousia-app-sidebar-border: color-mix(in srgb, #eee8f2 12%, transparent);
+  --ousia-app-sidebar-ring: #8e8c99;
 }
 
 .dark[data-radix-color-scale="sage"] {
-    --ousia-app-background: #0f1211;
-    --ousia-app-foreground: #eef2f0;
-    --ousia-app-card: #1a1f1d;
-    --ousia-app-card-foreground: #eef2f0;
-    --ousia-app-popover: #181c1b;
-    --ousia-app-popover-foreground: #eef2f0;
-    --ousia-app-primary: #eef2f0;
-    --ousia-app-primary-foreground: #181c1b;
-    --ousia-app-secondary: #232a27;
-    --ousia-app-secondary-foreground: #eef2f0;
-    --ousia-app-muted: #232a27;
-    --ousia-app-muted-foreground: #aab5b1;
-    --ousia-app-accent: #2a322f;
-    --ousia-app-accent-foreground: #f2f6f4;
-    --ousia-app-border: color-mix(in srgb, #e5eee9 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #e5eee9 16%, transparent);
-    --ousia-app-ring: #868e8b;
-    --ousia-app-sidebar: #131715;
-    --ousia-app-sidebar-foreground: #eef2f0;
-    --ousia-app-sidebar-primary: #eef2f0;
-    --ousia-app-sidebar-primary-foreground: #131715;
-    --ousia-app-sidebar-accent: #232a27;
-    --ousia-app-sidebar-accent-foreground: #f2f6f4;
-    --ousia-app-sidebar-border: color-mix(in srgb, #e5eee9 12%, transparent);
-    --ousia-app-sidebar-ring: #868e8b;
+  --ousia-app-background: #0f1211;
+  --ousia-app-foreground: #eef2f0;
+  --ousia-app-card: #1a1f1d;
+  --ousia-app-card-foreground: #eef2f0;
+  --ousia-app-popover: #181c1b;
+  --ousia-app-popover-foreground: #eef2f0;
+  --ousia-app-primary: #eef2f0;
+  --ousia-app-primary-foreground: #181c1b;
+  --ousia-app-secondary: #232a27;
+  --ousia-app-secondary-foreground: #eef2f0;
+  --ousia-app-muted: #232a27;
+  --ousia-app-muted-foreground: #aab5b1;
+  --ousia-app-accent: #2a322f;
+  --ousia-app-accent-foreground: #f2f6f4;
+  --ousia-app-border: color-mix(in srgb, #e5eee9 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #e5eee9 16%, transparent);
+  --ousia-app-ring: #868e8b;
+  --ousia-app-sidebar: #131715;
+  --ousia-app-sidebar-foreground: #eef2f0;
+  --ousia-app-sidebar-primary: #eef2f0;
+  --ousia-app-sidebar-primary-foreground: #131715;
+  --ousia-app-sidebar-accent: #232a27;
+  --ousia-app-sidebar-accent-foreground: #f2f6f4;
+  --ousia-app-sidebar-border: color-mix(in srgb, #e5eee9 12%, transparent);
+  --ousia-app-sidebar-ring: #868e8b;
 }
 
 .dark[data-radix-color-scale="olive"] {
-    --ousia-app-background: #10120f;
-    --ousia-app-foreground: #eff2ee;
-    --ousia-app-card: #1b1f1a;
-    --ousia-app-card-foreground: #eff2ee;
-    --ousia-app-popover: #191c18;
-    --ousia-app-popover-foreground: #eff2ee;
-    --ousia-app-primary: #eff2ee;
-    --ousia-app-primary-foreground: #191c18;
-    --ousia-app-secondary: #252a23;
-    --ousia-app-secondary-foreground: #eff2ee;
-    --ousia-app-muted: #252a23;
-    --ousia-app-muted-foreground: #adb5aa;
-    --ousia-app-accent: #2d322a;
-    --ousia-app-accent-foreground: #f3f6f1;
-    --ousia-app-border: color-mix(in srgb, #e8eee4 12%, transparent);
-    --ousia-app-input: color-mix(in srgb, #e8eee4 16%, transparent);
-    --ousia-app-ring: #898e87;
-    --ousia-app-sidebar: #141713;
-    --ousia-app-sidebar-foreground: #eff2ee;
-    --ousia-app-sidebar-primary: #eff2ee;
-    --ousia-app-sidebar-primary-foreground: #141713;
-    --ousia-app-sidebar-accent: #252a23;
-    --ousia-app-sidebar-accent-foreground: #f3f6f1;
-    --ousia-app-sidebar-border: color-mix(in srgb, #e8eee4 12%, transparent);
-    --ousia-app-sidebar-ring: #898e87;
+  --ousia-app-background: #10120f;
+  --ousia-app-foreground: #eff2ee;
+  --ousia-app-card: #1b1f1a;
+  --ousia-app-card-foreground: #eff2ee;
+  --ousia-app-popover: #191c18;
+  --ousia-app-popover-foreground: #eff2ee;
+  --ousia-app-primary: #eff2ee;
+  --ousia-app-primary-foreground: #191c18;
+  --ousia-app-secondary: #252a23;
+  --ousia-app-secondary-foreground: #eff2ee;
+  --ousia-app-muted: #252a23;
+  --ousia-app-muted-foreground: #adb5aa;
+  --ousia-app-accent: #2d322a;
+  --ousia-app-accent-foreground: #f3f6f1;
+  --ousia-app-border: color-mix(in srgb, #e8eee4 12%, transparent);
+  --ousia-app-input: color-mix(in srgb, #e8eee4 16%, transparent);
+  --ousia-app-ring: #898e87;
+  --ousia-app-sidebar: #141713;
+  --ousia-app-sidebar-foreground: #eff2ee;
+  --ousia-app-sidebar-primary: #eff2ee;
+  --ousia-app-sidebar-primary-foreground: #141713;
+  --ousia-app-sidebar-accent: #252a23;
+  --ousia-app-sidebar-accent-foreground: #f3f6f1;
+  --ousia-app-sidebar-border: color-mix(in srgb, #e8eee4 12%, transparent);
+  --ousia-app-sidebar-ring: #898e87;
 }
 
 .dark[data-radix-color-scale="tomato"],
@@ -1279,88 +1330,129 @@
 .dark[data-radix-color-scale="lime"],
 .dark[data-radix-color-scale="mint"],
 .dark[data-radix-color-scale="sky"] {
-    --ousia-app-background: color-mix(in oklch, var(--radix-scale-12) 20%, #101010);
-    --ousia-app-foreground: #f4f0ec;
-    --ousia-app-card: color-mix(in oklch, var(--radix-scale-12) 26%, #191919);
-    --ousia-app-card-foreground: #f4f0ec;
-    --ousia-app-popover: color-mix(in oklch, var(--radix-scale-12) 24%, #171717);
-    --ousia-app-popover-foreground: #f4f0ec;
-    --ousia-app-primary: #f4f0ec;
-    --ousia-app-primary-foreground: color-mix(in oklch, var(--radix-scale-12) 56%, #111111);
-    --ousia-app-secondary: color-mix(in oklch, var(--radix-scale-12) 32%, #242424);
-    --ousia-app-secondary-foreground: #f4f0ec;
-    --ousia-app-muted: color-mix(in oklch, var(--radix-scale-12) 32%, #242424);
-    --ousia-app-muted-foreground: #b4aaa2;
-    --ousia-app-accent: color-mix(in oklch, var(--radix-scale-12) 38%, #292929);
-    --ousia-app-accent-foreground: #f4f0ec;
-    --ousia-app-border: color-mix(in srgb, #f0e8e0 12%, transparent);
-    --ousia-app-input: color-mix(in oklch, var(--radix-scale-8) 12%, transparent);
-    --ousia-app-ring: color-mix(in oklch, var(--radix-scale-9) 48%, #bdb7b0);
-    --ousia-diff-card-bg: color-mix(in srgb, var(--radix-scale-12) 22%, var(--ousia-app-background));
-    --ousia-app-chart-1: color-mix(in oklch, var(--radix-scale-9) 74%, #ffffff);
-    --ousia-app-chart-2: color-mix(in oklch, var(--radix-scale-8) 62%, #bdb7b0);
-    --ousia-app-chart-3: color-mix(in oklch, var(--radix-scale-11) 52%, #e6e0da);
-    --ousia-app-chart-4: color-mix(in oklch, var(--radix-scale-12) 60%, #f4f1ed);
-    --ousia-app-chart-5: color-mix(in oklch, var(--radix-scale-6) 34%, #292929);
-    --ousia-app-sidebar: color-mix(in oklch, var(--radix-scale-12) 23%, #121212);
-    --ousia-app-sidebar-foreground: #f4f0ec;
-    --ousia-app-sidebar-primary: #f4f0ec;
-    --ousia-app-sidebar-primary-foreground: color-mix(in oklch, var(--radix-scale-12) 56%, #111111);
-    --ousia-app-sidebar-accent: color-mix(in oklch, var(--radix-scale-12) 36%, #242424);
-    --ousia-app-sidebar-accent-foreground: #f4f0ec;
-    --ousia-app-sidebar-border: color-mix(in srgb, #f0e8e0 12%, transparent);
-    --ousia-app-sidebar-ring: color-mix(in oklch, var(--radix-scale-9) 58%, #bdb7b0);
-    --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
-    --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
-    --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
-    --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
-    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
-    --ousia-floating-panel-border: color-mix(in srgb, var(--ousia-app-popover) 72%, black);
-    --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
-    --ousia-sidebar-row-selected-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2), 0 5px 12px -10px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.018);
-    --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
+  --ousia-app-background: color-mix(
+    in oklch,
+    var(--radix-scale-12) 20%,
+    #101010
+  );
+  --ousia-app-foreground: #f4f0ec;
+  --ousia-app-card: color-mix(in oklch, var(--radix-scale-12) 26%, #191919);
+  --ousia-app-card-foreground: #f4f0ec;
+  --ousia-app-popover: color-mix(in oklch, var(--radix-scale-12) 24%, #171717);
+  --ousia-app-popover-foreground: #f4f0ec;
+  --ousia-app-primary: #f4f0ec;
+  --ousia-app-primary-foreground: color-mix(
+    in oklch,
+    var(--radix-scale-12) 56%,
+    #111111
+  );
+  --ousia-app-secondary: color-mix(
+    in oklch,
+    var(--radix-scale-12) 32%,
+    #242424
+  );
+  --ousia-app-secondary-foreground: #f4f0ec;
+  --ousia-app-muted: color-mix(in oklch, var(--radix-scale-12) 32%, #242424);
+  --ousia-app-muted-foreground: #b4aaa2;
+  --ousia-app-accent: color-mix(in oklch, var(--radix-scale-12) 38%, #292929);
+  --ousia-app-accent-foreground: #f4f0ec;
+  --ousia-app-border: color-mix(in srgb, #f0e8e0 12%, transparent);
+  --ousia-app-input: color-mix(in oklch, var(--radix-scale-8) 12%, transparent);
+  --ousia-app-ring: color-mix(in oklch, var(--radix-scale-9) 48%, #bdb7b0);
+  --ousia-app-chart-1: color-mix(in oklch, var(--radix-scale-9) 74%, #ffffff);
+  --ousia-app-chart-2: color-mix(in oklch, var(--radix-scale-8) 62%, #bdb7b0);
+  --ousia-app-chart-3: color-mix(in oklch, var(--radix-scale-11) 52%, #e6e0da);
+  --ousia-app-chart-4: color-mix(in oklch, var(--radix-scale-12) 60%, #f4f1ed);
+  --ousia-app-chart-5: color-mix(in oklch, var(--radix-scale-6) 34%, #292929);
+  --ousia-app-sidebar: color-mix(in oklch, var(--radix-scale-12) 23%, #121212);
+  --ousia-app-sidebar-foreground: #f4f0ec;
+  --ousia-app-sidebar-primary: #f4f0ec;
+  --ousia-app-sidebar-primary-foreground: color-mix(
+    in oklch,
+    var(--radix-scale-12) 56%,
+    #111111
+  );
+  --ousia-app-sidebar-accent: color-mix(
+    in oklch,
+    var(--radix-scale-12) 36%,
+    #242424
+  );
+  --ousia-app-sidebar-accent-foreground: #f4f0ec;
+  --ousia-app-sidebar-border: color-mix(in srgb, #f0e8e0 12%, transparent);
+  --ousia-app-sidebar-ring: color-mix(
+    in oklch,
+    var(--radix-scale-9) 58%,
+    #bdb7b0
+  );
+  --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
+  --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
+  --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
+  --ousia-main-panel-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.018),
+    0 8px 18px -15px rgba(0, 0, 0, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.012);
+  --ousia-chat-composer-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.28), 0 6px 18px -6px rgb(0 0 0 / 0.72),
+    0 20px 44px -18px rgb(0 0 0 / 0.86), inset 0 1px 0 rgb(255 255 255 / 0.025);
+  --ousia-chat-composer-shadow-focus:
+    0 0 0 1px rgb(0 0 0 / 0.34), 0 8px 22px -6px rgb(0 0 0 / 0.78),
+    0 24px 52px -18px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.035);
+  --ousia-floating-panel-border: color-mix(
+    in srgb,
+    var(--ousia-app-popover) 72%,
+    black
+  );
+  --ousia-floating-panel-shadow:
+    0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5),
+    0 12px 28px -18px rgba(0, 0, 0, 0.72);
+  --ousia-sidebar-row-selected-shadow:
+    0 0 0 0.5px rgba(255, 255, 255, 0.022), 0 1px 1px rgba(0, 0, 0, 0.2),
+    0 5px 12px -10px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.018);
+  --ousia-sidebar-selected-shadow: var(--ousia-sidebar-row-selected-shadow);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+  }
   html,
   body,
   #root {
     width: 100%;
     height: 100%;
     background: var(--background);
-    }
+  }
   html {
     @apply font-sans;
-    }
+  }
   body {
     @apply bg-background text-foreground;
     margin: 0;
     overflow: hidden;
-    }
+  }
   #root {
-    min-height: 100vh;
-    }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+    min-height: 0;
+    overflow: hidden;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
     cursor: pointer;
-    }
+  }
   .window-drag {
     -webkit-app-region: drag;
     user-select: none;
-    }
+  }
   .window-no-drag {
     -webkit-app-region: no-drag;
-    }
+  }
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
-    }
+  }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
-    }
+  }
   button,
   textarea,
   input,
@@ -1372,24 +1464,13 @@
   [data-slot="select-content"],
   [data-slot="select-item"] {
     -webkit-app-region: no-drag;
-    }
+  }
   ::selection {
     @apply bg-primary text-primary-foreground;
-    }
+  }
 }
 
 @layer utilities {
-  @supports (corner-shape: squircle) {
-    .ousia-squircle-corners {
-      corner-shape: squircle;
-    }
-
-    .ousia-chat-composer-ring::after {
-      corner-shape: squircle;
-    }
-
-  }
-
   .ousia-chat-composer-ring::after {
     content: "";
     position: absolute;
@@ -1399,8 +1480,7 @@
     border: var(--ousia-chat-composer-ring-size) solid
       var(--ousia-chat-composer-ring-color);
     border-radius: calc(
-      var(--ousia-chat-composer-radius) +
-        var(--ousia-chat-composer-ring-size)
+      var(--ousia-chat-composer-radius) + var(--ousia-chat-composer-ring-size)
     );
     opacity: 0;
     transition: opacity 160ms ease;
@@ -1430,6 +1510,17 @@
 [data-shell-resizing="true"] {
   cursor: col-resize;
   user-select: none;
+}
+
+/* Skip offscreen historical paint only after the renderer has installed the
+ * message's exact block size. A generic fallback changes scrollHeight when a
+ * message becomes visible and fights the conversation follow state. */
+.ousia-chat-message-contain[data-chat-measured-block-size="true"]:not(
+    :last-child
+  ) {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto
+    var(--ousia-chat-message-intrinsic-block-size);
 }
 
 .project-row:hover .project-row-action,
@@ -1506,14 +1597,15 @@
 .ousia-chat-markdown [data-streamdown="code-block-body"]:focus-within,
 .ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child:hover,
 .ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child:focus,
-.ousia-chat-markdown [data-streamdown="table-wrapper"] > div:last-child:focus-within {
+.ousia-chat-markdown
+  [data-streamdown="table-wrapper"]
+  > div:last-child:focus-within {
   scrollbar-color: color-mix(in oklch, var(--muted-foreground) 20%, transparent)
     transparent;
 }
 
 .ousia-hover-scrollbar::-webkit-scrollbar,
-.ousia-chat-markdown
-  [data-streamdown="code-block-body"]::-webkit-scrollbar,
+.ousia-chat-markdown [data-streamdown="code-block-body"]::-webkit-scrollbar,
 .ousia-chat-markdown
   [data-streamdown="table-wrapper"]
   > div:last-child::-webkit-scrollbar {

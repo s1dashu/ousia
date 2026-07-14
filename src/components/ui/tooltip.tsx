@@ -423,7 +423,7 @@ function TooltipContent({
             getPlacementClassName(position.side),
             className
           )}
-          {...props}
+          {...(props as React.ComponentProps<typeof motion.span>)}
         >
           <span
             className={cn(

@@ -7,6 +7,7 @@ import type {
 
 export type ChatItem = OusiaChatHistoryItem
 type TextChatItem = OusiaTextChatItem
+export type ChatItemsBySession = Record<string, ChatItem[]>
 
 function findItemIndexFromEnd(items: ChatItem[], id: string) {
   for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -20,7 +21,7 @@ function findItemIndexFromEnd(items: ChatItem[], id: string) {
 function replaceItem(
   items: ChatItem[],
   index: number,
-  item: ChatItem
+  item: ChatItem,
 ): ChatItem[] {
   if (items[index] === item) {
     return items
@@ -40,7 +41,7 @@ function textItemChanged(previous: TextChatItem, next: TextChatItem) {
 
 function attachmentSummariesEqual(
   left: OusiaChatAttachmentSummary[] | undefined,
-  right: OusiaChatAttachmentSummary[] | undefined
+  right: OusiaChatAttachmentSummary[] | undefined,
 ) {
   const leftItems = left ?? []
   const rightItems = right ?? []
@@ -67,7 +68,7 @@ function earliestTimestamp(left: string | undefined, right: string) {
 
 function userMessageStatus(
   current: OusiaTextChatItem["status"] | undefined,
-  delivery: Extract<OusiaChatEvent, { type: "user_message" }>["delivery"]
+  delivery: Extract<OusiaChatEvent, { type: "user_message" }>["delivery"],
 ) {
   if (current === "failed" || delivery === "failed") {
     return "failed" as const
@@ -82,7 +83,7 @@ function upsertTextItem(
   items: ChatItem[],
   id: string,
   role: "assistant" | "thinking",
-  update: (item: TextChatItem) => void
+  update: (item: TextChatItem) => void,
 ) {
   const index = findItemIndexFromEnd(items, id)
   if (index >= 0) {
@@ -109,7 +110,7 @@ function upsertTextItem(
 
 export function applyChatEvent(
   items: ChatItem[],
-  event: OusiaChatEvent
+  event: OusiaChatEvent,
 ): ChatItem[] {
   if (event.type === "user_message") {
     const index = findItemIndexFromEnd(items, event.id)
@@ -193,7 +194,7 @@ export function applyChatEvent(
     const index = findItemIndexFromEnd(items, event.id)
     const existingItem = index >= 0 ? items[index] : undefined
     if (existingItem?.role === "tool") {
-      const updated = {
+      const updated: OusiaChatHistoryItem = {
         ...existingItem,
         name: event.name,
         text: input || existingItem.text,
@@ -280,7 +281,7 @@ export function applyChatEvent(
     const existingItem = index >= 0 ? items[index] : undefined
     if (existingItem?.role === "tool") {
       const result = formatToolPayload(event.result)
-      const updated = {
+      const updated: Extract<OusiaChatHistoryItem, { role: "tool" }> = {
         ...existingItem,
         name: event.name ?? existingItem.name,
         text: result || existingItem.text,
@@ -372,6 +373,27 @@ export function applyChatEvent(
   }
 
   return items
+}
+
+export function applyChatEventBatchBySession(
+  current: ChatItemsBySession,
+  eventsBySession: ReadonlyMap<string, readonly OusiaChatEvent[]>,
+): ChatItemsBySession {
+  let nextBySession = current
+  for (const [targetKey, events] of eventsBySession) {
+    let nextItems = current[targetKey] ?? []
+    for (const event of events) {
+      nextItems = applyChatEvent(nextItems, event)
+    }
+    if (nextItems === current[targetKey]) {
+      continue
+    }
+    if (nextBySession === current) {
+      nextBySession = { ...current }
+    }
+    nextBySession[targetKey] = nextItems
+  }
+  return nextBySession
 }
 
 function formatToolPayload(value: unknown) {

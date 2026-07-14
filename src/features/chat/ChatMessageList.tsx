@@ -1,4 +1,10 @@
-import { memo, useMemo } from "react"
+import {
+  memo,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from "react"
 import {
   Copy,
   FileImage,
@@ -15,6 +21,11 @@ import type { OusiaChatAttachmentSummary } from "@/electron/chat-types"
 import type { ChatItem } from "@/features/chat/chat-events"
 import { formatBytes } from "@/features/chat/chat-format"
 import { CHAT_CONTENT_MAX_WIDTH_CLASS } from "@/features/chat/chat-layout"
+import {
+  CHAT_MESSAGE_INTRINSIC_BLOCK_SIZE_PROPERTY,
+  CHAT_MESSAGE_MEASURED_ATTRIBUTE,
+  formatMeasuredChatMessageBlockSize,
+} from "@/features/chat/chat-message-containment"
 import { ToolCallGroupView, ToolCallView } from "@/features/chat/ChatToolCall"
 import { cn } from "@/lib/utils"
 
@@ -48,15 +59,15 @@ export const ChatMessageList = memo(function ChatMessageList({
 }: ChatMessageListProps) {
   const visibleItems = useMemo(
     () => items.filter(shouldRenderChatItem),
-    [items]
+    [items],
   )
   const renderItems = useMemo(
     () => groupVisibleItems(visibleItems),
-    [visibleItems]
+    [visibleItems],
   )
   const footerItemIds = useMemo(
     () => footerItemIdsForVisibleItems(visibleItems, isAgentWorking),
-    [isAgentWorking, visibleItems]
+    [isAgentWorking, visibleItems],
   )
 
   return (
@@ -64,13 +75,13 @@ export const ChatMessageList = memo(function ChatMessageList({
       {renderItems.length ? (
         <>
           {renderItems.map((item, index) => (
-            <div
+            <MeasuredChatMessageContainer
               className={cn(
-                "ousia-chat-message-contain",
-                chatRenderItemSpacingClass(item, renderItems[index - 1])
+                chatRenderItemSpacingClass(item, renderItems[index - 1]),
+                chatRenderItemRole(item) === "user" && "flex justify-end",
               )}
-              data-chat-message-role={chatRenderItemRole(item)}
               key={chatRenderItemId(item)}
+              role={chatRenderItemRole(item)}
             >
               <ChatItemView
                 item={item}
@@ -83,23 +94,82 @@ export const ChatMessageList = memo(function ChatMessageList({
                 sessionId={sessionId}
                 t={t}
               />
-            </div>
+            </MeasuredChatMessageContainer>
           ))}
           {showTurnWaitIndicator ? (
-            <div
-              className={cn(
-                "ousia-chat-message-contain",
-                chatWaitIndicatorSpacingClass(renderItems.at(-1))
-              )}
+            <MeasuredChatMessageContainer
+              className={chatWaitIndicatorSpacingClass(renderItems.at(-1))}
             >
               <AgentTurnWaitIndicator t={t} />
-            </div>
+            </MeasuredChatMessageContainer>
           ) : null}
         </>
       ) : null}
     </div>
   )
 })
+
+function MeasuredChatMessageContainer({
+  children,
+  className,
+  role,
+}: {
+  children: ReactNode
+  className?: string
+  role?: ChatItem["role"]
+}) {
+  const nodeRef = useRef<HTMLDivElement>(null)
+
+  useLayoutEffect(() => {
+    const node = nodeRef.current
+    if (!node) {
+      throw new Error("Chat message containment mounted without its DOM node.")
+    }
+    if (typeof ResizeObserver === "undefined") {
+      throw new Error("ResizeObserver is required for chat message containment.")
+    }
+
+    const updateMeasuredBlockSize = () => {
+      const blockSize = node.getBoundingClientRect().height
+      if (blockSize <= 0) {
+        return
+      }
+      const formattedBlockSize =
+        formatMeasuredChatMessageBlockSize(blockSize)
+      if (
+        node.style.getPropertyValue(
+          CHAT_MESSAGE_INTRINSIC_BLOCK_SIZE_PROPERTY,
+        ) === formattedBlockSize
+      ) {
+        return
+      }
+      node.style.setProperty(
+        CHAT_MESSAGE_INTRINSIC_BLOCK_SIZE_PROPERTY,
+        formattedBlockSize,
+      )
+      node.setAttribute(CHAT_MESSAGE_MEASURED_ATTRIBUTE, "true")
+    }
+
+    // The containment attribute is absent on first layout, so this reads the
+    // fully rendered height rather than a guessed placeholder.
+    updateMeasuredBlockSize()
+    const resizeObserver = new ResizeObserver(updateMeasuredBlockSize)
+    resizeObserver.observe(node)
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [])
+
+  return (
+    <div
+      ref={nodeRef}
+      className={cn("ousia-chat-message-contain", className)}
+      data-chat-message-role={role}
+    >
+      {children}
+    </div>
+  )
+}
 
 function shouldRenderChatItem(item: ChatItem) {
   return item.role !== "thinking" || item.status !== "finished"
@@ -177,11 +247,11 @@ function shouldGroupToolItem(item: ChatItem) {
 
 function chatRenderItemSpacingClass(
   item: ChatRenderItem,
-  previousItem?: ChatRenderItem
+  previousItem?: ChatRenderItem,
 ) {
   return chatItemSpacingClass(
     chatRenderItemPrimaryItem(item),
-    previousItem ? chatRenderItemPrimaryItem(previousItem) : undefined
+    previousItem ? chatRenderItemPrimaryItem(previousItem) : undefined,
   )
 }
 
@@ -208,7 +278,7 @@ function chatRenderItemId(item: ChatRenderItem) {
 
 function footerItemIdsForVisibleItems(
   items: ChatItem[],
-  isAgentWorking: boolean
+  isAgentWorking: boolean,
 ) {
   const footerItemIds = new Set<string>()
   let latestFinishedAssistantId: string | undefined
@@ -287,7 +357,7 @@ const ChatItemView = memo(function ChatItemView({
     }
 
     return (
-      <div className="border-l border-border/70 py-1 pr-2 pl-3 text-xs leading-5 text-muted-foreground/70 italic">
+      <div className="border-border/70 text-muted-foreground/70 border-l py-1 pr-2 pl-3 text-xs leading-5 italic">
         {chatItem.text || t.chat.thinking}
       </div>
     )
@@ -321,7 +391,7 @@ const ChatItemView = memo(function ChatItemView({
         {isStreamingSystemMessage ? (
           <LoaderCircle
             size={13}
-            className="animate-spin text-muted-foreground/70"
+            className="text-muted-foreground/70 animate-spin"
           />
         ) : null}
       </div>
@@ -333,7 +403,7 @@ const ChatItemView = memo(function ChatItemView({
       className={[
         "group/message ousia-chat-message-text text-sm leading-5 select-text",
         chatItem.role === "user"
-          ? "ousia-chat-user-message ousia-squircle-corners ml-auto w-fit rounded-[18px] px-3 py-2"
+          ? "ousia-chat-user-message w-fit max-w-full rounded-xl px-3 py-2"
           : "text-foreground",
       ].join(" ")}
     >
@@ -359,7 +429,7 @@ const ChatItemView = memo(function ChatItemView({
             </p>
           ) : null}
           {chatItem.status === "failed" ? (
-            <span className="mt-1 flex items-center gap-1 text-[11px] leading-4 text-destructive">
+            <span className="text-destructive mt-1 flex items-center gap-1 text-[11px] leading-4">
               {t.chat.sendFailed}
             </span>
           ) : null}
@@ -378,7 +448,7 @@ const ChatItemView = memo(function ChatItemView({
 
 function areChatItemViewPropsEqual(
   previous: ChatItemViewProps,
-  next: ChatItemViewProps
+  next: ChatItemViewProps,
 ) {
   if (
     previous.item.kind !== next.item.kind ||
@@ -438,10 +508,10 @@ function AssistantMessageFooter({
     : ""
 
   return (
-    <div className="mt-2 flex h-5 items-center gap-1 text-muted-foreground/70 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
+    <div className="text-muted-foreground/70 mt-2 flex h-5 items-center gap-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
       <button
         type="button"
-        className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
+        className="hover:bg-muted/60 hover:text-foreground flex size-4.5 items-center justify-center rounded-md"
         aria-label={t.chat.copyMessage}
         title={t.chat.copyMessage}
         onClick={() => {
@@ -450,15 +520,17 @@ function AssistantMessageFooter({
       >
         <Copy size={14} strokeWidth={1.5} />
       </button>
-      <button
-        type="button"
-        className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
-        aria-label={t.chat.branchFromMessage}
-        title={t.chat.branchFromMessage}
-        onClick={() => onBranchFromMessage(item.id)}
-      >
-        <GitBranchPlus size={14} strokeWidth={1.5} />
-      </button>
+      {item.isPersisted ? (
+        <button
+          type="button"
+          className="hover:bg-muted/60 hover:text-foreground flex size-4.5 items-center justify-center rounded-md"
+          aria-label={t.chat.branchFromMessage}
+          title={t.chat.branchFromMessage}
+          onClick={() => onBranchFromMessage(item.id)}
+        >
+          <GitBranchPlus size={14} strokeWidth={1.5} />
+        </button>
+      ) : null}
       {timeLabel ? (
         <span
           className="ml-1 text-xs leading-none tabular-nums"
@@ -483,7 +555,7 @@ function MessageAttachmentList({
         return (
           <span
             key={attachment.id}
-            className="inline-flex h-9 max-w-56 items-center gap-2 rounded-md border-[0.5px] border-foreground/8 bg-muted/15 px-2 text-xs text-muted-foreground dark:border-white/10 dark:bg-white/4"
+            className="border-foreground/8 bg-muted/15 text-muted-foreground inline-flex h-9 max-w-56 items-center gap-2 rounded-md border-[0.5px] px-2 text-xs dark:border-white/10 dark:bg-white/4"
             title={`${attachment.name} · ${formatBytes(attachment.size)}`}
           >
             {attachment.kind === "image" && attachment.dataBase64 ? (
@@ -493,7 +565,7 @@ function MessageAttachmentList({
                 className="size-6 shrink-0 rounded object-cover"
               />
             ) : (
-              <span className="flex size-6 shrink-0 items-center justify-center rounded bg-background/70">
+              <span className="bg-background/70 flex size-6 shrink-0 items-center justify-center rounded">
                 {attachment.kind === "image" ? (
                   <FileImage size={16} strokeWidth={1.5} />
                 ) : (
@@ -502,10 +574,10 @@ function MessageAttachmentList({
               </span>
             )}
             <span className="min-w-0">
-              <span className="block truncate leading-4 text-foreground">
+              <span className="text-foreground block truncate leading-4">
                 {attachment.name}
               </span>
-              <span className="block truncate text-[11px] leading-3 text-muted-foreground">
+              <span className="text-muted-foreground block truncate text-[11px] leading-3">
                 {formatBytes(attachment.size)}
               </span>
             </span>
@@ -519,14 +591,14 @@ function MessageAttachmentList({
 function AgentTurnWaitIndicator({ t }: { t: ReturnType<typeof getMessages> }) {
   return (
     <div
-      className="ousia-chat-message-text flex min-h-5 items-center text-sm leading-5 text-foreground"
+      className="ousia-chat-message-text text-foreground flex min-h-5 items-center text-sm leading-5"
       aria-label={t.chat.waitingForNextStep}
       role="status"
     >
       <span className="inline-flex h-5 items-center gap-1 align-baseline">
         {[0, 1, 2].map((index) => (
           <span
-            className="size-1.5 rounded-full bg-muted-foreground/55 motion-reduce:animate-none"
+            className="bg-muted-foreground/55 size-1.5 rounded-full motion-reduce:animate-none"
             key={index}
             style={{
               animation: "ousia-wave-dot 0.9s ease-in-out infinite",

@@ -1,7 +1,5 @@
 import {
-  isOusiaCodexReasoningEffort,
   isOusiaPiThinkingLevel,
-  type OusiaAgentProvider,
   type OusiaAppSettings,
   type OusiaAvailableModel,
   type OusiaReasoningEffort,
@@ -23,17 +21,8 @@ export function reasoningEffortLabel(effort: OusiaReasoningEffort) {
 }
 
 export function reasoningPreferencePatch(
-  agentProvider: OusiaAgentProvider,
   effort: OusiaReasoningEffort
-):
-  | Pick<OusiaAppSettings, "codexReasoningEffort">
-  | Pick<OusiaAppSettings, "thinkingLevel"> {
-  if (agentProvider === "codex") {
-    if (!isOusiaCodexReasoningEffort(effort)) {
-      throw new Error("Codex reasoning effort cannot be empty.")
-    }
-    return { codexReasoningEffort: effort.trim() }
-  }
+): Pick<OusiaAppSettings, "thinkingLevel"> {
   if (!isOusiaPiThinkingLevel(effort)) {
     throw new Error(`Unsupported Pi thinking level: ${effort}`)
   }

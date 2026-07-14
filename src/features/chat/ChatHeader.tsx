@@ -49,11 +49,10 @@ export function ChatHeader({
 }: ChatHeaderProps) {
   return (
     <header
+      data-tauri-drag-region="deep"
       className={cn(
         "window-drag relative z-30 grid h-[var(--ousia-titlebar-height)] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter] select-none",
-        isScrolled
-          ? "bg-white shadow-none dark:bg-card"
-          : "bg-white shadow-none dark:bg-card"
+        isScrolled ? "bg-card shadow-none" : "bg-card shadow-none",
       )}
     >
       <div className="window-drag absolute inset-0" aria-hidden="true" />
@@ -63,21 +62,13 @@ export function ChatHeader({
           isSidebarCollapsed &&
             (isWindowFullscreen
               ? "pl-[var(--ousia-titlebar-height)]"
-              : "pl-[var(--ousia-titlebar-sidebar-offset)]")
+              : "pl-[var(--ousia-titlebar-sidebar-offset)]"),
         )}
       >
         <div className="window-drag flex min-w-0 flex-1 items-center gap-2 self-stretch pl-2">
           <h1 className="window-drag truncate text-sm leading-none font-normal">
             {currentSession?.title ?? t.app.newSession}
           </h1>
-          {currentSession?.agentProvider === "codex" ? (
-            <span
-              data-slot="agent-provider-badge"
-              className="window-drag shrink-0 rounded-md bg-muted/55 px-1.5 py-0.5 text-[10px] leading-4 font-medium text-muted-foreground"
-            >
-              Codex
-            </span>
-          ) : null}
         </div>
       </div>
       <div className="window-drag relative z-10 flex shrink-0 items-center justify-end gap-1">

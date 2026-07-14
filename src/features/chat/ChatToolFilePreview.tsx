@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   lazy,
   Suspense,
   useLayoutEffect,
@@ -22,8 +24,23 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { OusiaChatToolFilePreview } from "@/electron/chat-types"
+import { decideFilePreviewFollowState } from "@/features/chat/chat-scroll-follow"
+import {
+  streamedToolPreviewReveals,
+  type ToolPreviewTextRow,
+} from "@/features/chat/chat-tool-preview-motion"
+import { createPreviewSnapshotScheduler } from "@/features/chat/chat-tool-preview-scheduler"
 
 const SCROLL_TO_LATEST_THRESHOLD = 24
+const STREAMING_PREVIEW_UPDATE_INTERVAL_MS = 120
+const STREAMING_PREVIEW_REVEAL_DURATION_MS = 150
+const MAX_STREAMING_PREVIEW_REVEAL_ROWS = 12
+const previewSchedulerClock = {
+  clearTimeout: (timerId: number) => window.clearTimeout(timerId),
+  now: () => performance.now(),
+  setTimeout: (callback: () => void, delay: number) =>
+    window.setTimeout(callback, delay),
+}
 
 const wrapFillUnsafeCSS = `
   [data-overflow="wrap"] {
@@ -47,11 +64,12 @@ const wrapFillUnsafeCSS = `
   }
 
   [data-diffs-header] {
-    background-color: var(--ousia-diff-card-bg);
+    background-color: var(--ousia-diff-header-surface);
+    box-shadow: inset 0 -1px 0 var(--ousia-diff-header-divider);
   }
 
   [data-diffs-header][data-sticky] {
-    background-color: var(--ousia-diff-card-bg);
+    background-color: var(--ousia-diff-header-surface);
     z-index: 6;
   }
 
@@ -79,6 +97,25 @@ const wrapFillUnsafeCSS = `
 
   [data-no-newline] {
     display: none;
+  }
+
+  @keyframes ousia-diff-stream-reveal {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  [data-ousia-diff-stream-reveal] {
+    animation: ousia-diff-stream-reveal ${STREAMING_PREVIEW_REVEAL_DURATION_MS}ms ease var(--ousia-diff-stream-reveal-delay, 0ms) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-ousia-diff-stream-reveal] {
+      animation: none;
+    }
   }
 `
 
@@ -117,10 +154,7 @@ const fileOptionsByTheme = {
   },
 } as const
 
-const previewCardBackground = "var(--ousia-diff-card-bg)"
-
 const previewFrameStyle = {
-  backgroundColor: previewCardBackground,
   borderRadius: "14px",
   display: "block",
   maxHeight: "48dvh",
@@ -129,10 +163,165 @@ const previewFrameStyle = {
 
 type PierreSurfaceStyle = CSSProperties & Record<`--${string}`, string>
 type HeaderMetadataRenderer = () => ReactNode
+type PierrePostRenderPhase = "mount" | "update" | "unmount"
+
+type PierreTextRow = ToolPreviewTextRow & {
+  node: HTMLElement
+}
+
+type ActivePierreTextReveal = {
+  startOffset: number
+  startedAt: number
+  text: string
+}
 
 const pierreSurfaceStyle = {
   display: "block",
 } satisfies PierreSurfaceStyle
+
+function pierreTextRows(container: HTMLElement): PierreTextRow[] {
+  const shadowRoot = container.shadowRoot
+  if (!shadowRoot) {
+    throw new Error("Pierre preview rendered without an open shadow root")
+  }
+
+  const rows: PierreTextRow[] = []
+  const contentColumns =
+    shadowRoot.querySelectorAll<HTMLElement>("[data-content]")
+  contentColumns.forEach((column, columnIndex) => {
+    const keyOccurrences = new Map<string, number>()
+    column
+      .querySelectorAll<HTMLElement>(":scope > [data-line]")
+      .forEach((node) => {
+        const baseKey = [
+          columnIndex,
+          node.dataset.lineIndex ?? "",
+          node.dataset.line ?? "",
+          node.dataset.altLine ?? "",
+          node.dataset.lineType ?? "",
+        ].join(":")
+        const occurrence = keyOccurrences.get(baseKey) ?? 0
+        keyOccurrences.set(baseKey, occurrence + 1)
+        rows.push({
+          key: `${baseKey}:${occurrence}`,
+          node,
+          text: node.textContent ?? "",
+        })
+      })
+  })
+  return rows
+}
+
+function wrapPierreTextSuffix(
+  node: HTMLElement,
+  startOffset: number,
+  elapsedMilliseconds: number,
+  revealMarker: string,
+) {
+  if (node.dataset.ousiaDiffStreamRevealApplied === revealMarker) {
+    return
+  }
+  const document = node.ownerDocument
+  const nodeFilter = document.defaultView?.NodeFilter
+  if (!nodeFilter) {
+    throw new Error("NodeFilter is unavailable for streamed diff animation")
+  }
+
+  const walker = document.createTreeWalker(node, nodeFilter.SHOW_TEXT)
+  let remainingOffset = startOffset
+  let startNode: Text | null = null
+  let offsetInNode = 0
+  while (walker.nextNode()) {
+    const textNode = walker.currentNode as Text
+    const textLength = textNode.data.length
+    if (remainingOffset <= textLength) {
+      startNode = textNode
+      offsetInNode = remainingOffset
+      break
+    }
+    remainingOffset -= textLength
+  }
+  if (!startNode) {
+    throw new Error("Streamed diff reveal offset exceeded the rendered row")
+  }
+
+  const range = document.createRange()
+  range.setStart(startNode, offsetInNode)
+  range.setEnd(node, node.childNodes.length)
+  const fragment = range.extractContents()
+  const reveal = document.createElement("span")
+  reveal.dataset.ousiaDiffStreamReveal = ""
+  reveal.style.setProperty(
+    "--ousia-diff-stream-reveal-delay",
+    `${-Math.round(elapsedMilliseconds)}ms`,
+  )
+  reveal.append(fragment)
+  node.append(reveal)
+  node.dataset.ousiaDiffStreamRevealApplied = revealMarker
+}
+
+function usePierreStreamReveal(isStreaming: boolean) {
+  const previousRowsRef = useRef<ToolPreviewTextRow[]>([])
+  const activeRevealsRef = useRef(new Map<string, ActivePierreTextReveal>())
+  const hasStreamedRef = useRef(isStreaming)
+
+  return useCallback(
+    (
+      container: HTMLElement,
+      _instance: unknown,
+      phase: PierrePostRenderPhase,
+    ) => {
+      if (phase === "unmount") {
+        previousRowsRef.current = []
+        activeRevealsRef.current.clear()
+        return
+      }
+      if (isStreaming) {
+        hasStreamedRef.current = true
+      }
+
+      const rows = pierreTextRows(container)
+      const currentRows = rows.map(({ key, text }) => ({ key, text }))
+      const now = performance.now()
+      if (hasStreamedRef.current) {
+        const reveals = streamedToolPreviewReveals(
+          previousRowsRef.current,
+          currentRows,
+          MAX_STREAMING_PREVIEW_REVEAL_ROWS,
+        )
+        for (const reveal of reveals) {
+          activeRevealsRef.current.set(reveal.key, {
+            startOffset: reveal.startOffset,
+            startedAt: now,
+            text: reveal.text,
+          })
+        }
+      }
+
+      const rowByKey = new Map(rows.map((row) => [row.key, row]))
+      for (const [key, reveal] of activeRevealsRef.current) {
+        const row = rowByKey.get(key)
+        const elapsedMilliseconds = now - reveal.startedAt
+        if (
+          !row ||
+          row.text !== reveal.text ||
+          elapsedMilliseconds >= STREAMING_PREVIEW_REVEAL_DURATION_MS
+        ) {
+          activeRevealsRef.current.delete(key)
+          continue
+        }
+        wrapPierreTextSuffix(
+          row.node,
+          reveal.startOffset,
+          elapsedMilliseconds,
+          `${reveal.startedAt}:${reveal.startOffset}`,
+        )
+      }
+      previousRowsRef.current = currentRows
+    },
+    [isStreaming],
+  )
+}
 
 function revealablePreviewPath(preview: OusiaChatToolFilePreview) {
   if (preview.kind !== "diff" && preview.kind !== "patch") {
@@ -186,7 +375,7 @@ function RevealFileInFinderButton({
         <TooltipTrigger asChild>
           <button
             type="button"
-            className="window-no-drag -my-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/75 transition-colors hover:bg-muted/55 hover:text-foreground focus-visible:bg-muted/55 focus-visible:text-foreground focus-visible:outline-none disabled:cursor-default disabled:opacity-45"
+            className="window-no-drag text-muted-foreground/75 hover:bg-muted/55 hover:text-foreground focus-visible:bg-muted/55 focus-visible:text-foreground -my-1 flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none disabled:cursor-default disabled:opacity-45"
             aria-label={t.chat.showFileInFinder}
             disabled={!canReveal || isOpening}
             onClick={handleClick}
@@ -220,7 +409,7 @@ function previewHeaderHeight(node: HTMLDivElement) {
     return 0
   }
   const header = host.shadowRoot?.querySelector<HTMLElement>(
-    "[data-diffs-header]"
+    "[data-diffs-header]",
   )
   return header?.offsetHeight ?? 0
 }
@@ -237,7 +426,7 @@ function scrollThumbStyleForNode(node: HTMLDivElement): CSSProperties | null {
   const trackHeight = Math.max(0, node.clientHeight - topInset - bottomInset)
   const thumbHeight = Math.max(
     minThumbHeight,
-    Math.round((node.clientHeight / node.scrollHeight) * trackHeight)
+    Math.round((node.clientHeight / node.scrollHeight) * trackHeight),
   )
   const maxScrollTop = node.scrollHeight - node.clientHeight
   const maxThumbTop = Math.max(0, trackHeight - thumbHeight)
@@ -252,15 +441,27 @@ function scrollThumbStyleForNode(node: HTMLDivElement): CSSProperties | null {
 }
 
 const LazyPierreDiffPreview = lazy(async () => {
-  const [{ File, FileDiff, PatchDiff }, { parseDiffFromFile }] = await Promise.all([
+  const [
+    { File, FileDiff, PatchDiff, WorkerPoolContextProvider, useWorkerPool },
+    { parseDiffFromFile },
+    { default: PierreDiffWorker },
+  ] = await Promise.all([
     import("@pierre/diffs/react"),
     import("@pierre/diffs"),
+    import("@pierre/diffs/worker/worker.js?worker"),
   ])
+
+  const workerPoolOptions = {
+    poolSize: 1,
+    totalASTLRUCacheSize: 20,
+    workerFactory: () => new PierreDiffWorker(),
+  }
+  const workerHighlighterOptions = { langs: [] }
 
   type ParsedGeneratedDiff = ReturnType<typeof parseDiffFromFile>
 
   function removeNoNewlineMetadata(
-    fileDiff: ParsedGeneratedDiff
+    fileDiff: ParsedGeneratedDiff,
   ): ParsedGeneratedDiff {
     return {
       ...fileDiff,
@@ -275,15 +476,17 @@ const LazyPierreDiffPreview = lazy(async () => {
   function stripNoNewlinePatchMetadata(patch: string) {
     return patch.replace(
       /(?:\r?\n)?\\ No newline at end of file(?=\r?\n|$)/g,
-      ""
+      "",
     )
   }
 
   function GeneratedDiffPreview({
+    onPostRender,
     preview,
     renderHeaderMetadata,
     themeType,
   }: {
+    onPostRender: ReturnType<typeof usePierreStreamReveal>
     preview: Extract<OusiaChatToolFilePreview, { kind: "diff" }>
     renderHeaderMetadata?: HeaderMetadataRenderer
     themeType: ResolvedTheme
@@ -309,12 +512,15 @@ const LazyPierreDiffPreview = lazy(async () => {
             : undefined,
       })
     }, [preview.newContent, preview.oldContent, preview.path])
+    const options = useMemo(
+      () => ({ ...diffOptionsByTheme[themeType], onPostRender }),
+      [onPostRender, themeType],
+    )
 
     return (
       <FileDiff
-        disableWorkerPool
         fileDiff={fileDiff}
-        options={diffOptionsByTheme[themeType]}
+        options={options}
         renderHeaderMetadata={renderHeaderMetadata}
         style={pierreSurfaceStyle}
       />
@@ -322,23 +528,28 @@ const LazyPierreDiffPreview = lazy(async () => {
   }
 
   function PatchDiffPreview({
+    onPostRender,
     preview,
     renderHeaderMetadata,
     themeType,
   }: {
+    onPostRender: ReturnType<typeof usePierreStreamReveal>
     preview: Extract<OusiaChatToolFilePreview, { kind: "patch" }>
     renderHeaderMetadata?: HeaderMetadataRenderer
     themeType: ResolvedTheme
   }) {
     const patch = useMemo(
       () => stripNoNewlinePatchMetadata(preview.patch),
-      [preview.patch]
+      [preview.patch],
+    )
+    const options = useMemo(
+      () => ({ ...diffOptionsByTheme[themeType], onPostRender }),
+      [onPostRender, themeType],
     )
 
     return (
       <PatchDiff
-        disableWorkerPool
-        options={diffOptionsByTheme[themeType]}
+        options={options}
         patch={patch}
         renderHeaderMetadata={renderHeaderMetadata}
         style={pierreSurfaceStyle}
@@ -346,76 +557,209 @@ const LazyPierreDiffPreview = lazy(async () => {
     )
   }
 
+  function DiffWorkerPoolBoundary({
+    children,
+    failureText,
+    onWorkerSettled,
+  }: {
+    children: ReactNode
+    failureText: string
+    onWorkerSettled: () => void
+  }) {
+    const workerPool = useWorkerPool()
+    const hasReportedFailureRef = useRef(false)
+    const hadPendingWorkRef = useRef(false)
+    const [failure, setFailure] = useState<{
+      data: Record<string, unknown>
+      message: string
+    }>()
+
+    useEffect(() => {
+      function reportFailure(data: Record<string, unknown>, message: string) {
+        if (hasReportedFailureRef.current) {
+          return
+        }
+        hasReportedFailureRef.current = true
+        console.error(`[chat.diff-worker] ${message}`, data)
+        void window.ousia
+          ?.reportFrontendError({
+            data,
+            kind: "chat-diff-worker",
+            message,
+          })
+          .catch((error: unknown) => {
+            console.error(
+              "[chat.diff-worker] Failed to persist worker failure",
+              error,
+            )
+          })
+      }
+
+      if (!workerPool) {
+        const data = { managerState: "unavailable" }
+        const message = "Chat diff worker pool is unavailable"
+        reportFailure(data, message)
+        return
+      }
+      return workerPool.subscribeToStatChanges((stats) => {
+        const hasPendingWork =
+          stats.activeTasks > 0 ||
+          stats.busyWorkers > 0 ||
+          stats.queuedTasks > 0
+        if (hasPendingWork) {
+          hadPendingWorkRef.current = true
+        } else if (hadPendingWorkRef.current) {
+          hadPendingWorkRef.current = false
+          onWorkerSettled()
+        }
+        if (!stats.workersFailed || hasReportedFailureRef.current) {
+          return
+        }
+        const data = {
+          activeTasks: stats.activeTasks,
+          busyWorkers: stats.busyWorkers,
+          managerState: stats.managerState,
+          queuedTasks: stats.queuedTasks,
+          totalWorkers: stats.totalWorkers,
+        }
+        const message = "Chat diff worker pool failed"
+        setFailure({ data, message })
+        reportFailure(data, message)
+      })
+    }, [onWorkerSettled, workerPool])
+
+    if (!workerPool || failure) {
+      return (
+        <pre className="m-0 px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-[var(--ousia-tool-warning-strong)]">
+          {failureText}
+        </pre>
+      )
+    }
+
+    return children
+  }
+
   return {
     default: function PierreDiffPreview({
+      isStreaming,
       preview,
       renderHeaderMetadata,
       themeType,
+      workerFailureText,
+      onWorkerSettled,
     }: {
+      isStreaming: boolean
       preview: OusiaChatToolFilePreview
       renderHeaderMetadata?: HeaderMetadataRenderer
       themeType: ResolvedTheme
+      workerFailureText: string
+      onWorkerSettled: () => void
     }) {
+      const onPostRender = usePierreStreamReveal(isStreaming)
+      const fileOptions = useMemo(
+        () => ({ ...fileOptionsByTheme[themeType], onPostRender }),
+        [onPostRender, themeType],
+      )
+      let content: ReactNode
       if (preview.kind === "diff") {
-        return (
+        content = (
           <GeneratedDiffPreview
+            onPostRender={onPostRender}
             preview={preview}
             renderHeaderMetadata={renderHeaderMetadata}
             themeType={themeType}
           />
         )
-      }
-
-      if (preview.kind === "patch") {
-        return (
+      } else if (preview.kind === "patch") {
+        content = (
           <PatchDiffPreview
+            onPostRender={onPostRender}
             preview={preview}
             renderHeaderMetadata={renderHeaderMetadata}
             themeType={themeType}
           />
         )
-      }
-
-      if (preview.kind === "file") {
-        return (
+      } else if (preview.kind === "file") {
+        content = (
           <File
-            disableWorkerPool
             file={{
               cacheKey: `${preview.path}:file:${preview.content.length}`,
               contents: preview.content,
               name: preview.path,
             }}
-            options={fileOptionsByTheme[themeType]}
+            options={fileOptions}
             style={pierreSurfaceStyle}
           />
+        )
+      } else {
+        content = (
+          <pre className="m-0 px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-[var(--ousia-tool-warning-strong)]">
+            {preview.message}
+          </pre>
         )
       }
 
       return (
-        <pre className="m-0 whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-4 text-[var(--ousia-tool-warning-strong)]">
-          {preview.message}
-        </pre>
+        <WorkerPoolContextProvider
+          highlighterOptions={workerHighlighterOptions}
+          poolOptions={workerPoolOptions}
+        >
+          <DiffWorkerPoolBoundary
+            failureText={workerFailureText}
+            onWorkerSettled={onWorkerSettled}
+          >
+            {content}
+          </DiffWorkerPoolBoundary>
+        </WorkerPoolContextProvider>
       )
     },
   }
 })
 
+function useScheduledFilePreview(
+  preview: OusiaChatToolFilePreview,
+  isStreaming: boolean,
+) {
+  const [scheduledPreview, setScheduledPreview] = useState(preview)
+  const [scheduler] = useState(() =>
+    createPreviewSnapshotScheduler({
+      clock: previewSchedulerClock,
+      commit: setScheduledPreview,
+      initialSnapshot: preview,
+      intervalMilliseconds: STREAMING_PREVIEW_UPDATE_INTERVAL_MS,
+    }),
+  )
+
+  useLayoutEffect(() => {
+    scheduler.update(preview, isStreaming)
+  }, [isStreaming, preview, scheduler])
+
+  useEffect(() => {
+    return () => scheduler.dispose()
+  }, [scheduler])
+
+  return scheduledPreview
+}
+
 export function ToolFilePreviewView({
+  isStreaming,
   preview,
   projectPath,
   t,
 }: {
+  isStreaming: boolean
   preview: OusiaChatToolFilePreview
   projectPath?: string
   t: ReturnType<typeof getMessages>
 }) {
   const { resolvedTheme } = useTheme()
+  const scheduledPreview = useScheduledFilePreview(preview, isStreaming)
   const frameRef = useRef<HTMLDivElement>(null)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
   const [scrollThumbStyle, setScrollThumbStyle] =
     useState<CSSProperties | null>(null)
-  const revealPath = revealablePreviewPath(preview)
+  const revealPath = revealablePreviewPath(scheduledPreview)
   const renderHeaderMetadata = useMemo<HeaderMetadataRenderer | undefined>(
     () =>
       revealPath
@@ -427,23 +771,38 @@ export function ToolFilePreviewView({
             />
           )
         : undefined,
-    [projectPath, revealPath, t]
+    [projectPath, revealPath, t],
   )
+
+  const syncAfterContentLayout = useCallback(
+    (node: HTMLDivElement) => {
+      if (isFollowingLatest) {
+        node.scrollTop = node.scrollHeight
+        setShowScrollToLatest(false)
+      } else {
+        setShowScrollToLatest(hasScrollableContent(node))
+      }
+      setScrollThumbStyle(scrollThumbStyleForNode(node))
+    },
+    [isFollowingLatest],
+  )
+
+  const handleWorkerSettled = useCallback(() => {
+    const node = frameRef.current
+    if (node) {
+      syncAfterContentLayout(node)
+    }
+  }, [syncAfterContentLayout])
 
   useLayoutEffect(() => {
     const node = frameRef.current
     if (!node) {
       return
     }
-    if (!isFollowingLatest) {
-      setShowScrollToLatest(hasScrollableContent(node))
-      setScrollThumbStyle(scrollThumbStyleForNode(node))
-      return
-    }
-    node.scrollTop = node.scrollHeight
-    setScrollThumbStyle(scrollThumbStyleForNode(node))
-    setShowScrollToLatest(false)
-  }, [isFollowingLatest, preview])
+    // Keep Ousia's synchronous layout follow here. Deferring this scroll lets
+    // Pierre's worker-driven height update paint with the preview above bottom.
+    syncAfterContentLayout(node)
+  }, [scheduledPreview, syncAfterContentLayout])
 
   useLayoutEffect(() => {
     const node = frameRef.current
@@ -451,24 +810,48 @@ export function ToolFilePreviewView({
       return
     }
 
+    let observedContentNode: Element | null = null
     const observer = new ResizeObserver(() => {
-      setScrollThumbStyle(scrollThumbStyleForNode(node))
+      syncAfterContentLayout(node)
     })
-    observer.observe(node)
-    const contentNode = node.firstElementChild
-    if (contentNode) {
-      observer.observe(contentNode)
+
+    const observeCurrentContent = () => {
+      const contentNode = node.firstElementChild
+      if (contentNode === observedContentNode) {
+        return
+      }
+      if (observedContentNode) {
+        observer.unobserve(observedContentNode)
+      }
+      observedContentNode = contentNode
+      if (observedContentNode) {
+        observer.observe(observedContentNode)
+      }
     }
 
+    observer.observe(node)
+    observeCurrentContent()
+    const mutationObserver = new MutationObserver(() => {
+      observeCurrentContent()
+      syncAfterContentLayout(node)
+    })
+    mutationObserver.observe(node, { childList: true })
+
     return () => {
+      mutationObserver.disconnect()
       observer.disconnect()
     }
-  }, [])
+  }, [syncAfterContentLayout])
 
   function syncFollowState(node: HTMLDivElement) {
     const isAtLatest = isScrolledToLatest(node)
-    setIsFollowingLatest(isAtLatest)
-    setShowScrollToLatest(!isAtLatest && hasScrollableContent(node))
+    const nextState = decideFilePreviewFollowState({
+      hasScrollableContent: hasScrollableContent(node),
+      isAtLatest,
+      isFollowingLatest,
+    })
+    setIsFollowingLatest(nextState.isFollowingLatest)
+    setShowScrollToLatest(nextState.showScrollToLatest)
     setScrollThumbStyle(scrollThumbStyleForNode(node))
   }
 
@@ -494,11 +877,11 @@ export function ToolFilePreviewView({
     setScrollThumbStyle(scrollThumbStyleForNode(node))
   }
 
-  if (preview.kind === "error") {
+  if (scheduledPreview.kind === "error") {
     return (
       <div className="mt-1.5 rounded-md border border-[var(--ousia-tool-warning)] bg-[var(--ousia-tool-warning-bg)]">
-        <pre className="m-0 whitespace-pre-wrap px-2.5 py-2 font-mono text-[11px] leading-4 text-[var(--ousia-tool-warning-strong)]">
-          {preview.message}
+        <pre className="m-0 px-2.5 py-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-[var(--ousia-tool-warning-strong)]">
+          {scheduledPreview.message}
         </pre>
       </div>
     )
@@ -508,7 +891,8 @@ export function ToolFilePreviewView({
     <div className="relative mt-1.5">
       <div
         ref={frameRef}
-        className="ousia-diff-preview-frame ousia-squircle-corners"
+        data-chat-nested-scroll
+        className="ousia-diff-preview-frame"
         onScroll={(event) => {
           syncFollowState(event.currentTarget)
         }}
@@ -517,15 +901,18 @@ export function ToolFilePreviewView({
       >
         <Suspense
           fallback={
-            <div className="px-2.5 py-2 text-[11px] leading-4 text-muted-foreground">
+            <div className="text-muted-foreground px-2.5 py-2 text-[11px] leading-4">
               {t.chat.toolPayloadLoading}
             </div>
           }
         >
           <LazyPierreDiffPreview
-            preview={preview}
+            isStreaming={isStreaming}
+            preview={scheduledPreview}
             renderHeaderMetadata={renderHeaderMetadata}
             themeType={resolvedTheme}
+            workerFailureText={t.chat.diffPreviewWorkerFailed}
+            onWorkerSettled={handleWorkerSettled}
           />
         </Suspense>
       </div>
@@ -533,7 +920,7 @@ export function ToolFilePreviewView({
       {scrollThumbStyle ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute top-0 right-0 z-20 w-1 rounded-full bg-muted-foreground/20"
+          className="bg-muted-foreground/20 pointer-events-none absolute top-0 right-0 z-20 w-1 rounded-full"
           style={scrollThumbStyle}
         />
       ) : null}
@@ -544,7 +931,7 @@ export function ToolFilePreviewView({
             type="button"
             variant="secondary"
             size="icon-sm"
-            className="pointer-events-auto size-6 rounded-full border-[0.5px] border-foreground/10 bg-popover/90 text-popover-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur hover:bg-popover/95 dark:border-foreground/10 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
+            className="border-foreground/10 bg-popover/90 text-popover-foreground hover:bg-popover/95 dark:border-foreground/10 pointer-events-auto size-6 rounded-full border-[0.5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
             aria-label={t.chat.scrollToLatest}
             onClick={() => {
               scrollToLatest("smooth")

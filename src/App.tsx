@@ -28,6 +28,11 @@ import {
 } from "@/app/chat-event-routing"
 import { nextBranchSessionTitle } from "@/app/branch-session-title"
 import {
+  markPersistedChatItems,
+  persistedChatItemIds,
+  reconcilePersistedChatHistory,
+} from "@/app/chat-history-reconciliation"
+import {
   shouldResetEmptyChatHistory,
   shouldRetryChatHistoryAfterSelection,
   shouldScheduleAutomaticChatHistoryRetry,
@@ -37,10 +42,10 @@ import {
   resolveOusiaChatContentWidthValue,
   resolveOusiaChatFontSizeValue,
   resolveOusiaChatLineSpacingValue,
-  resolveOusiaFontFamilyValue,
   type OusiaAppStateTransactionResult,
+  type OusiaChatContext,
   type OusiaChatEvent,
-  type OusiaCodexEnvironmentStatus,
+  type OusiaChatHistoryResult,
   type OusiaModelRegistryResult,
   type OusiaSidebarSectionId,
   type OusiaUpdateStatus,
@@ -48,7 +53,19 @@ import {
 import { getMessages, isDefaultSessionTitle } from "@/app/i18n"
 import { getConfiguredModelPresets } from "@/app/model-presets"
 import { ChatArea } from "@/features/chat/ChatArea"
-import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
+import {
+  appendBufferedChatEvent,
+  chatEventRequiresNonStarvableCommit,
+  chatEventRenderInterval,
+  CHAT_TEXT_STREAM_RENDER_INTERVAL_MS,
+  CHAT_TOOL_INPUT_RENDER_INTERVAL_MS,
+} from "@/features/chat/chat-event-buffer"
+import {
+  applyChatEvent,
+  applyChatEventBatchBySession,
+  type ChatItem,
+  type ChatItemsBySession,
+} from "@/features/chat/chat-events"
 import type { SettingsSectionId } from "@/features/settings/settings-navigation"
 import { SettingsPage } from "@/features/settings/SettingsPage"
 import { SettingsSidebar } from "@/features/settings/SettingsSidebar"
@@ -62,6 +79,7 @@ const MAX_SIDEBAR_WIDTH = 320
 const MIN_CHAT_WIDTH = 300
 const RESIZE_HANDLE_WIDTH = 1
 const CHAT_HISTORY_PAGE_SIZE = 20
+const CHAT_HISTORY_RECONCILIATION_PAGE_SIZE = 500
 const SIDEBAR_STYLE = { width: "var(--ousia-sidebar-live-width)" }
 const MAIN_PANEL_STYLE = { flex: "1 1 0", width: "auto" }
 
@@ -88,20 +106,23 @@ type ChatHistoryPageState = {
   status: "loading-initial" | "ready" | "loading-older" | "empty" | "error"
   totalItems?: number
 }
-type TextDeltaChatEvent = Extract<
-  OusiaChatEvent,
-  { type: "assistant_text_delta" | "thinking_delta" }
->
+type ChatEventBufferDiagnostics = {
+  appliedEventCount: number
+  coalescedEventCount: number
+  flushCount: number
+  maxBatchSize: number
+  receivedEventCount: number
+}
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
 function projectPathForAppStateSession(
   state: InitialAppState,
-  session: SessionRecord
+  session: SessionRecord,
 ) {
   if (!session.projectId) {
-    return state.settings.defaultSessionDir
+    return session.workingDirectory ?? state.settings.defaultSessionDir
   }
   return (
     state.projects.find((project) => project.id === session.projectId)?.path ??
@@ -112,7 +133,7 @@ function projectPathForAppStateSession(
 function moveRecordKey<T>(
   record: Record<string, T>,
   sourceKey: string,
-  targetKey: string
+  targetKey: string,
 ) {
   if (
     sourceKey === targetKey ||
@@ -132,7 +153,7 @@ function historyPageStateFromResult(
     hasMore?: boolean
     nextCursor?: string
     totalItems?: number
-  }
+  },
 ) {
   if (!items.length) {
     return {
@@ -151,44 +172,36 @@ function historyPageStateFromResult(
 
 function mergePersistedChatItems(
   existingItems: ChatItem[],
-  persistedItems: ChatItem[]
+  persistedItems: ChatItem[],
 ) {
+  const markedPersistedItems = markPersistedChatItems(persistedItems)
   if (!existingItems.length) {
-    return persistedItems
+    return markedPersistedItems
   }
-  if (!persistedItems.length) {
+  if (!markedPersistedItems.length) {
     return existingItems
   }
-  const persistedIds = new Set(persistedItems.map((item) => item.id))
+  const persistedIds = new Set(markedPersistedItems.map((item) => item.id))
   return [
-    ...persistedItems,
+    ...markedPersistedItems,
     ...existingItems.filter((item) => !persistedIds.has(item.id)),
   ]
 }
 
-function isTextDeltaEvent(
-  event: OusiaChatEvent | undefined
-): event is TextDeltaChatEvent {
-  return (
-    event?.type === "assistant_text_delta" || event?.type === "thinking_delta"
-  )
-}
-
-function canMergeTextDeltaEvents(
-  previousEvent: OusiaChatEvent | undefined,
-  nextEvent: TextDeltaChatEvent
-): previousEvent is TextDeltaChatEvent {
-  return (
-    isTextDeltaEvent(previousEvent) &&
-    previousEvent.type === nextEvent.type &&
-    previousEvent.id === nextEvent.id
-  )
+function chatItemDiagnostic(item: ChatItem) {
+  return {
+    id: item.id,
+    isPersisted: item.isPersisted === true,
+    role: item.role,
+    status: item.status,
+    textLength: item.text.length,
+  }
 }
 
 function reorderById<T extends { id: string }>(
   items: T[],
   sourceId: string,
-  targetId: string
+  targetId: string,
 ) {
   const sourceIndex = items.findIndex((item) => item.id === sourceId)
   const targetIndex = items.findIndex((item) => item.id === targetId)
@@ -204,13 +217,13 @@ function reorderById<T extends { id: string }>(
 function reorderSessionsById(
   sessions: SessionRecord[],
   sourceSessionId: string,
-  targetSessionId: string
+  targetSessionId: string,
 ) {
   const sourceSession = sessions.find(
-    (session) => session.id === sourceSessionId
+    (session) => session.id === sourceSessionId,
   )
   const targetSession = sessions.find(
-    (session) => session.id === targetSessionId
+    (session) => session.id === targetSessionId,
   )
   if (
     !sourceSession ||
@@ -224,7 +237,7 @@ function reorderSessionsById(
 
 function withSessionProjectId(
   session: SessionRecord,
-  projectId: string | undefined
+  projectId: string | undefined,
 ) {
   if (!projectId) {
     const { projectId: _projectId, ...defaultSession } = session
@@ -238,7 +251,7 @@ function moveSessionToProjectGroup(
   sessions: SessionRecord[],
   sessionId: string,
   targetProjectId: string | undefined,
-  targetSessionId?: string
+  targetSessionId?: string,
 ) {
   const sourceSession = sessions.find((session) => session.id === sessionId)
   if (!sourceSession) {
@@ -262,16 +275,16 @@ function moveSessionToProjectGroup(
 
   const movedSession = withSessionProjectId(
     sourceSession,
-    normalizedTargetProjectId
+    normalizedTargetProjectId,
   )
   const remainingSessions = sessions.filter(
-    (session) => session.id !== sessionId
+    (session) => session.id !== sessionId,
   )
   const targetIndex = canInsertAtTarget
     ? remainingSessions.findIndex((session) => session.id === targetSessionId)
     : -1
   const groupStartIndex = remainingSessions.findIndex(
-    (session) => (session.projectId || undefined) === normalizedTargetProjectId
+    (session) => (session.projectId || undefined) === normalizedTargetProjectId,
   )
   const insertIndex =
     targetIndex >= 0 ? targetIndex : groupStartIndex >= 0 ? groupStartIndex : 0
@@ -283,7 +296,7 @@ function moveSessionToProjectGroup(
 function moveSessionToGroupFront(
   sessions: SessionRecord[],
   sessionId: string,
-  time: string
+  time: string,
 ) {
   const targetSession = sessions.find((session) => session.id === sessionId)
   if (!targetSession) {
@@ -291,10 +304,10 @@ function moveSessionToGroupFront(
   }
   const updatedSession = { ...targetSession, time }
   const remainingSessions = sessions.filter(
-    (session) => session.id !== sessionId
+    (session) => session.id !== sessionId,
   )
   const groupStartIndex = remainingSessions.findIndex(
-    (session) => session.projectId === targetSession.projectId
+    (session) => session.projectId === targetSession.projectId,
   )
   if (groupStartIndex < 0) {
     return [updatedSession, ...remainingSessions]
@@ -305,14 +318,14 @@ function moveSessionToGroupFront(
 }
 
 function normalizeSidebarSectionOrder(
-  sectionOrder: OusiaSidebarSectionId[]
+  sectionOrder: OusiaSidebarSectionId[],
 ): OusiaSidebarSectionId[] {
   return [
     ...new Set(
       [...sectionOrder, "sessions", "projects"].filter(
         (sectionId): sectionId is OusiaSidebarSectionId =>
-          sectionId === "sessions" || sectionId === "projects"
-      )
+          sectionId === "sessions" || sectionId === "projects",
+      ),
     ),
   ]
 }
@@ -332,11 +345,15 @@ function ResizeHandle({
         aria-hidden="true"
         className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 transition-[width,background-color,opacity] ${
           isActive
-            ? "w-1 bg-ring/80"
-            : "w-px bg-transparent group-focus-within/resize:bg-ring/70 group-hover/resize:w-1 group-hover/resize:bg-ring/70"
+            ? "bg-ring/80 w-1"
+            : "group-focus-within/resize:bg-ring/70 group-hover/resize:bg-ring/70 w-px bg-transparent group-hover/resize:w-1"
         }`}
       />
-      <div aria-hidden="true" className="window-drag relative h-10 shrink-0" />
+      <div
+        aria-hidden="true"
+        className="window-drag relative h-10 shrink-0"
+        data-tauri-drag-region="deep"
+      />
       <div
         aria-label={label}
         className="window-no-drag group relative min-h-0 flex-1 overflow-visible"
@@ -353,7 +370,7 @@ function ResizeHandle({
 export function App() {
   const { theme, setTheme } = useTheme()
   const [initialState] = useState<InitialAppState>(() =>
-    createDefaultAppState()
+    createDefaultAppState(),
   )
   const [isAppStateLoaded, setIsAppStateLoaded] = useState(!window.ousia)
   const [updateStatus, setUpdateStatus] = useState<OusiaUpdateStatus>({
@@ -363,10 +380,10 @@ export function App() {
   const shellRef = useRef<HTMLElement>(null)
   const sidebarShellRef = useRef<HTMLDivElement>(null)
   const [sidebarWidth, setSidebarWidth] = useState(
-    initialState.shellLayout.sidebarWidth
+    initialState.shellLayout.sidebarWidth,
   )
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
-    initialState.shellLayout.isSidebarCollapsed
+    initialState.shellLayout.isSidebarCollapsed,
   )
   const [sidebarSectionOrder, setSidebarSectionOrder] = useState<
     OusiaSidebarSectionId[]
@@ -379,7 +396,7 @@ export function App() {
     number | null
   >(null)
   const zoomIndicatorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
+    null,
   )
   const [settings, setSettings] = useState<AppSettings>(initialState.settings)
   const t = getMessages(settings.language)
@@ -387,21 +404,18 @@ export function App() {
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("general")
   const [modelRegistry, setModelRegistry] = useState<OusiaModelRegistryResult>()
-  const [codexEnvironment, setCodexEnvironment] =
-    useState<OusiaCodexEnvironmentStatus>()
-  const [codexEnvironmentLoading, setCodexEnvironmentLoading] = useState(false)
   const [projects, setProjects] = useState<ProjectRecord[]>(
-    initialState.projects
+    initialState.projects,
   )
   const [expandedProjectIds, setExpandedProjectIds] = useState<string[]>(
-    initialState.expandedProjectIds
+    initialState.expandedProjectIds,
   )
   const [sessions, setSessions] = useState<SessionRecord[]>(
-    initialState.sessions
+    initialState.sessions,
   )
   const sessionsRef = useRef(sessions)
   const [selectedSessionId, setSelectedSessionId] = useState(
-    initialState.selectedSessionId
+    initialState.selectedSessionId,
   )
   const [sidebarScrollTargetSessionId, setSidebarScrollTargetSessionId] =
     useState("")
@@ -412,12 +426,34 @@ export function App() {
     Record<string, ChatHistoryPageState>
   >({})
   const itemsBySessionRef = useRef(itemsBySession)
+  const updateItemsBySession = useCallback(
+    (update: (current: ChatItemsBySession) => ChatItemsBySession) => {
+      const current = itemsBySessionRef.current
+      const next = update(current)
+      if (next === current) {
+        return current
+      }
+      itemsBySessionRef.current = next
+      setItemsBySession(next)
+      return next
+    },
+    [],
+  )
   const historyPageStateBySessionRef = useRef(historyPageStateBySession)
   const historyInFlightKeysRef = useRef<Set<string>>(new Set())
   const historyRetryAttemptsRef = useRef<Map<string, number>>(new Map())
   const historyRetryTimersRef = useRef<Map<string, number>>(new Map())
+  const historyReconciliationFrameIdsRef = useRef<Map<string, number>>(
+    new Map(),
+  )
+  const historyReconciliationInFlightKeysRef = useRef<Set<string>>(new Set())
   const pendingChatEventsRef = useRef<Map<string, OusiaChatEvent[]>>(new Map())
   const pendingChatEventsFrameRef = useRef(0)
+  const pendingChatEventsFlushAtRef = useRef(0)
+  const lastChatEventsFlushAtRef = useRef(0)
+  const chatEventBufferDiagnosticsRef = useRef<
+    Map<string, ChatEventBufferDiagnostics>
+  >(new Map())
   const sidebarResizeFrameRef = useRef(0)
   const [runStatusBySession, setRunStatusBySession] = useState<
     Record<string, AgentRunStatus>
@@ -442,7 +478,7 @@ export function App() {
         syncSettings?: boolean
         syncShellLayout?: boolean
         syncTheme?: boolean
-      } = {}
+      } = {},
     ) => {
       if (options.syncTheme) {
         isApplyingStoredThemeRef.current = true
@@ -455,7 +491,7 @@ export function App() {
         setSidebarWidth(state.shellLayout.sidebarWidth)
         setIsSidebarCollapsed(state.shellLayout.isSidebarCollapsed)
         setSidebarSectionOrder(
-          normalizeSidebarSectionOrder(state.shellLayout.sidebarSectionOrder)
+          normalizeSidebarSectionOrder(state.shellLayout.sidebarSectionOrder),
         )
       }
       setProjects(state.projects)
@@ -464,7 +500,7 @@ export function App() {
       setSessions(state.sessions)
       setSelectedSessionId(state.selectedSessionId)
     },
-    [setTheme]
+    [setTheme],
   )
 
   const applyAppStateTransaction = useCallback(
@@ -485,28 +521,25 @@ export function App() {
       })
       return true
     },
-    [applyPersistentAppState]
+    [applyPersistentAppState],
   )
 
   const projectPathForSession = useCallback(
     (session: SessionRecord) => {
       if (!session.projectId) {
-        return settings.defaultSessionDir
+        return session.workingDirectory ?? settings.defaultSessionDir
       }
       return (
         projects.find((project) => project.id === session.projectId)?.path ??
         settings.defaultSessionDir
       )
     },
-    [projects, settings.defaultSessionDir]
+    [projects, settings.defaultSessionDir],
   )
   const selectedSession =
     sessions.find(
-      (session) => session.id === selectedSessionId && !session.archivedAt
+      (session) => session.id === selectedSessionId && !session.archivedAt,
     ) ?? sessions.find((session) => !session.archivedAt)
-  const visibleSurfaceAgentProvider = isSettingsOpen
-    ? settings.defaultAgentProvider
-    : selectedSession?.agentProvider
   const selectedSessionIdForHistory = selectedSession?.id
   const selectedProject = selectedSession?.projectId
     ? projects.find((project) => project.id === selectedSession.projectId)
@@ -521,7 +554,7 @@ export function App() {
         name: projectNameFromPath(settings.defaultSessionDir),
         path: selectedProjectPath,
       },
-    [selectedProject, selectedProjectPath, settings.defaultSessionDir]
+    [selectedProject, selectedProjectPath, settings.defaultSessionDir],
   )
   const selectedChatKey =
     currentProject && selectedSession
@@ -546,7 +579,7 @@ export function App() {
             steering: [],
             followUp: [],
           },
-    [queuedChatStateBySession, selectedChatKey]
+    [queuedChatStateBySession, selectedChatKey],
   )
   const selectedContextUsage = selectedChatKey
     ? contextUsageBySession[selectedChatKey]
@@ -566,7 +599,7 @@ export function App() {
   }, [projectPathForSession, runStatusBySession, sessions])
   const unreadCompletedSessionIdSet = useMemo(
     () => unreadCompletedSessionIds,
-    [unreadCompletedSessionIds]
+    [unreadCompletedSessionIds],
   )
   const markSessionViewed = useCallback((sessionId: string) => {
     if (!sessionId) {
@@ -595,7 +628,7 @@ export function App() {
         return next
       })
     },
-    []
+    [],
   )
   const handleSettingsChange = useCallback(
     (nextSettings: AppSettings) => {
@@ -624,7 +657,7 @@ export function App() {
           })
       }
     },
-    [isAppStateLoaded, settings.autoRetryOnFailure]
+    [isAppStateLoaded, settings.autoRetryOnFailure],
   )
 
   const refreshModelRegistry = useCallback(async () => {
@@ -635,72 +668,114 @@ export function App() {
     setModelRegistry(registry)
     return registry
   }, [])
-  const refreshCodexEnvironment = useCallback(async () => {
-    if (!window.ousia) {
-      return undefined
-    }
-    setCodexEnvironmentLoading(true)
-    try {
-      const status = await window.ousia.checkCodexEnvironment()
-      setCodexEnvironment(status)
-      return status
-    } finally {
-      setCodexEnvironmentLoading(false)
-    }
-  }, [])
   const flushPendingChatEvents = useCallback(() => {
-    pendingChatEventsFrameRef.current = 0
+    if (pendingChatEventsFrameRef.current) {
+      window.cancelAnimationFrame(pendingChatEventsFrameRef.current)
+      pendingChatEventsFrameRef.current = 0
+    }
+    pendingChatEventsFlushAtRef.current = 0
     const pendingEvents = pendingChatEventsRef.current
     if (!pendingEvents.size) {
-      return
+      return 0
     }
 
     pendingChatEventsRef.current = new Map()
-    setItemsBySession((current) => {
-      let nextBySession = current
-      for (const [targetKey, events] of pendingEvents) {
-        let nextItems = current[targetKey] ?? []
-        for (const event of events) {
-          nextItems = applyChatEvent(nextItems, event)
-        }
-        if (nextItems !== current[targetKey]) {
-          if (nextBySession === current) {
-            nextBySession = { ...current }
-          }
-          nextBySession[targetKey] = nextItems
-        }
+    lastChatEventsFlushAtRef.current = performance.now()
+    let requiresNonStarvableCommit = false
+    for (const [targetKey, events] of pendingEvents) {
+      requiresNonStarvableCommit ||= events.some(
+        chatEventRequiresNonStarvableCommit,
+      )
+      const diagnostics = chatEventBufferDiagnosticsRef.current.get(targetKey)
+      if (!diagnostics) {
+        continue
       }
-      return nextBySession
-    })
-  }, [])
+      diagnostics.appliedEventCount += events.length
+      diagnostics.flushCount += 1
+      diagnostics.maxBatchSize = Math.max(
+        diagnostics.maxBatchSize,
+        events.length,
+      )
+    }
+    const applyPendingEvents = () => {
+      updateItemsBySession((current) =>
+        applyChatEventBatchBySession(current, pendingEvents),
+      )
+    }
+    if (requiresNonStarvableCommit) {
+      // Tool input is already capped at a bounded cadence. Normal priority here
+      // guarantees visible progress while its expensive highlighting stays in
+      // the worker and independently throttled preview component.
+      applyPendingEvents()
+    } else {
+      // Growing Markdown can take longer than one frame to render. Keep text
+      // work interruptible so composer input stays responsive.
+      startTransition(applyPendingEvents)
+    }
+    return [...pendingEvents.values()].reduce(
+      (count, events) => count + events.length,
+      0,
+    )
+  }, [updateItemsBySession])
+  const schedulePendingChatEventsFlush = useCallback(
+    (event: OusiaChatEvent) => {
+      const now = performance.now()
+      const renderInterval = chatEventRenderInterval(event)
+      const requestedFlushAt = renderInterval
+        ? Math.max(now, lastChatEventsFlushAtRef.current + renderInterval)
+        : now
+
+      if (pendingChatEventsFrameRef.current) {
+        pendingChatEventsFlushAtRef.current = Math.min(
+          pendingChatEventsFlushAtRef.current,
+          requestedFlushAt,
+        )
+        return
+      }
+
+      pendingChatEventsFlushAtRef.current = requestedFlushAt
+      const flushOnAnimationFrame = (frameTime: number) => {
+        if (frameTime + 1 < pendingChatEventsFlushAtRef.current) {
+          pendingChatEventsFrameRef.current = window.requestAnimationFrame(
+            flushOnAnimationFrame,
+          )
+          return
+        }
+        pendingChatEventsFrameRef.current = 0
+        pendingChatEventsFlushAtRef.current = 0
+        flushPendingChatEvents()
+      }
+      pendingChatEventsFrameRef.current = window.requestAnimationFrame(
+        flushOnAnimationFrame,
+      )
+    },
+    [flushPendingChatEvents],
+  )
   const queueChatItemEvent = useCallback(
     (targetKey: string, event: OusiaChatEvent) => {
       const pendingEvents = pendingChatEventsRef.current
-      const targetEvents = pendingEvents.get(targetKey)
-      if (targetEvents) {
-        const previousEvent = targetEvents[targetEvents.length - 1]
-        if (
-          isTextDeltaEvent(event) &&
-          canMergeTextDeltaEvents(previousEvent, event)
-        ) {
-          targetEvents[targetEvents.length - 1] = {
-            ...event,
-            delta: previousEvent.delta + event.delta,
-          } as TextDeltaChatEvent
-          return
-        }
-        targetEvents.push(event)
-      } else {
-        pendingEvents.set(targetKey, [event])
+      const targetEvents = pendingEvents.get(targetKey) ?? []
+      if (!pendingEvents.has(targetKey)) {
+        pendingEvents.set(targetKey, targetEvents)
       }
-      if (pendingChatEventsFrameRef.current) {
-        return
+      const wasCoalesced = appendBufferedChatEvent(targetEvents, event)
+      const diagnostics = chatEventBufferDiagnosticsRef.current.get(
+        targetKey,
+      ) ?? {
+        appliedEventCount: 0,
+        coalescedEventCount: 0,
+        flushCount: 0,
+        maxBatchSize: 0,
+        receivedEventCount: 0,
       }
-      pendingChatEventsFrameRef.current = window.requestAnimationFrame(
-        flushPendingChatEvents
-      )
+      diagnostics.receivedEventCount += 1
+      if (wasCoalesced) {
+        diagnostics.coalescedEventCount += 1
+      }
+      chatEventBufferDiagnosticsRef.current.set(targetKey, diagnostics)
+      schedulePendingChatEventsFlush(event)
     },
-    [flushPendingChatEvents]
+    [schedulePendingChatEventsFlush],
   )
 
   useEffect(() => {
@@ -733,18 +808,11 @@ export function App() {
   }, [applyPersistentAppState])
 
   useEffect(() => {
-    if (!isAppStateLoaded || visibleSurfaceAgentProvider !== "pi") {
+    if (!isAppStateLoaded) {
       return
     }
     void refreshModelRegistry()
-  }, [isAppStateLoaded, refreshModelRegistry, visibleSurfaceAgentProvider])
-
-  useEffect(() => {
-    if (!isAppStateLoaded || visibleSurfaceAgentProvider !== "codex") {
-      return
-    }
-    void refreshCodexEnvironment()
-  }, [isAppStateLoaded, refreshCodexEnvironment, visibleSurfaceAgentProvider])
+  }, [isAppStateLoaded, refreshModelRegistry])
 
   useEffect(() => {
     if (!modelRegistry) {
@@ -753,13 +821,13 @@ export function App() {
     const configuredModelPresets = getConfiguredModelPresets(
       settings.modelProviders,
       modelRegistry,
-      settings.disabledModelProviderIds
+      settings.disabledModelProviderIds,
     )
     if (
       configuredModelPresets.some(
         (model) =>
           model.provider === settings.modelProvider &&
-          model.modelId === settings.modelId
+          model.modelId === settings.modelId,
       )
     ) {
       return
@@ -804,36 +872,22 @@ export function App() {
 
   useEffect(() => {
     document.documentElement.style.setProperty(
-      "--font-sans-default",
-      resolveOusiaFontFamilyValue(settings.appFontFamily)
-    )
-  }, [settings.appFontFamily])
-
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--ousia-chat-font-family",
-      resolveOusiaFontFamilyValue(settings.chatFontFamily)
-    )
-  }, [settings.chatFontFamily])
-
-  useEffect(() => {
-    document.documentElement.style.setProperty(
       "--ousia-chat-content-max-width",
-      resolveOusiaChatContentWidthValue(settings.chatContentWidth)
+      resolveOusiaChatContentWidthValue(settings.chatContentWidth),
     )
   }, [settings.chatContentWidth])
 
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--ousia-chat-font-size",
-      resolveOusiaChatFontSizeValue(settings.chatFontSize)
+      resolveOusiaChatFontSizeValue(settings.chatFontSize),
     )
   }, [settings.chatFontSize])
 
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--ousia-chat-line-height",
-      resolveOusiaChatLineSpacingValue(settings.chatLineSpacing)
+      resolveOusiaChatLineSpacingValue(settings.chatLineSpacing),
     )
   }, [settings.chatLineSpacing])
 
@@ -877,7 +931,7 @@ export function App() {
     void window.ousia
       ?.saveAppSelection({
         expandedProjectIds: expandedProjectIds.filter((projectId) =>
-          projects.some((project) => project.id === projectId)
+          projects.some((project) => project.id === projectId),
         ),
         selectedSessionId: selectedSession?.id ?? "",
       })
@@ -949,7 +1003,7 @@ export function App() {
       !shouldRetryChatHistoryAfterSelection(
         previousChatKey,
         selectedChatKey,
-        selectedHistoryPageState?.status
+        selectedHistoryPageState?.status,
       )
     ) {
       return
@@ -1018,7 +1072,7 @@ export function App() {
     const historySessionId = selectedSessionIdForHistory
     const pageState = historyPageStateBySessionRef.current[historyKey]
     const hasLoadedItems = Boolean(
-      itemsBySessionRef.current[historyKey]?.length
+      itemsBySessionRef.current[historyKey]?.length,
     )
     if (
       (draftSessionKeysRef.current.has(historyKey) && !hasLoadedItems) ||
@@ -1051,11 +1105,11 @@ export function App() {
         .then((history) => {
           historyRetryAttemptsRef.current.delete(historyKey)
           startTransition(() => {
-            setItemsBySession((current) => ({
+            updateItemsBySession((current) => ({
               ...current,
               [historyKey]: mergePersistedChatItems(
                 current[historyKey] ?? [],
-                history.items
+                history.items,
               ),
             }))
             setHistoryPageStateBySession((current) => ({
@@ -1081,7 +1135,7 @@ export function App() {
           if (shouldScheduleAutomaticChatHistoryRetry(completedRetries)) {
             historyRetryAttemptsRef.current.set(
               historyKey,
-              completedRetries + 1
+              completedRetries + 1,
             )
             const retryTimer = window.setTimeout(() => {
               historyRetryTimersRef.current.delete(historyKey)
@@ -1108,14 +1162,270 @@ export function App() {
     selectedHistoryPageState?.status,
     selectedItems.length,
     selectedSessionIdForHistory,
+    updateItemsBySession,
   ])
+
+  const reconcileSessionHistory = useStableEvent(
+    async ({
+      context,
+      generation,
+      reason,
+      targetKey,
+    }: {
+      context: OusiaChatContext
+      generation?: number
+      reason: "branch-preflight" | "run-settled"
+      targetKey: string
+    }) => {
+      const api = window.ousia
+      if (!api) {
+        throw new Error(
+          "The Tauri bridge is unavailable for history reconciliation.",
+        )
+      }
+      if (historyReconciliationInFlightKeysRef.current.has(targetKey)) {
+        return undefined
+      }
+      historyReconciliationInFlightKeysRef.current.add(targetKey)
+      let failureDiagnostics: Record<string, unknown> | undefined
+      try {
+        const existingItems = itemsBySessionRef.current[targetKey] ?? []
+        const existingPersistedIds = persistedChatItemIds(existingItems)
+        const seenCursors = new Set<string>()
+        let beforeItemId: string | undefined
+        let authoritativeItems: ChatItem[] = []
+        let latestHistory: OusiaChatHistoryResult | undefined
+
+        while (true) {
+          const history = await api.getChatHistory({
+            beforeItemId,
+            includeToolPayloads: false,
+            limit: CHAT_HISTORY_RECONCILIATION_PAGE_SIZE,
+            projectPath: context.projectPath,
+            reconciliationReason: reason,
+            sessionId: context.sessionId,
+          })
+          latestHistory ??= history
+          authoritativeItems = [
+            ...markPersistedChatItems(history.items),
+            ...authoritativeItems,
+          ]
+          const foundPersistedAnchor = authoritativeItems.some((item) =>
+            existingPersistedIds.has(item.id),
+          )
+          if (
+            !history.hasMore ||
+            (existingPersistedIds.size > 0 && foundPersistedAnchor)
+          ) {
+            break
+          }
+          const nextCursor = history.nextCursor ?? history.items[0]?.id
+          if (!nextCursor || seenCursors.has(nextCursor)) {
+            throw new Error(
+              `Pi history pagination did not advance for session ${context.sessionId}.`,
+            )
+          }
+          seenCursors.add(nextCursor)
+          beforeItemId = nextCursor
+        }
+
+        if (
+          reason === "run-settled" &&
+          runStatusBySessionRef.current[targetKey] === "working"
+        ) {
+          console.debug(
+            "[chat.history.reconciliation] Deferred because a newer Pi run started",
+            { generation, sessionId: context.sessionId },
+          )
+          return undefined
+        }
+
+        const latestItems = itemsBySessionRef.current[targetKey] ?? []
+        const reconciliation = reconcilePersistedChatHistory(
+          latestItems,
+          authoritativeItems,
+        )
+        if (reconciliation.missingPersistedAnchor) {
+          failureDiagnostics = {
+            authoritativeTail: authoritativeItems
+              .slice(-10)
+              .map(chatItemDiagnostic),
+            rendererPersistedItems: latestItems
+              .filter((item) => item.isPersisted)
+              .slice(-10)
+              .map(chatItemDiagnostic),
+          }
+          throw new Error(
+            `Authoritative Pi history has no persisted anchor shared with the renderer for session ${context.sessionId}.`,
+          )
+        }
+        if (reconciliation.unmatchedTransientIds.length) {
+          const unmatchedIds = new Set(reconciliation.unmatchedTransientIds)
+          failureDiagnostics = {
+            authoritativeTail: authoritativeItems
+              .slice(-10)
+              .map(chatItemDiagnostic),
+            unmatchedTransientItems: latestItems
+              .filter((item) => unmatchedIds.has(item.id))
+              .map(chatItemDiagnostic),
+          }
+          throw new Error(
+            `Transient chat items were not persisted for session ${context.sessionId}: ${reconciliation.unmatchedTransientIds.join(", ")}`,
+          )
+        }
+
+        updateItemsBySession((current) => ({
+          ...current,
+          [targetKey]: reconciliation.items,
+        }))
+        setHistoryPageStateBySession((current) => {
+          const currentState = current[targetKey]
+          return {
+            ...current,
+            [targetKey]: {
+              ...currentState,
+              hasMore: currentState?.hasMore ?? false,
+              status: reconciliation.items.length ? "ready" : "empty",
+              totalItems: latestHistory?.totalItems,
+            },
+          }
+        })
+        console.info("[chat.history.reconciliation] Reconciled Pi history", {
+          anchorId: reconciliation.anchorId,
+          generation,
+          itemCount: reconciliation.items.length,
+          preservedLiveToolPayloadCount:
+            reconciliation.preservedLiveToolPayloadIds.length,
+          resolvedIdCount: reconciliation.resolvedIds.size,
+          sessionId: context.sessionId,
+        })
+        return reconciliation
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        const data = {
+          generation,
+          projectPath: context.projectPath,
+          reason,
+          sessionId: context.sessionId,
+          targetKey,
+          ...(failureDiagnostics ? { reconciliation: failureDiagnostics } : {}),
+        }
+        console.error("[chat.history.reconciliation] Failed", {
+          ...data,
+          error: message,
+        })
+        void api
+          .reportFrontendError({
+            data,
+            kind: "chat-history-reconciliation",
+            message,
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+          .catch((reportingError: unknown) => {
+            console.error(
+              "[chat.history.reconciliation] Failed to persist diagnostic",
+              reportingError,
+            )
+          })
+        if (reason === "run-settled") {
+          const errorId = `history-reconciliation-${context.sessionId}-${generation ?? "unknown"}`
+          updateItemsBySession((current) => {
+            const items = current[targetKey] ?? []
+            if (items.some((item) => item.id === errorId)) {
+              return current
+            }
+            return {
+              ...current,
+              [targetKey]: [
+                ...items,
+                {
+                  id: errorId,
+                  role: "error",
+                  text: `Failed to reconcile the completed Pi run with persisted history: ${message}`,
+                  timestamp: new Date().toISOString(),
+                },
+              ],
+            }
+          })
+        }
+        throw error
+      } finally {
+        historyReconciliationInFlightKeysRef.current.delete(targetKey)
+      }
+    },
+  )
+
+  const scheduleSessionHistoryReconciliation = useStableEvent(
+    ({
+      context,
+      generation,
+      targetKey,
+    }: {
+      context: OusiaChatContext
+      generation?: number
+      targetKey: string
+    }) => {
+      if (historyReconciliationFrameIdsRef.current.has(targetKey)) {
+        return
+      }
+      const frameId = window.requestAnimationFrame(() => {
+        historyReconciliationFrameIdsRef.current.delete(targetKey)
+        const flushedEventCount = flushPendingChatEvents()
+        if (flushedEventCount > 0) {
+          console.info(
+            "[chat.history.reconciliation] Flushed pending chat events before reconciliation",
+            {
+              eventCount: flushedEventCount,
+              generation,
+              sessionId: context.sessionId,
+            },
+          )
+        }
+        const bufferDiagnostics =
+          chatEventBufferDiagnosticsRef.current.get(targetKey)
+        if (bufferDiagnostics) {
+          const trace = {
+            ...bufferDiagnostics,
+            generation,
+            sessionId: context.sessionId,
+            textRenderIntervalMilliseconds: CHAT_TEXT_STREAM_RENDER_INTERVAL_MS,
+            toolInputRenderIntervalMilliseconds:
+              CHAT_TOOL_INPUT_RENDER_INTERVAL_MS,
+          }
+          console.info("[chat.stream.buffer] Renderer buffer summary", trace)
+          void window.ousia
+            ?.reportFrontendLog({
+              data: trace,
+              level: "info",
+              message: "Renderer stream buffer summary",
+              scope: "chat.stream.buffer",
+            })
+            .catch((error: unknown) => {
+              console.error(
+                "[chat.stream.buffer] Failed to persist renderer buffer summary",
+                error,
+              )
+              throw error
+            })
+          chatEventBufferDiagnosticsRef.current.delete(targetKey)
+        }
+        void reconcileSessionHistory({
+          context,
+          generation,
+          reason: "run-settled",
+          targetKey,
+        }).catch(() => undefined)
+      })
+      historyReconciliationFrameIdsRef.current.set(targetKey, frameId)
+    },
+  )
 
   useEffect(() => {
     return window.ousia?.onChatEvent((event) => {
       const target = resolveChatEventTarget(
         sessionsRef.current,
         event.context,
-        selectedChatKeyRef.current
+        selectedChatKeyRef.current,
       )
       if (target.kind === "drop") {
         if (target.reason === "unknown-context-session") {
@@ -1125,8 +1435,8 @@ export function App() {
                 eventType: event.type,
                 projectPath: target.context.projectPath,
                 sessionId: target.context.sessionId,
-              }
-            )}`
+              },
+            )}`,
           )
         }
         return
@@ -1201,7 +1511,7 @@ export function App() {
           event.type === "error")
       ) {
         setSessions((current) =>
-          moveSessionToGroupFront(current, targetSession.id, event.timestamp)
+          moveSessionToGroupFront(current, targetSession.id, event.timestamp),
         )
         void window.ousia
           ?.touchSession({
@@ -1215,10 +1525,23 @@ export function App() {
           })
       }
       queueChatItemEvent(targetKey, event)
+      if (
+        event.type === "run_status" &&
+        event.status === "finished" &&
+        event.context
+      ) {
+        scheduleSessionHistoryReconciliation({
+          context: event.context,
+          generation: event.generation,
+          targetKey,
+        })
+      }
     })
-  }, [queueChatItemEvent])
+  }, [queueChatItemEvent, scheduleSessionHistoryReconciliation])
 
   useEffect(() => {
+    const reconciliationFrames = historyReconciliationFrameIdsRef.current
+    const chatEventBufferDiagnostics = chatEventBufferDiagnosticsRef.current
     return () => {
       if (pendingChatEventsFrameRef.current) {
         window.cancelAnimationFrame(pendingChatEventsFrameRef.current)
@@ -1226,7 +1549,14 @@ export function App() {
       if (sidebarResizeFrameRef.current) {
         window.cancelAnimationFrame(sidebarResizeFrameRef.current)
       }
+      for (const frameId of reconciliationFrames.values()) {
+        window.cancelAnimationFrame(frameId)
+      }
+      reconciliationFrames.clear()
       pendingChatEventsRef.current = new Map()
+      pendingChatEventsFlushAtRef.current = 0
+      lastChatEventsFlushAtRef.current = 0
+      chatEventBufferDiagnostics.clear()
     }
   }, [])
 
@@ -1274,7 +1604,7 @@ export function App() {
     const target = resolveChatEventTarget(
       sessionsRef.current,
       event.context,
-      selectedChatKeyRef.current
+      selectedChatKeyRef.current,
     )
     if (target.kind === "drop") {
       console.error("[chat.local-event] Dropped event", {
@@ -1292,7 +1622,7 @@ export function App() {
       draftSessionKeysRef.current.delete(targetKey)
       if (targetSession) {
         setSessions((current) =>
-          moveSessionToGroupFront(current, targetSession.id, event.timestamp)
+          moveSessionToGroupFront(current, targetSession.id, event.timestamp),
         )
         void window.ousia
           ?.touchSession({
@@ -1341,7 +1671,7 @@ export function App() {
       }))
       return
     }
-    setItemsBySession((current) => ({
+    updateItemsBySession((current) => ({
       ...current,
       [targetKey]: applyChatEvent(current[targetKey] ?? [], event),
     }))
@@ -1380,11 +1710,11 @@ export function App() {
         sessionId: selectedSession.id,
       })
       startTransition(() => {
-        setItemsBySession((current) => {
+        updateItemsBySession((current) => {
           const existingItems = current[selectedChatKey] ?? []
           const existingIds = new Set(existingItems.map((item) => item.id))
           const olderItems = history.items.filter(
-            (item) => !existingIds.has(item.id)
+            (item) => !existingIds.has(item.id),
           )
           if (!olderItems.length) {
             return current
@@ -1421,6 +1751,7 @@ export function App() {
     selectedProjectPath,
     selectedChatKey,
     selectedSession,
+    updateItemsBySession,
   ])
 
   async function handleOpenProject() {
@@ -1444,7 +1775,7 @@ export function App() {
   async function addProject(path: string, name: string) {
     if (window.ousia) {
       const knownSessionIds = new Set(
-        sessionsRef.current.map((session) => session.id)
+        sessionsRef.current.map((session) => session.id),
       )
       const result = await window.ousia.createProject({
         name,
@@ -1460,10 +1791,10 @@ export function App() {
       if (result.session && !knownSessionIds.has(result.session.id)) {
         const targetKey = chatKey(
           projectPathForAppStateSession(result.state, result.session),
-          result.session.id
+          result.session.id,
         )
         draftSessionKeysRef.current.add(targetKey)
-        setItemsBySession((current) => {
+        updateItemsBySession((current) => {
           const next = { ...current }
           delete next[targetKey]
           return next
@@ -1510,10 +1841,10 @@ export function App() {
       }
       const targetKey = chatKey(
         projectPathForAppStateSession(result.state, result.session),
-        result.session.id
+        result.session.id,
       )
       draftSessionKeysRef.current.add(targetKey)
-      setItemsBySession((current) => {
+      updateItemsBySession((current) => {
         const next = { ...current }
         delete next[targetKey]
         return next
@@ -1530,12 +1861,13 @@ export function App() {
 
     const session = createSession(
       t.app.newSession,
-      settings.defaultAgentProvider
+      settings.defaultAgentProvider,
+      settings.defaultSessionDir,
     )
     const targetKey = chatKey(settings.defaultSessionDir, session.id)
     draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
-    setItemsBySession((current) => {
+    updateItemsBySession((current) => {
       const next = { ...current }
       delete next[targetKey]
       return next
@@ -1552,7 +1884,7 @@ export function App() {
 
   async function createProjectSession(
     projectId: string,
-    explicitProjectPath?: string
+    explicitProjectPath?: string,
   ) {
     if (window.ousia) {
       const result = await window.ousia.createSession({
@@ -1570,10 +1902,10 @@ export function App() {
       }
       const targetKey = chatKey(
         projectPathForAppStateSession(result.state, result.session),
-        result.session.id
+        result.session.id,
       )
       draftSessionKeysRef.current.add(targetKey)
-      setItemsBySession((current) => {
+      updateItemsBySession((current) => {
         const next = { ...current }
         delete next[targetKey]
         return next
@@ -1598,7 +1930,7 @@ export function App() {
     const targetKey = chatKey(projectPath, session.id)
     draftSessionKeysRef.current.add(targetKey)
     setSessions((current) => [session, ...current])
-    setItemsBySession((current) => {
+    updateItemsBySession((current) => {
       const next = { ...current }
       delete next[targetKey]
       return next
@@ -1609,7 +1941,7 @@ export function App() {
       return next
     })
     setExpandedProjectIds((current) =>
-      current.includes(projectId) ? current : [...current, projectId]
+      current.includes(projectId) ? current : [...current, projectId],
     )
     setSelectedSessionId(session.id)
     setSidebarScrollTargetSessionId(session.id)
@@ -1617,11 +1949,11 @@ export function App() {
 
   async function selectOrCreateProjectSession(project: ProjectRecord) {
     const existingSession = sessions.find(
-      (session) => session.projectId === project.id && !session.archivedAt
+      (session) => session.projectId === project.id && !session.archivedAt,
     )
     if (existingSession) {
       setExpandedProjectIds((current) =>
-        current.includes(project.id) ? current : [...current, project.id]
+        current.includes(project.id) ? current : [...current, project.id],
       )
       setSelectedSessionId(existingSession.id)
       return
@@ -1635,18 +1967,18 @@ export function App() {
       return
     }
     const projectSessions = sessionsRef.current.filter(
-      (session) => session.projectId === projectId
+      (session) => session.projectId === projectId,
     )
     const workingSession = findWorkingChatSession(
       projectSessions,
       project.path,
-      runStatusBySessionRef.current
+      runStatusBySessionRef.current,
     )
     if (workingSession) {
       console.warn(
         `[app-state.delete] Blocked project deletion because a session is running: ${JSON.stringify(
-          { projectId, sessionId: workingSession.id }
-        )}`
+          { projectId, sessionId: workingSession.id },
+        )}`,
       )
       return
     }
@@ -1659,7 +1991,7 @@ export function App() {
       }
       const removedSessions = result.removedSessions ?? []
       applyAppStateTransaction(result)
-      setItemsBySession((current) => {
+      updateItemsBySession((current) => {
         const next = { ...current }
         for (const session of removedSessions) {
           delete next[chatKey(project.path, session.id)]
@@ -1702,15 +2034,15 @@ export function App() {
     const remaining = projects.filter((item) => item.id !== projectId)
     const removedSessions = projectSessions
     const remainingSessions = sessionsRef.current.filter(
-      (session) => session.projectId !== projectId
+      (session) => session.projectId !== projectId,
     )
     setProjects(remaining)
     setExpandedProjectIds((current) =>
-      current.filter((item) => item !== projectId)
+      current.filter((item) => item !== projectId),
     )
     sessionsRef.current = remainingSessions
     setSessions(remainingSessions)
-    setItemsBySession((current) => {
+    updateItemsBySession((current) => {
       const next = { ...current }
       for (const session of removedSessions) {
         delete next[chatKey(project.path, session.id)]
@@ -1747,7 +2079,7 @@ export function App() {
 
     if (selectedSession?.projectId === projectId) {
       const nextSession = remainingSessions.find(
-        (session) => !session.archivedAt
+        (session) => !session.archivedAt,
       )
       setSelectedSessionId(nextSession?.id ?? "")
       setIsSettingsOpen(false)
@@ -1760,18 +2092,18 @@ export function App() {
       return
     }
     const projectSessions = sessionsRef.current.filter(
-      (session) => session.projectId === projectId && !session.archivedAt
+      (session) => session.projectId === projectId && !session.archivedAt,
     )
     const workingSession = findWorkingChatSession(
       projectSessions,
       project.path,
-      runStatusBySessionRef.current
+      runStatusBySessionRef.current,
     )
     if (workingSession) {
       console.warn(
         `[app-state.archive] Blocked project archival because a session is running: ${JSON.stringify(
-          { projectId, sessionId: workingSession.id }
-        )}`
+          { projectId, sessionId: workingSession.id },
+        )}`,
       )
       return
     }
@@ -1795,13 +2127,13 @@ export function App() {
     const archivedIds = new Set(projectSessions.map((session) => session.id))
     const archivedAt = new Date().toISOString()
     let nextSessions = sessionsRef.current.map((session) =>
-      archivedIds.has(session.id) ? { ...session, archivedAt } : session
+      archivedIds.has(session.id) ? { ...session, archivedAt } : session,
     )
     let activeSessions = nextSessions.filter((session) => !session.archivedAt)
     if (!activeSessions.length) {
       const replacement = createSession(
         t.app.newSession,
-        settings.defaultAgentProvider
+        settings.defaultAgentProvider,
       )
       nextSessions = [replacement, ...nextSessions]
       activeSessions = [replacement]
@@ -1846,7 +2178,7 @@ export function App() {
         "[sidebar.default-session-folder] Electron API unavailable",
         {
           path,
-        }
+        },
       )
       return
     }
@@ -1858,7 +2190,7 @@ export function App() {
           {
             path,
             error: result.error,
-          }
+          },
         )
       }
     } catch (error) {
@@ -1896,8 +2228,8 @@ export function App() {
       current.map((candidate) =>
         candidate.id === sessionId
           ? { ...candidate, title: nextTitle }
-          : candidate
-      )
+          : candidate,
+      ),
     )
   }
 
@@ -1906,15 +2238,17 @@ export function App() {
       return
     }
 
-    setItemsBySession((current) => moveRecordKey(current, sourceKey, targetKey))
+    updateItemsBySession((current) =>
+      moveRecordKey(current, sourceKey, targetKey),
+    )
     setHistoryPageStateBySession((current) =>
-      moveRecordKey(current, sourceKey, targetKey)
+      moveRecordKey(current, sourceKey, targetKey),
     )
     setQueuedChatStateBySession((current) =>
-      moveRecordKey(current, sourceKey, targetKey)
+      moveRecordKey(current, sourceKey, targetKey),
     )
     setContextUsageBySession((current) =>
-      moveRecordKey(current, sourceKey, targetKey)
+      moveRecordKey(current, sourceKey, targetKey),
     )
     setRunStatusBySession((current) => {
       const next = moveRecordKey(current, sourceKey, targetKey)
@@ -1935,7 +2269,7 @@ export function App() {
     targetSessionId,
   }: MoveSessionTarget) {
     const sourceSession = sessionsRef.current.find(
-      (session) => session.id === sessionId
+      (session) => session.id === sessionId,
     )
     if (!sourceSession) {
       return
@@ -1990,14 +2324,14 @@ export function App() {
         current,
         sessionId,
         targetProjectId,
-        targetSessionId
-      )
+        targetSessionId,
+      ),
     )
     if (targetProjectId) {
       setExpandedProjectIds((current) =>
         current.includes(targetProjectId)
           ? current
-          : [...current, targetProjectId]
+          : [...current, targetProjectId],
       )
     }
     setSidebarScrollTargetSessionId(sessionId)
@@ -2005,10 +2339,10 @@ export function App() {
 
   function handleReorderProjects(
     sourceProjectId: string,
-    targetProjectId: string
+    targetProjectId: string,
   ) {
     setProjects((current) =>
-      reorderById(current, sourceProjectId, targetProjectId)
+      reorderById(current, sourceProjectId, targetProjectId),
     )
     void window.ousia
       ?.reorderProjects({
@@ -2020,10 +2354,10 @@ export function App() {
 
   function handleReorderSessions(
     sourceSessionId: string,
-    targetSessionId: string
+    targetSessionId: string,
   ) {
     setSessions((current) =>
-      reorderSessionsById(current, sourceSessionId, targetSessionId)
+      reorderSessionsById(current, sourceSessionId, targetSessionId),
     )
     void window.ousia
       ?.reorderSessions({
@@ -2035,14 +2369,14 @@ export function App() {
 
   function handleReorderSidebarSections(
     sourceSectionId: OusiaSidebarSectionId,
-    targetSectionId: OusiaSidebarSectionId
+    targetSectionId: OusiaSidebarSectionId,
   ) {
     setSidebarSectionOrder((current) =>
       reorderById(
         normalizeSidebarSectionOrder(current).map((id) => ({ id })),
         sourceSectionId,
-        targetSectionId
-      ).map((item) => item.id)
+        targetSectionId,
+      ).map((item) => item.id),
     )
   }
 
@@ -2051,7 +2385,7 @@ export function App() {
       return
     }
     const session = sessionsRef.current.find(
-      (candidate) => candidate.id === sessionId
+      (candidate) => candidate.id === sessionId,
     )
     if (!session) {
       return
@@ -2065,14 +2399,8 @@ export function App() {
         projectPath: projectPathForSession(session),
         sessionId,
         model: {
-          provider:
-            session.agentProvider === "codex"
-              ? "openai"
-              : settings.modelProvider,
-          modelId:
-            session.agentProvider === "codex"
-              ? settings.codexModelId
-              : settings.modelId,
+          provider: settings.modelProvider,
+          modelId: settings.modelId,
         },
       })
       .then((result) => {
@@ -2082,7 +2410,7 @@ export function App() {
         }
         if (window.ousia) {
           const currentSession = sessionsRef.current.find(
-            (candidate) => candidate.id === sessionId
+            (candidate) => candidate.id === sessionId,
           )
           if (!currentSession || !isDefaultSessionTitle(currentSession.title)) {
             return
@@ -2099,8 +2427,8 @@ export function App() {
           current.map((candidate) =>
             candidate.id === sessionId && isDefaultSessionTitle(candidate.title)
               ? { ...candidate, title: result.title }
-              : candidate
-          )
+              : candidate,
+          ),
         )
       })
       .finally(() => {
@@ -2112,22 +2440,72 @@ export function App() {
     if (!selectedSession || !selectedChatKey) {
       return
     }
-    const branchIndex = selectedItems.findIndex((item) => item.id === messageId)
+    const now = new Date().toISOString()
+    let sourceItems =
+      itemsBySessionRef.current[selectedChatKey] ?? selectedItems
+    let resolvedMessageId = messageId
+    if (window.ousia) {
+      try {
+        const reconciliation = await reconcileSessionHistory({
+          context: {
+            projectPath: selectedProjectPath,
+            sessionId: selectedSession.id,
+          },
+          reason: "branch-preflight",
+          targetKey: selectedChatKey,
+        })
+        if (!reconciliation) {
+          throw new Error(
+            `Pi history reconciliation is already running for session ${selectedSession.id}.`,
+          )
+        }
+        sourceItems = reconciliation.items
+        resolvedMessageId =
+          reconciliation.resolvedIds.get(messageId) ?? messageId
+        if (
+          !sourceItems.some(
+            (item) =>
+              item.id === resolvedMessageId && item.isPersisted === true,
+          )
+        ) {
+          throw new Error(
+            `Cannot branch from message ${messageId} because it is not present in authoritative Pi history.`,
+          )
+        }
+      } catch (error) {
+        appendLocalEvent({
+          type: "error",
+          id: `branch-preflight-${Date.now()}`,
+          text: error instanceof Error ? error.message : String(error),
+          timestamp: now,
+        })
+        return
+      }
+    }
+
+    const branchIndex = sourceItems.findIndex(
+      (item) => item.id === resolvedMessageId,
+    )
     if (branchIndex < 0) {
+      appendLocalEvent({
+        type: "error",
+        id: `branch-source-${Date.now()}`,
+        text: `Cannot branch because message ${resolvedMessageId} is no longer in the selected conversation.`,
+        timestamp: now,
+      })
       return
     }
 
-    const now = new Date().toISOString()
     const branchTitle = nextBranchSessionTitle(
       selectedSession,
-      sessionsRef.current
+      sessionsRef.current,
     )
-    let branchSession = {
+    let branchSession: SessionRecord = {
       ...createSession(branchTitle, selectedSession.agentProvider),
       projectId: selectedSession.projectId,
       time: now,
     }
-    const branchItems: ChatItem[] = selectedItems
+    const branchItems: ChatItem[] = sourceItems
       .slice(0, branchIndex + 1)
       .map((item) => {
         if (item.role === "tool") {
@@ -2139,7 +2517,7 @@ export function App() {
         return attachments ? { ...item, attachments } : { ...item }
       })
     let branchKey = chatKey(selectedProjectPath, branchSession.id)
-    const branchSourceItem = selectedItems[branchIndex]
+    const branchSourceItem = sourceItems[branchIndex]
 
     let resolvedBranchItems = branchItems
     if (window.ousia) {
@@ -2163,7 +2541,7 @@ export function App() {
         .branchChat({
           projectPath: selectedProjectPath,
           sessionId: selectedSession.id,
-          messageId,
+          messageId: resolvedMessageId,
           messageText:
             branchSourceItem.role === "assistant"
               ? branchSourceItem.text
@@ -2193,7 +2571,7 @@ export function App() {
         selectedSessionId: branchSession.id,
       })
       applyAppStateTransaction(selectResult)
-      setItemsBySession((current) => ({
+      updateItemsBySession((current) => ({
         ...current,
         [branchKey]: resolvedBranchItems,
       }))
@@ -2204,7 +2582,7 @@ export function App() {
     }
 
     setSessions((current) => [branchSession, ...current])
-    setItemsBySession((current) => ({
+    updateItemsBySession((current) => ({
       ...current,
       [branchKey]: resolvedBranchItems,
     }))
@@ -2212,7 +2590,7 @@ export function App() {
       setExpandedProjectIds((current) =>
         current.includes(branchSession.projectId!)
           ? current
-          : [...current, branchSession.projectId!]
+          : [...current, branchSession.projectId!],
       )
     }
     setSelectedSessionId(branchSession.id)
@@ -2231,8 +2609,8 @@ export function App() {
         `[app-state.archive] Blocked running session archival: ${JSON.stringify(
           {
             sessionId,
-          }
-        )}`
+          },
+        )}`,
       )
       return
     }
@@ -2258,17 +2636,17 @@ export function App() {
     }
 
     const activeGroupSessions = sessionsRef.current.filter(
-      (item) => !item.archivedAt && item.projectId === session.projectId
+      (item) => !item.archivedAt && item.projectId === session.projectId,
     )
     const archivedGroupIndex = activeGroupSessions.findIndex(
-      (item) => item.id === sessionId
+      (item) => item.id === sessionId,
     )
     const adjacentSession =
       activeGroupSessions[archivedGroupIndex + 1] ??
       activeGroupSessions[archivedGroupIndex - 1]
     const archivedAt = new Date().toISOString()
     let remaining = sessionsRef.current.map((item) =>
-      item.id === sessionId ? { ...item, archivedAt } : item
+      item.id === sessionId ? { ...item, archivedAt } : item,
     )
     const activeSessions = remaining.filter((item) => !item.archivedAt)
     if (!activeSessions.length) {
@@ -2317,14 +2695,14 @@ export function App() {
     if (!window.ousia) {
       const deletedIds = new Set(sessionIds)
       const nextSessions = sessionsRef.current.filter(
-        (session) => !deletedIds.has(session.id)
+        (session) => !deletedIds.has(session.id),
       )
       sessionsRef.current = nextSessions
       setSessions(nextSessions)
       return
     }
     const sessionsToDelete = sessionsRef.current.filter((session) =>
-      sessionIds.includes(session.id)
+      sessionIds.includes(session.id),
     )
     const result = await window.ousia.deleteSessions({ sessionIds })
     if (!applyAppStateTransaction(result)) {
@@ -2332,7 +2710,7 @@ export function App() {
     }
     for (const session of sessionsToDelete) {
       const targetKey = chatKey(projectPathForSession(session), session.id)
-      setItemsBySession((current) => {
+      updateItemsBySession((current) => {
         const next = { ...current }
         delete next[targetKey]
         return next
@@ -2373,7 +2751,7 @@ export function App() {
         sidebarResizeFrameRef.current = 0
         sidebarShellRef.current?.style.setProperty(
           "--ousia-sidebar-live-width",
-          `${pendingSidebarWidth}px`
+          `${pendingSidebarWidth}px`,
         )
       })
     }
@@ -2392,7 +2770,7 @@ export function App() {
       }
       sidebarShellRef.current?.style.setProperty(
         "--ousia-sidebar-live-width",
-        `${pendingSidebarWidth}px`
+        `${pendingSidebarWidth}px`,
       )
       setSidebarWidth(pendingSidebarWidth)
       window.removeEventListener("pointermove", handlePointerMove)
@@ -2414,12 +2792,12 @@ export function App() {
 
       const maxSidebarWidth = Math.min(
         MAX_SIDEBAR_WIDTH,
-        shellWidth - MIN_CHAT_WIDTH - RESIZE_HANDLE_WIDTH
+        shellWidth - MIN_CHAT_WIDTH - RESIZE_HANDLE_WIDTH,
       )
       const nextSidebarWidth = clamp(
         rawSidebarWidth,
         MIN_SIDEBAR_WIDTH,
-        Math.max(MIN_SIDEBAR_WIDTH, maxSidebarWidth)
+        Math.max(MIN_SIDEBAR_WIDTH, maxSidebarWidth),
       )
       commitSidebarWidth(nextSidebarWidth)
     }
@@ -2454,22 +2832,22 @@ export function App() {
   const stableDeleteProject = useStableEvent(handleDeleteProject)
   const stableArchiveSession = useStableEvent(handleArchiveSession)
   const stableRestoreArchivedSessions = useStableEvent(
-    handleRestoreArchivedSessions
+    handleRestoreArchivedSessions,
   )
   const stableDeleteArchivedSessions = useStableEvent(
-    handleDeleteArchivedSessions
+    handleDeleteArchivedSessions,
   )
   const stableMoveSession = useStableEvent(handleMoveSession)
   const stableOpenProject = useStableEvent(handleOpenProject)
   const stableOpenSettings = useStableEvent(handleOpenSettings)
   const stableShowProjectInFolder = useStableEvent(handleShowProjectInFolder)
   const stableShowDefaultSessionInFolder = useStableEvent(
-    handleShowDefaultSessionInFolder
+    handleShowDefaultSessionInFolder,
   )
   const stableRenameSession = useStableEvent(handleRenameSession)
   const stableReorderProjects = useStableEvent(handleReorderProjects)
   const stableReorderSidebarSections = useStableEvent(
-    handleReorderSidebarSections
+    handleReorderSidebarSections,
   )
   const stableReorderSessions = useStableEvent(handleReorderSessions)
   const stableSelectSession = useStableEvent(handleSelectSession)
@@ -2478,7 +2856,7 @@ export function App() {
   const stableBranchFromMessage = useStableEvent(handleBranchFromMessage)
   const handleSidebarScrollTargetHandled = useCallback(
     () => setSidebarScrollTargetSessionId(""),
-    []
+    [],
   )
   const handleCloseSettings = useCallback(() => setIsSettingsOpen(false), [])
 
@@ -2509,13 +2887,13 @@ export function App() {
     <main
       ref={shellRef}
       data-shell-resizing={isShellResizing ? "true" : undefined}
-      className="relative flex h-screen min-h-screen w-screen min-w-0 overflow-hidden rounded-[var(--ousia-window-radius)] bg-background text-foreground"
+      className="bg-background text-foreground fixed inset-0 flex min-h-0 min-w-0 overflow-hidden rounded-[var(--ousia-window-radius)]"
     >
       <div
         aria-hidden={zoomIndicatorPercent === null}
         aria-live="polite"
         className={[
-          "pointer-events-none fixed top-3 right-3 z-50 rounded-md border border-foreground/10 bg-popover/92 px-3 py-1.5 text-sm font-medium text-popover-foreground tabular-nums shadow-lg backdrop-blur transition-all duration-150",
+          "border-foreground/10 bg-popover/92 text-popover-foreground pointer-events-none fixed top-3 right-3 z-50 rounded-md border px-3 py-1.5 text-sm font-medium tabular-nums shadow-lg backdrop-blur transition-all duration-150",
           zoomIndicatorPercent === null
             ? "translate-y-1 opacity-0"
             : "translate-y-0 opacity-100",
@@ -2569,7 +2947,6 @@ export function App() {
           {isSettingsOpen ? (
             <SettingsSidebar
               activeSection={activeSettingsSection}
-              agentProvider={settings.defaultAgentProvider}
               language={settings.language}
               onBack={handleCloseSettings}
               onSectionChange={setActiveSettingsSection}
@@ -2583,26 +2960,22 @@ export function App() {
           />
         </div>
       )}
-      <div className="relative z-20 min-w-0 flex-1 bg-sidebar">
+      <div className="bg-sidebar relative z-20 min-w-0 flex-1">
         <div className="flex h-full min-w-0 overflow-visible">
           {isSettingsOpen ? (
             <SettingsPage
               activeSection={activeSettingsSection}
-              codexEnvironment={codexEnvironment}
-              codexEnvironmentLoading={codexEnvironmentLoading}
               modelRegistry={modelRegistry}
               projects={projects}
               sessions={sessions}
               settings={settings}
               onRefreshModelRegistry={refreshModelRegistry}
-              onRefreshCodexEnvironment={refreshCodexEnvironment}
               onSettingsChange={handleSettingsChange}
               onRestoreArchivedSessions={stableRestoreArchivedSessions}
               onDeleteArchivedSessions={stableDeleteArchivedSessions}
             />
           ) : (
             <ChatArea
-              codexEnvironment={codexEnvironment}
               currentProject={selectedSession ? currentProject : undefined}
               currentSession={selectedSession}
               items={selectedItems}

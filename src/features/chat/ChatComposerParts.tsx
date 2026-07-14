@@ -7,6 +7,7 @@ import {
   Trash2,
   X,
 } from "@/components/icons/huge-icons"
+import type { Ref } from "react"
 
 import type { getMessages } from "@/app/i18n"
 import {
@@ -26,8 +27,10 @@ import { cn } from "@/lib/utils"
 export const CHAT_COMPOSER_INPUT_CLASS =
   "ousia-chat-composer-input ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] resize-none rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 shadow-none placeholder:text-muted-foreground/55 focus-visible:ring-0 dark:bg-transparent"
 
-export const CHAT_COMPOSER_SHELL_CLASS =
-  "shrink-0 bg-white pb-4 dark:bg-card"
+export const CHAT_COMPOSER_SHELL_CLASS = "relative z-30 shrink-0 bg-card pb-4"
+
+export const CHAT_QUEUE_OVERLAY_CLASS =
+  "ousia-hover-scrollbar absolute inset-x-5 bottom-[calc(100%-2rem)] z-0 max-h-[min(50vh,24rem)] overflow-y-auto overscroll-contain"
 
 export type QueuedChatMessage = {
   id: string
@@ -47,6 +50,7 @@ export function QueuedMessageList({
   onEdit,
   onSendNow,
   readOnly = false,
+  rootRef,
   t,
 }: {
   className?: string
@@ -60,13 +64,15 @@ export function QueuedMessageList({
   onEdit: (id: string) => void
   onSendNow: (id: string) => void
   readOnly?: boolean
+  rootRef?: Ref<HTMLDivElement>
   t: ReturnType<typeof getMessages>
 }) {
   return (
     <div
+      ref={rootRef}
       className={cn(
-        "ousia-squircle-corners rounded-t-[var(--ousia-chat-composer-radius)] rounded-b-none border-[0.5px] border-foreground/10 bg-white px-2.5 pt-2.5 pb-10 shadow-[0_6px_22px_rgba(0,0,0,0.035),0_1px_8px_rgba(0,0,0,0.02),inset_0_1px_0_rgba(255,255,255,0.42)] dark:border-foreground/10 dark:bg-card dark:shadow-[0_6px_22px_rgba(0,0,0,0.18),0_1px_8px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.035)]",
-        className
+        "border-foreground/10 bg-card rounded-t-[var(--ousia-chat-composer-radius)] rounded-b-none border-[0.5px] px-2.5 pt-2.5 pb-10 shadow-[0_6px_22px_rgba(0,0,0,0.035),0_1px_8px_rgba(0,0,0,0.02),inset_0_1px_0_rgba(255,255,255,0.42)] dark:shadow-[0_6px_22px_rgba(0,0,0,0.18),0_1px_8px_rgba(0,0,0,0.1),inset_0_1px_0_rgba(255,255,255,0.035)]",
+        className,
       )}
     >
       <div className="space-y-1.5">
@@ -102,9 +108,9 @@ export function QueuedMessageList({
             }}
             onDragEnd={readOnly ? undefined : onDragEnd}
             className={cn(
-              "flex h-8 min-w-0 items-center gap-2 rounded-lg bg-muted/35 px-2.5 text-xs text-muted-foreground",
+              "bg-muted/35 text-muted-foreground flex h-8 min-w-0 items-center gap-2 rounded-lg px-2.5 text-xs",
               draggingId === message.id && "opacity-50",
-              editingId === message.id && "bg-ring/12 text-foreground"
+              editingId === message.id && "bg-ring/12 text-foreground",
             )}
           >
             {readOnly ? null : (
@@ -114,14 +120,14 @@ export function QueuedMessageList({
                 className="shrink-0 cursor-grab"
               />
             )}
-            <span className="shrink-0 tabular-nums text-muted-foreground/75">
+            <span className="text-muted-foreground/75 shrink-0 tabular-nums">
               {index + 1}
             </span>
             <span className="min-w-0 flex-1 truncate">
               {queuedMessageLabel(message)}
             </span>
             {message.attachments.length ? (
-              <span className="shrink-0 text-muted-foreground/75">
+              <span className="text-muted-foreground/75 shrink-0">
                 {t.chat.attachmentCount(message.attachments.length)}
               </span>
             ) : null}
@@ -132,7 +138,7 @@ export function QueuedMessageList({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={t.chat.sendNow}
-                  className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                  className="text-muted-foreground hover:text-foreground size-5 rounded-md [&_svg]:size-3.5"
                   onClick={() => onSendNow(message.id)}
                 >
                   <SendHorizontal size={14} />
@@ -142,7 +148,7 @@ export function QueuedMessageList({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={t.app.edit}
-                  className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                  className="text-muted-foreground hover:text-foreground size-5 rounded-md [&_svg]:size-3.5"
                   onClick={() => onEdit(message.id)}
                 >
                   <Pencil size={14} />
@@ -152,7 +158,7 @@ export function QueuedMessageList({
                   variant="ghost"
                   size="icon-xs"
                   aria-label={t.app.delete}
-                  className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                  className="text-muted-foreground hover:text-foreground size-5 rounded-md [&_svg]:size-3.5"
                   onClick={() => onDelete(message.id)}
                 >
                   <Trash2 size={14} />

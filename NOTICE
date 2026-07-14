@@ -1,24 +1,10 @@
-Ousia Desktop
+Pi Desktop
+Copyright (c) 2026 Pi contributors
+
+The Pi user interface is derived from Ousia Desktop.
 Copyright (c) 2026 Ousia Desktop contributors
 
 This project is distributed under the MIT License.
-
-Bundled fonts
-=============
-
-The following font files are included for optional in-app CJK typography and are
-distributed under the SIL Open Font License, Version 1.1:
-
-- LXGW WenKai
-  - Copyright 2021-2023 LXGW
-  - Copyright 2020 The Klee Project Authors
-  - Files: src/assets/fonts/debug/lxgw-wenkai/
-  - License: src/assets/fonts/debug/lxgw-wenkai/LICENSE.txt
-
-- Zhuque Fangsong
-  - Copyright (c) 2023 Zhejiang JadeFoci Technology Co. LTD
-  - Files: src/assets/fonts/debug/zhuque-fangsong/
-  - License: src/assets/fonts/debug/zhuque-fangsong/LICENSE.txt
 
 Third-party packages are installed through npm and keep their own license
 metadata in package manifests and lockfiles.

@@ -74,7 +74,7 @@ const sidebarRightActionRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1`
 const sidebarProjectRowXClass = sidebarRightActionRowXClass
 const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = sidebarRightActionRowXClass
-const sidebarEmptySectionRowXClass = sidebarSessionRowXClass
+const sidebarEmptySectionRowXClass = sidebarSectionHeaderXClass
 const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
@@ -85,8 +85,8 @@ const sidebarProjectRowStateClass =
   "relative text-sidebar-accent-foreground before:pointer-events-none before:absolute before:inset-0 before:rounded-md before:bg-transparent hover:before:bg-[var(--sidebar-accent)] focus-within:before:bg-[var(--sidebar-accent)] [&>*]:relative [&>*]:z-[1]"
 const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
-const sidebarGhostActionClass =
-  "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
+const sidebarActionHoverClass =
+  "hover:bg-muted hover:text-sidebar-accent-foreground"
 const sidebarDragPlaceholderClass =
   "!bg-neutral-500/12 !text-transparent !shadow-none hover:!bg-neutral-500/12 focus-within:!bg-neutral-500/12 dark:!bg-white/10 dark:!text-transparent dark:hover:!bg-white/10 dark:focus-within:!bg-white/10 [&>*]:opacity-0"
 const sidebarCompletionAccentClass = "bg-blue-500"
@@ -264,7 +264,7 @@ function DragPreview({ preview }: { preview: SidebarDragPreview }) {
     return (
       <div
         className={[
-          "ousia-squircle-corners grid h-8.5 w-full items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]",
+          "grid h-8.5 w-full items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]",
           "px-2 text-sm",
           sidebarSelectedRowClass,
           "grid-cols-[minmax(0,1fr)_24px_24px]",
@@ -299,7 +299,7 @@ function DragPreview({ preview }: { preview: SidebarDragPreview }) {
     return (
       <div
         className={[
-          "ousia-squircle-corners grid h-8.5 w-full items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
+          "grid h-8.5 w-full items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
           "font-radix-regular",
           sidebarSelectedRowClass,
           preview.projectChild
@@ -375,7 +375,7 @@ function SortableSessionRow({
       ref={setNodeRef}
       style={style}
       className={[
-        "group/session ousia-squircle-corners font-radix-regular relative grid h-8.5 cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing",
+        "group/session font-radix-regular relative grid h-8.5 cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing",
         isSelectedSession ? sidebarSelectedRowClass : sidebarRowStateClass,
         projectChild ? "gap-x-0 gap-y-1" : "gap-1",
         projectChild
@@ -461,7 +461,7 @@ function SortableSessionRow({
               className={[
                 "absolute inset-0",
                 sidebarActionButtonClass,
-                sidebarGhostActionClass,
+                sidebarActionHoverClass,
                 "opacity-0 transition-opacity group-focus-within/session:opacity-100 group-hover/session:opacity-100",
               ].join(" ")}
               aria-label={t.sidebar.archiveSession(session.title)}
@@ -557,7 +557,7 @@ function SortableProjectSection({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
+              className={`${sidebarProjectActionButtonClass} ${sidebarActionHoverClass} project-row-action shrink-0 opacity-0 transition-opacity`}
               aria-label={t.sidebar.projectActions(project.name)}
               onClick={(event) => event.stopPropagation()}
               onPointerDown={(event) => event.stopPropagation()}
@@ -596,7 +596,7 @@ function SortableProjectSection({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
+          className={`${sidebarProjectActionButtonClass} ${sidebarActionHoverClass} project-row-action shrink-0 opacity-0 transition-opacity`}
           aria-label={t.sidebar.newProjectSession(project.name)}
           onClick={(event) => {
             event.stopPropagation()
@@ -653,7 +653,7 @@ function SortableSidebarSection({
       className={[
         "mt-3 min-w-0 first:mt-0",
         isDragging
-          ? `ousia-squircle-corners rounded-[var(--ousia-sidebar-selected-radius)] ${sidebarDragPlaceholderClass}`
+          ? `rounded-[var(--ousia-sidebar-selected-radius)] ${sidebarDragPlaceholderClass}`
           : "",
       ].join(" ")}
     >
@@ -692,7 +692,7 @@ function SortableSidebarSection({
           type="button"
           variant="ghost"
           size="icon-sm"
-          className={sidebarActionButtonClass}
+          className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
           aria-label={actionLabel}
           onMouseDown={handleTextButtonMouseDown}
           onClick={(event) => {
@@ -1025,7 +1025,7 @@ function SidebarComponent({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  className={`${sidebarActionButtonClass} ${sidebarGhostActionClass}`}
+                  className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
                   aria-label={t.sidebar.defaultSessionActions}
                   onClick={(event) => event.stopPropagation()}
                   onPointerDown={(event) => event.stopPropagation()}
@@ -1230,7 +1230,10 @@ function SidebarComponent({
       className="ousia-sidebar-shell ousia-sidebar-theme flex min-h-0 shrink-0 flex-col bg-sidebar text-sidebar-foreground"
       style={style}
     >
-      <div className="window-drag h-[var(--ousia-titlebar-height)] shrink-0" />
+      <div
+        className="window-drag h-[var(--ousia-titlebar-height)] shrink-0"
+        data-tauri-drag-region="deep"
+      />
 
       <div
         ref={scrollContainerRef}

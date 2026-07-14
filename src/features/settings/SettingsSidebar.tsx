@@ -2,7 +2,7 @@ import { memo, type CSSProperties } from "react"
 
 import { getMessages } from "@/app/i18n"
 import { ArrowLeft } from "@/components/icons/huge-icons"
-import type { OusiaAgentProvider, OusiaLanguage } from "@/electron/chat-types"
+import type { OusiaLanguage } from "@/electron/chat-types"
 import {
   getSettingsNavigationItems,
   type SettingsSectionId,
@@ -16,7 +16,6 @@ import { cn } from "@/lib/utils"
 
 type SettingsSidebarProps = {
   activeSection: SettingsSectionId
-  agentProvider: OusiaAgentProvider
   language: OusiaLanguage
   onBack: () => void
   onSectionChange: (section: SettingsSectionId) => void
@@ -25,14 +24,13 @@ type SettingsSidebarProps = {
 
 function SettingsSidebarComponent({
   activeSection,
-  agentProvider,
   language,
   onBack,
   onSectionChange,
   style,
 }: SettingsSidebarProps) {
   const t = getMessages(language)
-  const navigationItems = getSettingsNavigationItems(agentProvider, t.settings)
+  const navigationItems = getSettingsNavigationItems(t.settings)
 
   return (
     <aside
@@ -42,7 +40,10 @@ function SettingsSidebarComponent({
       )}
       style={style}
     >
-      <div className="window-drag h-10 shrink-0" />
+      <div
+        className="window-drag h-10 shrink-0"
+        data-tauri-drag-region="deep"
+      />
       <div className="px-2 pb-4">
         <button
           type="button"

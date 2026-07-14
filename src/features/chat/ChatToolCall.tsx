@@ -29,6 +29,7 @@ import {
   shouldAutoExpandToolDisclosure,
 } from "@/features/chat/chat-tool-disclosure"
 import { toolFilePreviewFromItem } from "@/features/chat/chat-tool-file-preview"
+import { shouldThrottleToolPreview } from "@/features/chat/chat-tool-preview-scheduler"
 import { ToolFilePreviewView } from "@/features/chat/ChatToolFilePreview"
 import { cn } from "@/lib/utils"
 
@@ -119,7 +120,7 @@ const RunningToolSpinner = memo(function RunningToolSpinner() {
       aria-hidden="true"
       size={14}
       strokeWidth={1.5}
-      className="shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+      className="text-muted-foreground shrink-0 animate-spin motion-reduce:animate-none"
       style={runningToolSpinnerStyle}
     />
   )
@@ -164,7 +165,7 @@ export const ToolCallView = memo(function ToolCallView({
   const [isLoadingPayload, setIsLoadingPayload] = useState(false)
   const [hasMountedFilePreview, setHasMountedFilePreview] = useState(false)
   const hasManualOpenStateRef = useRef(
-    initialDisclosure.storedOpen !== undefined
+    initialDisclosure.storedOpen !== undefined,
   )
   const inFlightPayloadKeyRef = useRef<string | null>(null)
   const hasInitializedDisclosurePersistenceRef = useRef(false)
@@ -185,7 +186,7 @@ export const ToolCallView = memo(function ToolCallView({
             filePreview: loadedPayload.item.filePreview ?? item.filePreview,
           }
         : item,
-    [item, loadedPayload, payloadRequestKey]
+    [item, loadedPayload, payloadRequestKey],
   )
   const input =
     displayItem.input ??
@@ -202,12 +203,12 @@ export const ToolCallView = memo(function ToolCallView({
       : "")
   const filePreview = useMemo(
     () => toolFilePreviewFromItem(displayItem),
-    [displayItem]
+    [displayItem],
   )
   const hasFilePreview = Boolean(filePreview)
   const summary = useMemo(
     () => formatSingleToolSummary(displayItem),
-    [displayItem]
+    [displayItem],
   )
 
   useEffect(() => {
@@ -266,7 +267,7 @@ export const ToolCallView = memo(function ToolCallView({
     if (
       shouldAutoCollapseToolDisclosure(
         previousDisclosureItem,
-        currentDisclosureItem
+        currentDisclosureItem,
       )
     ) {
       timer = window.setTimeout(() => {
@@ -376,14 +377,14 @@ export const ToolCallView = memo(function ToolCallView({
   ])
 
   return (
-    <div className="text-xs text-card-foreground">
+    <div className="text-card-foreground text-xs">
       <button
         type="button"
         aria-expanded={isOpen}
         className={cn(
-          "group flex min-h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left transition-colors outline-none hover:text-foreground focus-visible:text-foreground",
+          "group hover:text-foreground focus-visible:text-foreground flex min-h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left transition-colors outline-none",
           displayItem.status === "failed" &&
-            `${toolFailureTextClass} ${toolFailureHoverTextClass}`
+            `${toolFailureTextClass} ${toolFailureHoverTextClass}`,
         )}
         onClick={(event) => {
           onPreserveScrollAnchor(event.currentTarget)
@@ -396,16 +397,16 @@ export const ToolCallView = memo(function ToolCallView({
       >
         <span
           className={cn(
-            "flex size-5 shrink-0 items-center justify-center text-muted-foreground",
-            displayItem.status === "failed" && toolFailureTextClass
+            "text-muted-foreground flex size-5 shrink-0 items-center justify-center",
+            displayItem.status === "failed" && toolFailureTextClass,
           )}
         >
           {renderToolIcon(displayItem.name)}
         </span>
         <span
           className={cn(
-            "min-w-0 flex-1 truncate text-sm font-normal text-muted-foreground/85",
-            displayItem.status === "failed" && toolFailureTextClass
+            "text-muted-foreground/85 min-w-0 flex-1 truncate text-sm font-normal",
+            displayItem.status === "failed" && toolFailureTextClass,
           )}
           title={summary}
         >
@@ -416,8 +417,8 @@ export const ToolCallView = memo(function ToolCallView({
           size={15}
           strokeWidth={1.5}
           className={cn(
-            "shrink-0 text-muted-foreground opacity-0 transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100",
-            isOpen && "rotate-180 opacity-100"
+            "text-muted-foreground invisible shrink-0 transition-transform group-hover:visible group-focus-visible:visible",
+            isOpen && "visible rotate-180",
           )}
         />
       </button>
@@ -425,6 +426,10 @@ export const ToolCallView = memo(function ToolCallView({
       {(isOpen || hasMountedFilePreview) && filePreview ? (
         <div hidden={!isOpen}>
           <ToolFilePreviewView
+            isStreaming={shouldThrottleToolPreview(
+              displayItem.status,
+              displayItem.inputComplete,
+            )}
             preview={filePreview}
             projectPath={projectPath}
             t={t}
@@ -433,7 +438,7 @@ export const ToolCallView = memo(function ToolCallView({
       ) : null}
 
       {isOpen && !filePreview ? (
-        <div className="ousia-squircle-corners mt-1.5 rounded-2xl bg-muted/35 px-3 py-2.5">
+        <div className="bg-muted/35 mt-1.5 rounded-lg px-3 py-2.5">
           <ToolPayloadSection
             title={t.chat.toolArgs}
             value={
@@ -460,7 +465,7 @@ export const ToolCallView = memo(function ToolCallView({
       ) : null}
 
       {isOpen && filePreview && errorText ? (
-        <div className="ousia-squircle-corners mt-1.5 rounded-2xl bg-muted/35 px-3 py-2.5">
+        <div className="bg-muted/35 mt-1.5 rounded-lg px-3 py-2.5">
           <ToolPayloadSection
             title={t.chat.toolError}
             value={errorText}
@@ -487,7 +492,7 @@ export const ToolCallGroupView = memo(function ToolCallGroupView({
 }) {
   const hasRunningItem = useMemo(
     () => items.some((item) => item.status === "running"),
-    [items]
+    [items],
   )
   const groupItemId = `group:${items[0]?.id ?? "empty"}:${items.at(-1)?.id ?? "empty"}`
   const disclosureKey = toolDisclosureKey({
@@ -529,11 +534,11 @@ export const ToolCallGroupView = memo(function ToolCallGroupView({
   }, [disclosureKey, isOpen])
 
   return (
-    <div className="text-xs text-muted-foreground">
+    <div className="text-muted-foreground text-xs">
       <button
         type="button"
         aria-expanded={isOpen}
-        className="flex h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left transition-colors outline-none hover:text-foreground focus-visible:text-foreground"
+        className="hover:text-foreground focus-visible:text-foreground flex h-6 max-w-full items-center gap-2 rounded-md px-0.5 text-left transition-colors outline-none"
         onClick={(event) => {
           onPreserveScrollAnchor(event.currentTarget)
           setIsOpen((current) => !current)
@@ -542,7 +547,7 @@ export const ToolCallGroupView = memo(function ToolCallGroupView({
         <span className="flex size-5 shrink-0 items-center justify-center">
           {renderToolGroupIcon(items)}
         </span>
-        <span className="min-w-0 truncate text-sm font-normal text-muted-foreground/85">
+        <span className="text-muted-foreground/85 min-w-0 truncate text-sm font-normal">
           {formatToolGroupSummary(items, t)}
         </span>
         {hasRunningItem ? <RunningToolSpinner /> : null}
@@ -551,7 +556,7 @@ export const ToolCallGroupView = memo(function ToolCallGroupView({
           strokeWidth={1.5}
           className={cn(
             "shrink-0 transition-transform",
-            isOpen && "rotate-180"
+            isOpen && "rotate-180",
           )}
         />
       </button>
@@ -601,24 +606,25 @@ function ToolPayloadSection({
     <section className="mt-2 first:mt-0">
       <h4
         className={cn(
-          "mb-1 text-[10px] leading-3 font-semibold tracking-wide text-muted-foreground uppercase",
-          tone === "warning" && toolFailureTextClass
+          "text-muted-foreground mb-1 text-[10px] leading-3 font-semibold tracking-wide uppercase",
+          tone === "warning" && toolFailureTextClass,
         )}
       >
         {title}
       </h4>
       <pre
         ref={preRef}
+        data-chat-nested-scroll
         onScroll={(event) => {
           const node = event.currentTarget
           setIsFollowingLatest(
-            node.scrollHeight - node.scrollTop - node.clientHeight < 8
+            node.scrollHeight - node.scrollTop - node.clientHeight < 8,
           )
         }}
         className={cn(
-          "ousia-hover-scrollbar ousia-squircle-corners max-h-48 overflow-auto rounded-[4px] bg-background/75 px-2.5 py-1.5 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground",
+          "ousia-hover-scrollbar bg-background/75 text-muted-foreground max-h-48 overflow-auto rounded-[4px] px-2.5 py-1.5 font-mono text-[11px] leading-4 whitespace-pre-wrap",
           tone === "warning" &&
-            "bg-[var(--ousia-tool-warning-bg)] text-[var(--ousia-tool-warning-strong)]"
+            "bg-[var(--ousia-tool-warning-bg)] text-[var(--ousia-tool-warning-strong)]",
         )}
       >
         {formatToolPayloadForDisplay(value)}
@@ -650,7 +656,7 @@ function formatSingleToolSummary(item: ToolChatItem) {
 
 function formatToolGroupSummary(
   items: ToolChatItem[],
-  t: ReturnType<typeof getMessages>
+  t: ReturnType<typeof getMessages>,
 ) {
   const buckets = items.reduce(
     (result, item) => {
@@ -670,7 +676,7 @@ function formatToolGroupSummary(
       }
       return result
     },
-    { bash: 0, edit: 0, ls: 0, other: 0, read: 0, search: 0 }
+    { bash: 0, edit: 0, ls: 0, other: 0, read: 0, search: 0 },
   )
   const parts = [
     buckets.read ? t.chat.toolGroupReadFiles(buckets.read) : "",
@@ -687,7 +693,7 @@ function formatToolGroupSummary(
 function formatToolTargetSummary(
   item: ToolChatItem,
   verb: string,
-  preferredTarget = ""
+  preferredTarget = "",
 ) {
   const target = preferredTarget || toolTargetFromInput(item.input || item.text)
   return target ? `${verb} ${target}` : verb
@@ -695,7 +701,7 @@ function formatToolTargetSummary(
 
 function filePreviewPath(item: ToolChatItem, verb: string) {
   const preview = item.filePreview ?? toolFilePreviewFromItem(item)
-  const path = preview && "path" in preview ? preview.path : ""
+  const path = preview && "path" in preview ? (preview.path ?? "") : ""
   const trimmed = path.trim()
   return trimmed && trimmed !== verb ? trimmed : ""
 }
@@ -713,7 +719,7 @@ function formatSearchSummary(item: ToolChatItem, verb: string) {
     const path = record.path ?? record.filePath ?? record.file_path
     const parts = [query, path]
       .filter(
-        (part): part is string => typeof part === "string" && !!part.trim()
+        (part): part is string => typeof part === "string" && !!part.trim(),
       )
       .map((part) => part.trim())
     return parts.length ? `${verb} ${parts.join(" ")}` : verb

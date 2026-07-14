@@ -22,7 +22,6 @@ import {
   SendArrowDown,
   SendArrowUp,
   SlidersHorizontal,
-  X,
 } from "@/components/icons/huge-icons"
 
 import type { AppSettings, ProjectRecord, SessionRecord } from "@/app/app-state"
@@ -55,15 +54,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Tooltip,
@@ -79,7 +69,6 @@ import {
   type OusiaChatExportFormat,
   type OusiaLanguage,
   type OusiaChatAttachment,
-  type OusiaCodexEnvironmentStatus,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
   type OusiaSendDuringRunMode,
@@ -90,6 +79,7 @@ import {
   AttachmentStrip,
   CHAT_COMPOSER_INPUT_CLASS,
   CHAT_COMPOSER_SHELL_CLASS,
+  CHAT_QUEUE_OVERLAY_CLASS,
   QueuedMessageList,
   type QueuedChatMessage,
 } from "@/features/chat/ChatComposerParts"
@@ -100,6 +90,10 @@ import {
   filesFromDataTransfer,
   normalizePastedMessageText,
 } from "@/features/chat/chat-attachments"
+import {
+  composerScrollTopAfterResize,
+  isComposerSelectionAtLatest,
+} from "@/features/chat/chat-composer-scroll"
 import {
   formatSessionHistoryForClipboard,
   writeTextToClipboard,
@@ -118,13 +112,32 @@ import {
   CHAT_CONTENT_MAX_WIDTH_CLASS,
 } from "@/features/chat/chat-layout"
 import type { ChatItem } from "@/features/chat/chat-events"
-import { codexSendBlockReason } from "@/features/chat/chat-provider-readiness"
+import {
+  canScrollInDirection,
+  chatBottomClearanceForOverlay,
+  classifyChatScrollMovement,
+  decideChatScrollFollow,
+  isScrollAtLatest,
+  type ScrollMetrics,
+} from "@/features/chat/chat-scroll-follow"
 import { cn } from "@/lib/utils"
 
 const CHAT_INPUT_MAX_HEIGHT = 192
 const CHAT_INPUT_MIN_HEIGHT = 48
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 const MAX_TOTAL_ATTACHMENT_BYTES = 40 * 1024 * 1024
+
+function chatScrollMetrics(
+  node: HTMLDivElement,
+  scrollTop = node.scrollTop,
+): ScrollMetrics {
+  return {
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+    scrollTop,
+  }
+}
+
 const allAgentTools: OusiaAgentToolName[] = [
   "read",
   "write",
@@ -136,7 +149,6 @@ const allAgentTools: OusiaAgentToolName[] = [
 ]
 
 type ChatAreaProps = {
-  codexEnvironment: OusiaCodexEnvironmentStatus | undefined
   currentProject: ProjectRecord | undefined
   currentSession: SessionRecord | undefined
   contextUsage:
@@ -162,7 +174,7 @@ type ChatAreaProps = {
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSessionCompletionVisibility: (
     sessionId: string,
-    isFullyVisible: boolean
+    isFullyVisible: boolean,
   ) => void
   onSessionViewed: (sessionId: string) => void
   onSettingsChange: (settings: AppSettings) => void
@@ -208,15 +220,15 @@ function formatContextUsagePercent(percent: number) {
   return percent < 10 ? percent.toFixed(1) : Math.round(percent).toString()
 }
 
-function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
+function isPiConfigurationRequiredStatusItem(item: ChatItem) {
   return (
-    item.id.startsWith("provider-api-key-") &&
+    (item.id.startsWith("provider-api-key-") ||
+      item.id.startsWith("pi-configuration-")) &&
     (item.role === "system" || item.role === "error")
   )
 }
 
 function ChatAreaComponent({
-  codexEnvironment,
   currentProject,
   currentSession,
   contextUsage: contextUsageFromEvent,
@@ -254,17 +266,11 @@ function ChatAreaComponent({
   const [isCompacting, setIsCompacting] = useState(false)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
   const [openSessionMenuKey, setOpenSessionMenuKey] = useState<string | null>(
-    null
+    null,
   )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [isComposerSettingsOpen, setIsComposerSettingsOpen] = useState(false)
   const [isCustomToolsDialogOpen, setIsCustomToolsDialogOpen] = useState(false)
-  const [isProviderKeyDialogOpen, setIsProviderKeyDialogOpen] = useState(false)
-  const [providerKeyDialogProviderId, setProviderKeyDialogProviderId] =
-    useState("")
-  const [providerKeyDialogApiKey, setProviderKeyDialogApiKey] = useState("")
-  const [providerKeyDialogError, setProviderKeyDialogError] = useState("")
-  const [isSavingProviderKey, setIsSavingProviderKey] = useState(false)
   const [copyStatus, setCopyStatus] = useState<ChatCopyStatus>("idle")
   const [contextUsageState, setContextUsageState] = useState<{
     key: string
@@ -276,18 +282,22 @@ function ChatAreaComponent({
   }>()
   const [isChatScrolled, setIsChatScrolled] = useState(false)
   const [showScrollToLatest, setShowScrollToLatest] = useState(false)
+  const [chatBottomClearance, setChatBottomClearance] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
   const chatContentRef = useRef<HTMLDivElement>(null)
+  const queueOverlayRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputScrollTopBeforeResizeRef = useRef(0)
+  const inputShouldFollowLatestAfterResizeRef = useRef(false)
   const followLatestFrameRef = useRef(0)
   const manualScrollIntentTimerRef = useRef(0)
   const manualScrollAwayFromLatestRef = useRef(false)
   const manualScrollIntentRef = useRef(false)
-  const lastChatScrollTopRef = useRef(0)
+  const lastChatScrollMetricsRef = useRef<ScrollMetrics | null>(null)
   const programmaticScrollResetFrameRef = useRef(0)
-  const programmaticScrollResetTimerRef = useRef(0)
+  const pendingProgrammaticScrollTargetRef = useRef<number | null>(null)
+  const reportedPendingScrollCorrectionRef = useRef(false)
   const chatLayoutAnchorResetTimerRef = useRef(0)
   const completionVisibilityFrameRef = useRef(0)
   const pendingCompletionVisibilitySessionIdRef = useRef<string | null>(null)
@@ -302,104 +312,55 @@ function ChatAreaComponent({
     top: number
   } | null>(null)
   const isFollowingLatestRef = useRef(isFollowingLatest)
+  const isAgentWorkingRef = useRef(isAgentWorking)
   const isComposingRef = useRef(false)
   const isProgrammaticScrollRef = useRef(false)
   const sendDuringRunModeRef = useRef(settings.sendDuringRunMode)
   const wasAgentWorkingRef = useRef(isAgentWorking)
+  isAgentWorkingRef.current = isAgentWorking
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
-  const isCodexSession = currentSession?.agentProvider === "codex"
-  const effectiveAgentMode: OusiaAgentMode =
-    isCodexSession &&
-    (settings.agentMode === "noTerminal" || settings.agentMode === "custom")
-      ? "standard"
-      : settings.agentMode
+  const effectiveAgentMode: OusiaAgentMode = settings.agentMode
   const piModelPresets = useMemo(
     () =>
       getConfiguredModelPresets(
         settings.modelProviders,
         modelRegistry,
-        settings.disabledModelProviderIds
+        settings.disabledModelProviderIds,
       ),
-    [modelRegistry, settings.disabledModelProviderIds, settings.modelProviders]
+    [modelRegistry, settings.disabledModelProviderIds, settings.modelProviders],
   )
-  const configuredModelPresets = useMemo(
-    () => (isCodexSession ? (codexEnvironment?.models ?? []) : piModelPresets),
-    [codexEnvironment?.models, isCodexSession, piModelPresets]
-  )
+  const configuredModelPresets = piModelPresets
   const selectedModelPreset = useMemo(
     () =>
       configuredModelPresets.find(
         (model) =>
-          model.modelId ===
-            (isCodexSession
-              ? settings.codexModelId || codexEnvironment?.defaultModelId
-              : settings.modelId) &&
-          (isCodexSession || model.provider === settings.modelProvider)
+          model.modelId === settings.modelId &&
+          model.provider === settings.modelProvider,
       ),
-    [
-      codexEnvironment?.defaultModelId,
-      configuredModelPresets,
-      isCodexSession,
-      settings.codexModelId,
-      settings.modelId,
-      settings.modelProvider,
-    ]
+    [configuredModelPresets, settings.modelId, settings.modelProvider],
   )
-  const storedReasoningEffort = isCodexSession
-    ? settings.codexReasoningEffort
-    : settings.thinkingLevel
+  const storedReasoningEffort = settings.thinkingLevel
   const activeThinkingLevels = selectedModelPreset?.thinkingLevels ?? [
     storedReasoningEffort ?? "medium",
   ]
   const selectedThinkingLevel = resolveModelReasoningEffort(
     selectedModelPreset,
-    storedReasoningEffort
+    storedReasoningEffort,
   )
   const selectedModelLabel = selectedModelPreset
     ? modelLabel(selectedModelPreset)
-    : isCodexSession
-      ? "Codex"
-      : t.chat.model
-  const providerKeyDialogProviders = useMemo(
-    () =>
-      modelRegistry?.providers.filter(
-        (provider) =>
-          provider.models.length > 0 &&
-          !settings.disabledModelProviderIds.includes(provider.id)
-      ) ?? [],
-    [modelRegistry?.providers, settings.disabledModelProviderIds]
-  )
-  const providerKeyDialogSelectItems = useMemo(
-    () =>
-      providerKeyDialogProviders.map((provider) => ({
-        label: provider.name,
-        value: provider.id,
-      })),
-    [providerKeyDialogProviders]
-  )
-  const providerKeyDialogProvider = useMemo(
-    () =>
-      providerKeyDialogProviders.find(
-        (provider) => provider.id === providerKeyDialogProviderId
-      ),
-    [providerKeyDialogProviderId, providerKeyDialogProviders]
-  )
-  const canSaveProviderKey =
-    Boolean(providerKeyDialogProvider) &&
-    Boolean(providerKeyDialogApiKey.trim()) &&
-    !isSavingProviderKey
-  const hasSelectedProviderApiKey =
-    isCodexSession || !modelRegistry || Boolean(selectedModelPreset)
+    : t.chat.model
+  const hasSelectedPiModel = !modelRegistry || Boolean(selectedModelPreset)
   const visibleChatItems = useMemo(() => {
-    if (!hasSelectedProviderApiKey) {
+    if (!hasSelectedPiModel) {
       return items
     }
 
-    return items.filter((item) => !isProviderApiKeyRequiredStatusItem(item))
-  }, [hasSelectedProviderApiKey, items])
+    return items.filter((item) => !isPiConfigurationRequiredStatusItem(item))
+  }, [hasSelectedPiModel, items])
   const showTurnWaitIndicator = useDelayedTurnWaitIndicator(
-    shouldShowTurnWaitIndicator(items, isAgentWorking)
+    shouldShowTurnWaitIndicator(items, isAgentWorking),
   )
   const hasDraftContent = Boolean(draft.trim() || attachments.length)
   const sendDuringRunMode = settings.sendDuringRunMode
@@ -447,6 +408,34 @@ function ChatAreaComponent({
     : piQueuedMessages
   const isPiQueueVisible = !queuedMessages.length && piQueuedMessages.length > 0
 
+  const updateChatBottomClearance = useCallback(() => {
+    const scrollNode = scrollRef.current
+    const overlayNode = queueOverlayRef.current
+    if (!scrollNode || !overlayNode) {
+      setChatBottomClearance(0)
+      return
+    }
+
+    const existingBottomPadding = Number.parseFloat(
+      window.getComputedStyle(scrollNode).paddingBottom,
+    )
+    if (!Number.isFinite(existingBottomPadding)) {
+      throw new Error(
+        "Conversation bottom padding could not be measured for queue clearance.",
+      )
+    }
+    const viewport = scrollNode.getBoundingClientRect()
+    const overlay = overlayNode.getBoundingClientRect()
+    const nextClearance = chatBottomClearanceForOverlay({
+      existingBottomPadding,
+      overlay,
+      viewport,
+    })
+    setChatBottomClearance((current) =>
+      current === nextClearance ? current : nextClearance,
+    )
+  }, [])
+
   const markCurrentSessionViewed = useCallback(() => {
     if (currentSession) {
       onSessionViewed(currentSession.id)
@@ -454,7 +443,7 @@ function ChatAreaComponent({
   }, [currentSession, onSessionViewed])
 
   function isScrolledToLatest(node: HTMLDivElement) {
-    return node.scrollHeight - node.scrollTop - node.clientHeight < 24
+    return isScrollAtLatest(node)
   }
 
   function maxChatScrollTop(node: HTMLDivElement) {
@@ -467,10 +456,10 @@ function ChatAreaComponent({
       return true
     }
     const assistantMessages = node.querySelectorAll<HTMLElement>(
-      '[data-chat-message-role="assistant"]'
+      '[data-chat-message-role="assistant"]',
     )
     const latestAssistantMessage = assistantMessages.item(
-      assistantMessages.length - 1
+      assistantMessages.length - 1,
     )
     if (!latestAssistantMessage) {
       return true
@@ -502,10 +491,7 @@ function ChatAreaComponent({
       window.cancelAnimationFrame(programmaticScrollResetFrameRef.current)
       programmaticScrollResetFrameRef.current = 0
     }
-    if (programmaticScrollResetTimerRef.current) {
-      window.clearTimeout(programmaticScrollResetTimerRef.current)
-      programmaticScrollResetTimerRef.current = 0
-    }
+    pendingProgrammaticScrollTargetRef.current = null
   }, [])
 
   const clearManualScrollIntent = useCallback(() => {
@@ -557,7 +543,7 @@ function ChatAreaComponent({
       clearChatLayoutAnchor,
       clearManualScrollIntent,
       clearProgrammaticScrollReset,
-    ]
+    ],
   )
 
   const applyChatLayoutAnchor = useCallback(() => {
@@ -575,7 +561,7 @@ function ChatAreaComponent({
     const delta = nextTop - anchor.top
     if (Math.abs(delta) > 0.5) {
       node.scrollTop += delta
-      lastChatScrollTopRef.current = node.scrollTop
+      lastChatScrollMetricsRef.current = chatScrollMetrics(node)
     }
     setShowScrollToLatest(!isScrolledToLatest(node))
     return true
@@ -592,39 +578,58 @@ function ChatAreaComponent({
         manualScrollIntentTimerRef.current = 0
       }, 1200)
     },
-    [clearManualScrollIntent]
+    [clearManualScrollIntent],
   )
 
-  const releaseProgrammaticScrollAfterLayout = useCallback(
+  const verifyProgrammaticScrollAfterLayout = useCallback(
     (behavior: ScrollBehavior) => {
-      clearProgrammaticScrollReset()
-
-      const release = () => {
-        isProgrammaticScrollRef.current = false
+      if (programmaticScrollResetFrameRef.current) {
+        window.cancelAnimationFrame(programmaticScrollResetFrameRef.current)
         programmaticScrollResetFrameRef.current = 0
-        if (programmaticScrollResetTimerRef.current) {
-          window.clearTimeout(programmaticScrollResetTimerRef.current)
-          programmaticScrollResetTimerRef.current = 0
-        }
       }
 
-      if (behavior === "smooth") {
-        programmaticScrollResetTimerRef.current = window.setTimeout(
-          release,
-          450
-        )
-        return
+      const verify = () => {
+        programmaticScrollResetFrameRef.current = 0
+        const node = scrollRef.current
+        if (!node || !isFollowingLatestRef.current) {
+          pendingProgrammaticScrollTargetRef.current = null
+          isProgrammaticScrollRef.current = false
+          return
+        }
+
+        const observedMetrics = chatScrollMetrics(node)
+        lastChatScrollMetricsRef.current = observedMetrics
+        if (isScrolledToLatest(node)) {
+          // While the renderer is still streaming, later worker/layout work can
+          // move WebKit away from the bottom without changing the final outer
+          // geometry. Keep the correction pending until that work has ended.
+          if (isAgentWorkingRef.current) {
+            return
+          }
+          pendingProgrammaticScrollTargetRef.current = null
+          isProgrammaticScrollRef.current = false
+          return
+        }
+
+        const nextTarget = maxChatScrollTop(node)
+        const previousTarget = pendingProgrammaticScrollTargetRef.current
+        pendingProgrammaticScrollTargetRef.current = nextTarget
+        if (behavior === "auto") {
+          node.scrollTop = nextTarget
+        } else if (previousTarget !== nextTarget) {
+          node.scrollTo({ behavior, top: nextTarget })
+        }
+        // A target is a request, not an observation. Never put it in the
+        // movement baseline before WebKit reports the actual scrollTop.
+        lastChatScrollMetricsRef.current = chatScrollMetrics(node)
+        programmaticScrollResetFrameRef.current =
+          window.requestAnimationFrame(verify)
       }
 
-      programmaticScrollResetFrameRef.current = window.requestAnimationFrame(
-        () => {
-          programmaticScrollResetFrameRef.current =
-            window.requestAnimationFrame(release)
-        }
-      )
-      programmaticScrollResetTimerRef.current = window.setTimeout(release, 120)
+      programmaticScrollResetFrameRef.current =
+        window.requestAnimationFrame(verify)
     },
-    [clearProgrammaticScrollReset]
+    [],
   )
 
   const performLatestScroll = useCallback(
@@ -633,17 +638,26 @@ function ChatAreaComponent({
       if (!node) {
         return
       }
+      clearProgrammaticScrollReset()
       clearManualScrollIntent()
       isProgrammaticScrollRef.current = true
-      lastChatScrollTopRef.current = maxChatScrollTop(node)
-      node.scrollTo({
-        top: maxChatScrollTop(node),
-        behavior,
-      })
+      const targetScrollTop = maxChatScrollTop(node)
+      pendingProgrammaticScrollTargetRef.current = targetScrollTop
+      lastChatScrollMetricsRef.current = chatScrollMetrics(node)
+      if (behavior === "auto") {
+        node.scrollTop = targetScrollTop
+      } else {
+        node.scrollTo({ top: targetScrollTop, behavior })
+      }
+      lastChatScrollMetricsRef.current = chatScrollMetrics(node)
       setShowScrollToLatest(false)
-      releaseProgrammaticScrollAfterLayout(behavior)
+      verifyProgrammaticScrollAfterLayout(behavior)
     },
-    [clearManualScrollIntent, releaseProgrammaticScrollAfterLayout]
+    [
+      clearManualScrollIntent,
+      clearProgrammaticScrollReset,
+      verifyProgrammaticScrollAfterLayout,
+    ],
   )
 
   const scrollToLatest = useCallback(
@@ -652,8 +666,20 @@ function ChatAreaComponent({
       performLatestScroll(behavior)
       setIsFollowingLatest(true)
     },
-    [performLatestScroll]
+    [performLatestScroll],
   )
+
+  const scheduleLatestScroll = useCallback(() => {
+    if (followLatestFrameRef.current) {
+      window.cancelAnimationFrame(followLatestFrameRef.current)
+    }
+    followLatestFrameRef.current = window.requestAnimationFrame(() => {
+      followLatestFrameRef.current = 0
+      if (isFollowingLatestRef.current) {
+        performLatestScroll("auto")
+      }
+    })
+  }, [performLatestScroll])
 
   const loadOlderHistory = useCallback(() => {
     const node = scrollRef.current
@@ -676,6 +702,12 @@ function ChatAreaComponent({
     isFollowingLatestRef.current = isFollowingLatest
   }, [isFollowingLatest])
 
+  useEffect(() => {
+    if (isAgentWorking) {
+      reportedPendingScrollCorrectionRef.current = false
+    }
+  }, [currentSession?.id, isAgentWorking])
+
   useLayoutEffect(() => {
     olderHistoryScrollAnchorRef.current = null
     isFollowingLatestRef.current = true
@@ -687,6 +719,10 @@ function ChatAreaComponent({
       clearProgrammaticScrollReset()
       clearManualScrollIntent()
       clearChatLayoutAnchor()
+      if (followLatestFrameRef.current) {
+        window.cancelAnimationFrame(followLatestFrameRef.current)
+        followLatestFrameRef.current = 0
+      }
       if (completionVisibilityFrameRef.current) {
         window.cancelAnimationFrame(completionVisibilityFrameRef.current)
       }
@@ -744,9 +780,9 @@ function ChatAreaComponent({
           pendingCompletionVisibilitySessionIdRef.current = null
           onSessionCompletionVisibility(
             pendingSessionId,
-            isLatestAssistantMessageFullyVisible()
+            isLatestAssistantMessageFullyVisible(),
           )
-        }
+        },
       )
     })
     return () => {
@@ -767,23 +803,19 @@ function ChatAreaComponent({
     if (!isFollowingLatestRef.current) {
       return
     }
-    window.cancelAnimationFrame(followLatestFrameRef.current)
-    followLatestFrameRef.current = window.requestAnimationFrame(() => {
-      const node = scrollRef.current
-      if (!node) {
-        return
-      }
-      performLatestScroll("auto")
-    })
+    scheduleLatestScroll()
     return () => {
-      window.cancelAnimationFrame(followLatestFrameRef.current)
+      if (followLatestFrameRef.current) {
+        window.cancelAnimationFrame(followLatestFrameRef.current)
+        followLatestFrameRef.current = 0
+      }
     }
   }, [
     currentProject?.path,
     currentSession?.id,
     isAgentWorking,
     items,
-    performLatestScroll,
+    scheduleLatestScroll,
   ])
 
   useLayoutEffect(() => {
@@ -795,7 +827,7 @@ function ChatAreaComponent({
     olderHistoryScrollAnchorRef.current = null
     const nextScrollTop = anchor.top + (node.scrollHeight - anchor.height)
     node.scrollTop = nextScrollTop
-    lastChatScrollTopRef.current = nextScrollTop
+    lastChatScrollMetricsRef.current = chatScrollMetrics(node)
   }, [items])
 
   useEffect(() => {
@@ -810,7 +842,6 @@ function ChatAreaComponent({
       return
     }
 
-    let frameId = 0
     const resizeObserver = new ResizeObserver(() => {
       const node = scrollRef.current
       if (!node) {
@@ -823,20 +854,41 @@ function ChatAreaComponent({
         setShowScrollToLatest(!isScrolledToLatest(node))
         return
       }
-      window.cancelAnimationFrame(frameId)
-      frameId = window.requestAnimationFrame(() => {
-        if (isFollowingLatestRef.current) {
-          performLatestScroll("auto")
-        }
-      })
+      scheduleLatestScroll()
     })
 
     resizeObserver.observe(contentNode)
+    const scrollNode = scrollRef.current
+    if (scrollNode) {
+      resizeObserver.observe(scrollNode)
+    }
     return () => {
-      window.cancelAnimationFrame(frameId)
       resizeObserver.disconnect()
     }
-  }, [applyChatLayoutAnchor, performLatestScroll])
+  }, [applyChatLayoutAnchor, scheduleLatestScroll])
+
+  useLayoutEffect(() => {
+    updateChatBottomClearance()
+    const scrollNode = scrollRef.current
+    const overlayNode = queueOverlayRef.current
+    if (!scrollNode || !overlayNode) {
+      return
+    }
+    if (typeof ResizeObserver === "undefined") {
+      throw new Error(
+        "ResizeObserver is required for queued-message bottom clearance.",
+      )
+    }
+
+    const resizeObserver = new ResizeObserver(updateChatBottomClearance)
+    resizeObserver.observe(scrollNode)
+    resizeObserver.observe(overlayNode)
+    window.addEventListener("resize", updateChatBottomClearance)
+    return () => {
+      window.removeEventListener("resize", updateChatBottomClearance)
+      resizeObserver.disconnect()
+    }
+  }, [updateChatBottomClearance, visibleQueuedMessages.length])
 
   useEffect(() => {
     const sessionId = currentSession?.id
@@ -859,21 +911,23 @@ function ChatAreaComponent({
 
     const previousScrollTop = Math.max(
       node.scrollTop,
-      inputScrollTopBeforeResizeRef.current
+      inputScrollTopBeforeResizeRef.current,
     )
     node.style.height = "auto"
     const nextHeight = Math.min(
       Math.max(node.scrollHeight, CHAT_INPUT_MIN_HEIGHT),
-      CHAT_INPUT_MAX_HEIGHT
+      CHAT_INPUT_MAX_HEIGHT,
     )
     node.style.height = `${nextHeight}px`
     node.style.overflowY =
       node.scrollHeight > CHAT_INPUT_MAX_HEIGHT ? "auto" : "hidden"
-    node.scrollTop = Math.min(
+    node.scrollTop = composerScrollTopAfterResize({
+      followLatest: inputShouldFollowLatestAfterResizeRef.current,
+      maxScrollTop: Math.max(0, node.scrollHeight - node.clientHeight),
       previousScrollTop,
-      Math.max(0, node.scrollHeight - node.clientHeight)
-    )
+    })
     inputScrollTopBeforeResizeRef.current = node.scrollTop
+    inputShouldFollowLatestAfterResizeRef.current = false
   }, [draft])
 
   useEffect(() => {
@@ -933,46 +987,108 @@ function ChatAreaComponent({
 
   function handleChatScroll(event: UIEvent<HTMLDivElement>) {
     const node = event.currentTarget
-    const scrollTop = node.scrollTop
-    const isScrollingTowardHistory =
-      scrollTop < lastChatScrollTopRef.current - 1
-    lastChatScrollTopRef.current = scrollTop
+    const currentMetrics = chatScrollMetrics(node)
+    const previousMetrics = lastChatScrollMetricsRef.current ?? currentMetrics
+    const movement = classifyChatScrollMovement(previousMetrics, currentMetrics)
+    lastChatScrollMetricsRef.current = currentMetrics
     const isAtLatest = isScrolledToLatest(node)
-    setIsChatScrolled(scrollTop > 2)
-    if (scrollTop < 160) {
+    setIsChatScrolled(currentMetrics.scrollTop > 2)
+    if (currentMetrics.scrollTop < 160) {
       loadOlderHistory()
     }
-    if (isProgrammaticScrollRef.current) {
-      if (isAtLatest) {
-        clearProgrammaticScrollReset()
-        isProgrammaticScrollRef.current = false
+    const hasPendingProgrammaticScroll = isProgrammaticScrollRef.current
+    const decision = decideChatScrollFollow({
+      hasPendingProgrammaticScroll,
+      isAtLatest,
+      isFollowingLatest: isFollowingLatestRef.current,
+      isScrollingTowardHistory: movement.isUnexplainedHistoryScroll,
+      manualScrollAwayFromLatest: manualScrollAwayFromLatestRef.current,
+      manualScrollIntent: manualScrollIntentRef.current,
+    })
+    if (decision === "stop-observed-history-scroll") {
+      const trace = {
+        currentMetrics,
+        hasPendingProgrammaticScroll,
+        movement,
+        previousMetrics,
+        sessionId: currentSession?.id,
       }
+      console.debug(
+        "[chat.scroll-follow] Stopping latest follow after observed upward scroll",
+        trace,
+      )
+      void window.ousia
+        ?.reportFrontendLog({
+          data: trace,
+          level: "info",
+          message:
+            "Stopped latest follow after unexplained upward scroll movement with unchanged geometry",
+          scope: "chat.scroll-follow",
+        })
+        .catch((error: unknown) => {
+          console.error(
+            "[chat.scroll-follow] Failed to persist upward-scroll trace",
+            error,
+          )
+          throw error
+        })
+      markCurrentSessionViewed()
+      handleManualScrollIntent(true)
       return
     }
-    if (manualScrollAwayFromLatestRef.current) {
-      isFollowingLatestRef.current = false
-      setIsFollowingLatest(false)
-      setShowScrollToLatest(!isAtLatest)
-      return
-    }
-    if (
-      !manualScrollIntentRef.current &&
-      isFollowingLatestRef.current &&
-      !isAtLatest
-    ) {
-      if (isScrollingTowardHistory) {
-        markCurrentSessionViewed()
-        handleManualScrollIntent(true)
-        return
+    if (decision === "restore") {
+      const trace = {
+        currentMetrics,
+        distanceFromLatest: maxChatScrollTop(node) - currentMetrics.scrollTop,
+        hasPendingProgrammaticScroll,
+        movement,
+        previousMetrics,
+        sessionId: currentSession?.id,
+      }
+      console.debug(
+        "[chat.scroll-follow] Restoring latest after non-manual layout movement",
+        trace,
+      )
+      const shouldReportPendingCorrection =
+        hasPendingProgrammaticScroll &&
+        movement.isUnexplainedHistoryScroll &&
+        !reportedPendingScrollCorrectionRef.current
+      if (shouldReportPendingCorrection) {
+        reportedPendingScrollCorrectionRef.current = true
+      }
+      if (
+        (movement.geometryChanged && movement.isScrollingTowardHistory) ||
+        shouldReportPendingCorrection
+      ) {
+        void window.ousia
+          ?.reportFrontendLog({
+            data: trace,
+            level: "debug",
+            message: shouldReportPendingCorrection
+              ? "Restored latest after WebKit moved during a pending programmatic scroll correction"
+              : "Restored latest after renderer geometry changed during upward scroll movement",
+            scope: "chat.scroll-follow",
+          })
+          .catch((error: unknown) => {
+            console.error(
+              "[chat.scroll-follow] Failed to persist layout-scroll trace",
+              error,
+            )
+            throw error
+          })
       }
       performLatestScroll("auto")
       return
     }
-    if (isAtLatest) {
+    if (decision === "follow") {
       clearManualScrollIntent()
+      isFollowingLatestRef.current = true
+      setIsFollowingLatest(true)
+      setShowScrollToLatest(false)
+      return
     }
-    isFollowingLatestRef.current = isAtLatest
-    setIsFollowingLatest(isAtLatest)
+    isFollowingLatestRef.current = false
+    setIsFollowingLatest(false)
     setShowScrollToLatest(!isAtLatest)
   }
 
@@ -990,7 +1106,22 @@ function ChatAreaComponent({
   }
 
   function handleWheelCapture(event: WheelEvent<HTMLDivElement>) {
+    const nestedScrollNode =
+      event.target instanceof Element
+        ? event.target.closest<HTMLElement>("[data-chat-nested-scroll]")
+        : null
+    if (
+      nestedScrollNode &&
+      nestedScrollNode !== event.currentTarget &&
+      event.currentTarget.contains(nestedScrollNode) &&
+      canScrollInDirection(nestedScrollNode, event.deltaY)
+    ) {
+      return
+    }
     const isScrollingTowardHistory = event.deltaY < 0
+    if (!isScrollingTowardHistory && isScrolledToLatest(event.currentTarget)) {
+      return
+    }
     markCurrentSessionViewed()
     handleManualScrollIntent(isScrollingTowardHistory)
     if (isScrollingTowardHistory && event.currentTarget.scrollTop < 160) {
@@ -1019,11 +1150,8 @@ function ChatAreaComponent({
     onSettingsChange(
       normalizeOusiaAppSettings({
         ...settings,
-        ...reasoningPreferencePatch(
-          isCodexSession ? "codex" : "pi",
-          thinkingLevel
-        ),
-      })
+        ...reasoningPreferencePatch(thinkingLevel),
+      }),
     )
   }
 
@@ -1032,7 +1160,7 @@ function ChatAreaComponent({
       normalizeOusiaAppSettings({
         ...settings,
         ...patch,
-      })
+      }),
     )
   }
 
@@ -1058,143 +1186,93 @@ function ChatAreaComponent({
     onSettingsChange(
       normalizeOusiaAppSettings({
         ...settings,
-        ...(isCodexSession
-          ? { codexModelId: model.modelId }
-          : { modelProvider: model.provider, modelId: model.modelId }),
-      })
+        modelProvider: model.provider,
+        modelId: model.modelId,
+      }),
     )
   }
 
-  const openProviderKeyDialog = useCallback(() => {
-    const providerOptions =
-      modelRegistry?.providers.filter(
-        (provider) =>
-          provider.models.length > 0 &&
-          !settings.disabledModelProviderIds.includes(provider.id)
-      ) ?? []
-    const provider =
-      providerOptions.find((item) => item.id === "deepseek") ??
-      providerOptions.find((item) => item.id === settings.modelProvider) ??
-      providerOptions[0]
-    const providerId = provider?.id ?? settings.modelProvider
-    setProviderKeyDialogProviderId(providerId)
-    setProviderKeyDialogApiKey("")
-    setProviderKeyDialogError("")
-    setIsComposerSettingsOpen(false)
-    setIsModelMenuOpen(false)
-    setOpenSessionMenuKey(null)
-    setIsProviderKeyDialogOpen(true)
-  }, [modelRegistry, settings])
-
-  const ensureSelectedProviderApiKey = useCallback(() => {
-    if (isCodexSession) {
-      const blockReason = codexSendBlockReason(codexEnvironment)
-      if (blockReason === "unavailable") {
-        onLocalEvent({
-          type: "error",
-          id: `codex-unavailable-${Date.now()}`,
-          text: codexEnvironment?.error ?? t.chat.codexUnavailable,
-          timestamp: new Date().toISOString(),
-        })
-        return false
-      }
-      if (blockReason === "sign-in-required") {
-        onLocalEvent({
-          type: "status_message",
-          id: `codex-login-${Date.now()}`,
-          role: "error",
-          status: "finished",
-          text: t.chat.codexSignInRequired,
-          timestamp: new Date().toISOString(),
-        })
-        return false
-      }
-      return true
-    }
+  const ensureSelectedPiModel = useCallback(() => {
     if (!modelRegistry || selectedModelPreset) {
       return true
     }
-    openProviderKeyDialog()
     onLocalEvent({
       type: "status_message",
-      id: `provider-api-key-${Date.now()}`,
+      id: `pi-configuration-${Date.now()}`,
       status: "finished",
-      text: t.chat.providerApiKeyRequiredInfo,
+      text: t.chat.piConfigurationRequiredInfo,
       timestamp: new Date().toISOString(),
     })
     return false
   }, [
-    codexEnvironment,
-    isCodexSession,
     onLocalEvent,
-    openProviderKeyDialog,
     modelRegistry,
     selectedModelPreset,
-    t.chat.codexSignInRequired,
-    t.chat.codexUnavailable,
-    t.chat.providerApiKeyRequiredInfo,
+    t.chat.piConfigurationRequiredInfo,
   ])
 
-  async function saveProviderKeyFromDialog() {
-    const apiKey = providerKeyDialogApiKey.trim()
-    const provider = providerKeyDialogProvider
-    const defaultModel = provider?.models[0]
-    if (!provider || !defaultModel || !apiKey || !window.ousia) {
+  useEffect(() => {
+    if (!window.ousia || !currentProject || !currentSession || isAgentWorking) {
       return
     }
-    setProviderKeyDialogError("")
-    setIsSavingProviderKey(true)
-    const result = await window.ousia
-      .savePiProviderCredential({
-        apiKey,
-        provider: provider.id,
-      })
-      .catch((error: unknown) => ({
-        ok: false as const,
-        error: error instanceof Error ? error.message : String(error),
-      }))
-    setIsSavingProviderKey(false)
-    if (!result.ok) {
-      setProviderKeyDialogError(result.error ?? t.settings.providerSaveFailed)
-      return
+    let isCancelled = false
+    const context = {
+      projectPath: currentProject.path,
+      sessionId: currentSession.id,
     }
-    await onRefreshModelRegistry().catch(() => undefined)
-    const nextModelProviders = settings.modelProviders.some(
-      (configured) => configured.id === provider.id
-    )
-      ? settings.modelProviders.map((configured) =>
-          configured.id === provider.id
-            ? { ...configured, apiKey: "" }
-            : configured
-        )
-      : [
-          ...settings.modelProviders,
-          {
-            id: provider.id,
-            apiKey: "",
-          },
-        ]
-    const thinkingLevel = resolveModelReasoningEffort(
-      defaultModel,
-      settings.thinkingLevel
-    )
-    const thinkingPatch = reasoningPreferencePatch("pi", thinkingLevel)
-
-    onSettingsChange(
-      normalizeOusiaAppSettings({
-        ...settings,
-        modelProvider: provider.id,
-        modelId: defaultModel.modelId,
-        ...thinkingPatch,
-        modelProviders: nextModelProviders,
-        disabledModelProviderIds: settings.disabledModelProviderIds.filter(
-          (providerId) => providerId !== provider.id
-        ),
+    void window.ousia
+      .prepareChatSession({
+        ...context,
+        agentMode: effectiveAgentMode,
+        customAgentTools: settings.customAgentTools,
+        autoCompactContext: settings.autoCompactContext,
+        autoRetryOnFailure: settings.autoRetryOnFailure,
+        deferConfiguration: !selectedModelPreset,
+        thinkingLevel: selectedThinkingLevel,
+        model: {
+          provider: settings.modelProvider,
+          modelId: settings.modelId,
+        },
       })
-    )
-    setProviderKeyDialogApiKey("")
-    setIsProviderKeyDialogOpen(false)
-  }
+      .then(() => {
+        if (!isCancelled) {
+          console.debug("[chat.prepare] Pi session is ready", context)
+        }
+      })
+      .catch((error: unknown) => {
+        if (isCancelled) {
+          return
+        }
+        const message = error instanceof Error ? error.message : String(error)
+        console.error("[chat.prepare] Failed to prepare Pi session", {
+          ...context,
+          error: message,
+        })
+        onLocalEvent({
+          context,
+          type: "error",
+          id: `prepare-error-${currentSession.id}-${Date.now()}`,
+          text: message,
+          timestamp: new Date().toISOString(),
+        })
+      })
+    return () => {
+      isCancelled = true
+    }
+  }, [
+    currentProject,
+    currentSession,
+    effectiveAgentMode,
+    isAgentWorking,
+    onLocalEvent,
+    selectedModelPreset,
+    selectedThinkingLevel,
+    settings.autoCompactContext,
+    settings.autoRetryOnFailure,
+    settings.customAgentTools,
+    settings.modelId,
+    settings.modelProvider,
+  ])
 
   const sendMessage = useCallback(
     async ({
@@ -1219,7 +1297,7 @@ function ChatAreaComponent({
         })
         return
       }
-      if (!ensureSelectedProviderApiKey()) {
+      if (!ensureSelectedPiModel()) {
         return
       }
       if (
@@ -1266,21 +1344,17 @@ function ChatAreaComponent({
               agentMode: effectiveAgentMode,
               customAgentTools: settings.customAgentTools,
               autoCompactContext: settings.autoCompactContext,
-              ...(isCodexSession
-                ? {}
-                : { autoRetryOnFailure: settings.autoRetryOnFailure }),
+              autoRetryOnFailure: settings.autoRetryOnFailure,
               ...context,
               thinkingLevel: selectedThinkingLevel,
               model: {
-                provider: isCodexSession ? "openai" : settings.modelProvider,
-                modelId: isCodexSession
-                  ? (selectedModelPreset?.modelId ?? settings.codexModelId)
-                  : settings.modelId,
+                provider: settings.modelProvider,
+                modelId: settings.modelId,
               },
             }),
         })
         console.debug("[chat.send] Published optimistic user message", {
-          agentProvider: isCodexSession ? "codex" : "pi",
+          agentProvider: "pi",
           messageId: optimisticMessage.messageId,
           sessionId: currentSession.id,
         })
@@ -1339,12 +1413,11 @@ function ChatAreaComponent({
       currentSession,
       effectiveAgentMode,
       isAgentWorking,
-      isCodexSession,
       isSending,
       items.length,
-      onGenerateSessionTitle,
       onLocalEvent,
-      ensureSelectedProviderApiKey,
+      onGenerateSessionTitle,
+      ensureSelectedPiModel,
       scrollToLatest,
       selectedModelPreset,
       selectedThinkingLevel,
@@ -1353,12 +1426,12 @@ function ChatAreaComponent({
       t.chat.noElectron,
       t.chat.noSelection,
       t.chat.sendFailed,
-    ]
+    ],
   )
 
   function queueDraftMessage(
     text: string,
-    outgoingAttachments: OusiaChatAttachment[]
+    outgoingAttachments: OusiaChatAttachment[],
   ) {
     setIsQueuePausedAfterInterrupt(false)
     if (editingQueueId) {
@@ -1366,8 +1439,8 @@ function ChatAreaComponent({
         current.map((message) =>
           message.id === editingQueueId
             ? { ...message, text, attachments: outgoingAttachments }
-            : message
-        )
+            : message,
+        ),
       )
       setEditingQueueId(null)
       return
@@ -1394,7 +1467,7 @@ function ChatAreaComponent({
   }
 
   async function materializePiQueue(
-    messages: QueuedChatMessage[] = piQueuedMessages
+    messages: QueuedChatMessage[] = piQueuedMessages,
   ) {
     setQueuedMessages(messages)
     await clearPiQueue()
@@ -1406,9 +1479,10 @@ function ChatAreaComponent({
     if ((!text && attachments.length === 0) || isSending) {
       return
     }
-    if (!ensureSelectedProviderApiKey()) {
+    if (!ensureSelectedPiModel()) {
       return
     }
+    inputRef.current?.focus({ preventScroll: true })
     const outgoingAttachments = attachments
     setDraft("")
     setAttachments([])
@@ -1437,7 +1511,7 @@ function ChatAreaComponent({
     if (!message) {
       return
     }
-    if (!ensureSelectedProviderApiKey()) {
+    if (!ensureSelectedPiModel()) {
       return
     }
     const remainingMessages = sourceMessages.filter((item) => item.id !== id)
@@ -1546,7 +1620,7 @@ function ChatAreaComponent({
       return
     }
     const timer = window.setTimeout(() => {
-      if (!ensureSelectedProviderApiKey()) {
+      if (!ensureSelectedPiModel()) {
         setIsQueuePausedAfterInterrupt(true)
         return
       }
@@ -1564,7 +1638,7 @@ function ChatAreaComponent({
     return () => window.clearTimeout(timer)
   }, [
     editingQueueId,
-    ensureSelectedProviderApiKey,
+    ensureSelectedPiModel,
     isAgentWorking,
     isQueueAutoSendPaused,
     isSending,
@@ -1585,7 +1659,7 @@ function ChatAreaComponent({
         piQueuedMessages.map((message, index) => ({
           ...message,
           id: `interrupted-${Date.now()}-${index}`,
-        }))
+        })),
       )
       setIsQueuePausedAfterInterrupt(true)
     }
@@ -1605,7 +1679,7 @@ function ChatAreaComponent({
     if (isCompacting || !window.ousia || !currentProject || !currentSession) {
       return
     }
-    if (!ensureSelectedProviderApiKey()) {
+    if (!ensureSelectedPiModel()) {
       return
     }
     const statusMessageId = `compact-${Date.now()}`
@@ -1622,17 +1696,13 @@ function ChatAreaComponent({
         agentMode: effectiveAgentMode,
         customAgentTools: settings.customAgentTools,
         autoCompactContext: settings.autoCompactContext,
-        ...(isCodexSession
-          ? {}
-          : { autoRetryOnFailure: settings.autoRetryOnFailure }),
+        autoRetryOnFailure: settings.autoRetryOnFailure,
         projectPath: currentProject.path,
         sessionId: currentSession.id,
         thinkingLevel: selectedThinkingLevel,
         model: {
-          provider: isCodexSession ? "openai" : settings.modelProvider,
-          modelId: isCodexSession
-            ? (selectedModelPreset?.modelId ?? settings.codexModelId)
-            : settings.modelId,
+          provider: settings.modelProvider,
+          modelId: settings.modelId,
         },
       })
       if (!result.ok) {
@@ -1716,7 +1786,7 @@ function ChatAreaComponent({
     if (!window.ousia || !currentProject || !currentSession) {
       return
     }
-    if (!ensureSelectedProviderApiKey()) {
+    if (!ensureSelectedPiModel()) {
       return
     }
     const markdown = formatSessionHistoryForClipboard({
@@ -1731,17 +1801,13 @@ function ChatAreaComponent({
       agentMode: effectiveAgentMode,
       customAgentTools: settings.customAgentTools,
       autoCompactContext: settings.autoCompactContext,
-      ...(isCodexSession
-        ? {}
-        : { autoRetryOnFailure: settings.autoRetryOnFailure }),
+      autoRetryOnFailure: settings.autoRetryOnFailure,
       projectPath: currentProject.path,
       sessionId: currentSession.id,
       thinkingLevel: selectedThinkingLevel,
       model: {
-        provider: isCodexSession ? "openai" : settings.modelProvider,
-        modelId: isCodexSession
-          ? (selectedModelPreset?.modelId ?? settings.codexModelId)
-          : settings.modelId,
+        provider: settings.modelProvider,
+        modelId: settings.modelId,
       },
     })
     if (!result.ok && !result.canceled) {
@@ -1781,9 +1847,14 @@ function ChatAreaComponent({
     inputScrollTopBeforeResizeRef.current = target.scrollTop
     const selectionStart = target.selectionStart
     const selectionEnd = target.selectionEnd
+    inputShouldFollowLatestAfterResizeRef.current = isComposerSelectionAtLatest(
+      target.value.length,
+      selectionStart,
+      selectionEnd,
+    )
     setDraft(
       (current) =>
-        `${current.slice(0, selectionStart)}${normalizedText}${current.slice(selectionEnd)}`
+        `${current.slice(0, selectionStart)}${normalizedText}${current.slice(selectionEnd)}`,
     )
     window.requestAnimationFrame(() => {
       const nextCursor = selectionStart + normalizedText.length
@@ -1793,14 +1864,20 @@ function ChatAreaComponent({
 
   function handleDraftChange(event: ChangeEvent<HTMLTextAreaElement>) {
     markCurrentSessionViewed()
-    inputScrollTopBeforeResizeRef.current = event.currentTarget.scrollTop
-    setDraft(event.currentTarget.value)
+    const target = event.currentTarget
+    inputScrollTopBeforeResizeRef.current = target.scrollTop
+    inputShouldFollowLatestAfterResizeRef.current = isComposerSelectionAtLatest(
+      target.value.length,
+      target.selectionStart,
+      target.selectionEnd,
+    )
+    setDraft(target.value)
   }
 
   async function addFiles(files: File[]) {
     const currentTotal = attachments.reduce(
       (total, item) => total + item.size,
-      0
+      0,
     )
     const selectedTotal = files.reduce((total, file) => total + file.size, 0)
     if (currentTotal + selectedTotal > MAX_TOTAL_ATTACHMENT_BYTES) {
@@ -1851,8 +1928,8 @@ function ChatAreaComponent({
   return (
     <section
       className={cn(
-        "ousia-main-panel @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card",
-        MAIN_PANEL_LEFT_CORNERS_CLASS
+        "ousia-main-panel border-border/60 bg-card @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 shadow-[var(--ousia-main-panel-shadow)]",
+        MAIN_PANEL_LEFT_CORNERS_CLASS,
       )}
       style={style}
       onKeyDownCapture={handleChatKeyDownCapture}
@@ -1881,8 +1958,8 @@ function ChatAreaComponent({
       <div
         ref={scrollRef}
         className={cn(
-          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto bg-white pt-4 pb-16 select-text dark:bg-card",
-          CHAT_HORIZONTAL_PADDING_CLASS
+          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter bg-card min-h-0 flex-1 overflow-auto pt-4 pb-16 select-text",
+          CHAT_HORIZONTAL_PADDING_CLASS,
         )}
         onScroll={handleChatScroll}
         onWheelCapture={handleWheelCapture}
@@ -1896,7 +1973,7 @@ function ChatAreaComponent({
           {isLoadingOlderHistory ? (
             <div
               aria-label={t.chat.historyLoading}
-              className="flex h-8 items-center justify-center text-muted-foreground"
+              className="text-muted-foreground flex h-8 items-center justify-center"
             >
               <LoaderCircle className="size-4 animate-spin" strokeWidth={1.5} />
             </div>
@@ -1911,6 +1988,13 @@ function ChatAreaComponent({
             showTurnWaitIndicator={showTurnWaitIndicator}
             t={t}
           />
+          {chatBottomClearance ? (
+            <div
+              aria-hidden="true"
+              data-chat-bottom-clearance
+              style={{ height: chatBottomClearance }}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -1920,7 +2004,7 @@ function ChatAreaComponent({
             type="button"
             variant="secondary"
             size="icon-sm"
-            className="pointer-events-auto absolute bottom-1 left-1/2 size-6 -translate-x-1/2 rounded-full border-[0.5px] border-foreground/10 bg-popover/90 text-popover-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur hover:bg-popover/95 dark:border-foreground/10 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
+            className="border-foreground/10 bg-popover/90 text-popover-foreground hover:bg-popover/95 dark:border-foreground/10 pointer-events-auto absolute bottom-1 left-1/2 size-6 -translate-x-1/2 rounded-full border-[0.5px] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),inset_0_0_0_1px_rgba(255,255,255,0.22),0_4px_14px_rgba(0,0,0,0.045),0_1px_5px_rgba(0,0,0,0.025)] backdrop-blur dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_0_0_1px_rgba(255,255,255,0.04),0_4px_14px_rgba(0,0,0,0.22),0_1px_5px_rgba(0,0,0,0.12)]"
             aria-label={t.chat.scrollToLatest}
             onClick={() => {
               markCurrentSessionViewed()
@@ -1933,17 +2017,15 @@ function ChatAreaComponent({
       ) : null}
 
       <form
-        className={cn(
-          CHAT_COMPOSER_SHELL_CLASS,
-          CHAT_HORIZONTAL_PADDING_CLASS
-        )}
+        className={cn(CHAT_COMPOSER_SHELL_CLASS, CHAT_HORIZONTAL_PADDING_CLASS)}
         onSubmit={handleSubmit}
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
           <div className="relative">
+            {/* Queue growth must not resize the conversation scroll viewport. */}
             {visibleQueuedMessages.length ? (
               <QueuedMessageList
-                className="mx-5"
+                className={CHAT_QUEUE_OVERLAY_CLASS}
                 editingId={editingQueueId}
                 draggingId={draggingQueueId}
                 messages={visibleQueuedMessages}
@@ -1953,15 +2035,11 @@ function ChatAreaComponent({
                 onDragStart={setDraggingQueueId}
                 onEdit={editQueuedMessage}
                 onSendNow={sendQueuedMessageNow}
+                rootRef={queueOverlayRef}
                 t={t}
               />
             ) : null}
-            <div
-              className={cn(
-                "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-composer-surface)] px-4 pt-3 pb-3 shadow-[var(--ousia-chat-composer-shadow)] transition-[border-color,box-shadow] focus-within:border-[color:var(--ousia-chat-composer-border-focus)] focus-within:shadow-[var(--ousia-chat-composer-shadow-focus)] focus-within:ring-0",
-                visibleQueuedMessages.length && "-mt-8"
-              )}
-            >
+            <div className="ousia-chat-composer-ring relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-composer-surface)] px-4 pt-3 pb-3 shadow-[var(--ousia-chat-composer-shadow)] transition-[border-color,box-shadow] focus-within:border-[color:var(--ousia-chat-composer-border-focus)] focus-within:shadow-[var(--ousia-chat-composer-shadow-focus)] focus-within:ring-0">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -2075,39 +2153,32 @@ function ChatAreaComponent({
                                 t.settings.customModeDescription,
                               ],
                             ] satisfies Array<[OusiaAgentMode, string, string]>
-                          )
-                            .filter(
-                              ([value]) =>
-                                !isCodexSession ||
-                                value === "standard" ||
-                                value === "readOnly"
-                            )
-                            .map(([value, label, description]) => (
-                              <Tooltip key={value}>
-                                <TooltipTrigger asChild>
-                                  <DropdownMenuRadioItem
-                                    value={value}
-                                    onClick={() => {
-                                      updateComposerSettings({
-                                        agentMode: value,
-                                      })
-                                      if (value === "custom") {
-                                        setIsCustomToolsDialogOpen(true)
-                                      }
-                                    }}
-                                  >
-                                    {label}
-                                  </DropdownMenuRadioItem>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="right"
-                                  align="center"
-                                  className="max-w-56"
+                          ).map(([value, label, description]) => (
+                            <Tooltip key={value}>
+                              <TooltipTrigger asChild>
+                                <DropdownMenuRadioItem
+                                  value={value}
+                                  onClick={() => {
+                                    updateComposerSettings({
+                                      agentMode: value,
+                                    })
+                                    if (value === "custom") {
+                                      setIsCustomToolsDialogOpen(true)
+                                    }
+                                  }}
                                 >
-                                  {description}
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
+                                  {label}
+                                </DropdownMenuRadioItem>
+                              </TooltipTrigger>
+                              <TooltipContent
+                                side="right"
+                                align="center"
+                                className="max-w-56"
+                              >
+                                {description}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
                         </TooltipProvider>
                       </DropdownMenuRadioGroup>
                       <DropdownMenuSeparator />
@@ -2115,7 +2186,7 @@ function ChatAreaComponent({
                         value={sendDuringRunMode}
                         onValueChange={(value) =>
                           updateSendDuringRunMode(
-                            value === "queue" ? "queue" : "steer"
+                            value === "queue" ? "queue" : "steer",
                           )
                         }
                       >
@@ -2138,24 +2209,24 @@ function ChatAreaComponent({
                   >
                     <DropdownMenuTrigger
                       aria-label={t.chat.modelAndThinking}
-                      className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground"
+                      className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-xs transition-colors outline-none"
                     >
-                      <span className="hidden shrink-0 text-foreground @max-[520px]:inline">
+                      <span className="text-foreground hidden shrink-0 @max-[520px]:inline">
                         {t.chat.model}
                       </span>
-                      <span className="min-w-0 truncate text-foreground @max-[520px]:hidden">
+                      <span className="text-foreground min-w-0 truncate @max-[520px]:hidden">
                         {selectedModelLabel}
                       </span>
                       {selectedModelPreset &&
                       selectedThinkingLevel !== "off" ? (
-                        <span className="shrink-0 text-muted-foreground @max-[520px]:hidden">
+                        <span className="text-muted-foreground shrink-0 @max-[520px]:hidden">
                           {reasoningEffortLabel(selectedThinkingLevel)}
                         </span>
                       ) : null}
                       <ChevronDown
                         size={18}
                         strokeWidth={1.5}
-                        className="shrink-0 text-muted-foreground"
+                        className="text-muted-foreground shrink-0"
                       />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
@@ -2185,26 +2256,22 @@ function ChatAreaComponent({
                         ))}
                       </DropdownMenuRadioGroup>
                       <DropdownMenuSeparator />
-                      <div className="flex items-center justify-between gap-3 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                      <div className="text-muted-foreground flex items-center justify-between gap-3 px-2 py-1.5 text-xs font-medium">
                         <span>{t.chat.model}</span>
-                        {isCodexSession ? (
-                          <span>Codex</span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="whitespace-nowrap underline-offset-4 hover:text-foreground hover:underline focus-visible:text-foreground focus-visible:underline focus-visible:outline-none"
-                            onClick={() => openProviderKeyDialog()}
-                          >
-                            {t.chat.addModelProvider}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="hover:text-foreground focus-visible:text-foreground whitespace-nowrap underline-offset-4 hover:underline focus-visible:underline focus-visible:outline-none"
+                          onClick={() => void onRefreshModelRegistry()}
+                        >
+                          {t.chat.refreshLocalPiModels}
+                        </button>
                       </div>
                       <DropdownMenuRadioGroup
                         value={
                           selectedModelPreset
                             ? modelPresetValue(
                                 selectedModelPreset.provider,
-                                selectedModelPreset.modelId
+                                selectedModelPreset.modelId,
                               )
                             : undefined
                         }
@@ -2212,7 +2279,7 @@ function ChatAreaComponent({
                         {configuredModelPresets.map((preset) => {
                           const value = modelPresetValue(
                             preset.provider,
-                            preset.modelId
+                            preset.modelId,
                           )
 
                           return (
@@ -2237,10 +2304,10 @@ function ChatAreaComponent({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span
-                            className="flex size-6 items-center justify-center text-muted-foreground/55"
+                            className="text-muted-foreground/55 flex size-6 items-center justify-center"
                             aria-label={t.chat.contextUsageDetails(
                               contextUsagePercentLabel,
-                              contextRemainingLabel
+                              contextRemainingLabel,
                             )}
                           >
                             <svg
@@ -2275,7 +2342,7 @@ function ChatAreaComponent({
                         <TooltipContent>
                           {t.chat.contextUsageDetails(
                             contextUsagePercentLabel,
-                            contextRemainingLabel
+                            contextRemainingLabel,
                           )}
                         </TooltipContent>
                       </Tooltip>
@@ -2284,7 +2351,7 @@ function ChatAreaComponent({
                   <Button
                     type="submit"
                     size="icon-sm"
-                    className="size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] hover:bg-primary/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
+                    className="hover:bg-primary/90 size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
                     disabled={isSending || !hasDraftContent}
                     aria-label={t.app.send}
                   >
@@ -2297,129 +2364,13 @@ function ChatAreaComponent({
         </div>
       </form>
       <Dialog
-        open={isProviderKeyDialogOpen}
-        onOpenChange={(open) => {
-          setIsProviderKeyDialogOpen(open)
-          if (!open) {
-            setProviderKeyDialogApiKey("")
-          }
-        }}
-      >
-        <DialogContent showCloseButton={false}>
-          <div className="flex items-start justify-between gap-4">
-            <DialogHeader>
-              <DialogTitle>{t.chat.providerApiKeyTitle}</DialogTitle>
-              <DialogDescription>
-                {t.chat.providerApiKeyDescription}
-              </DialogDescription>
-            </DialogHeader>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="ousia-squircle-corners mt-0.5 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.96]"
-              aria-label={t.app.close}
-              onClick={() => setIsProviderKeyDialogOpen(false)}
-            >
-              <X size={18} />
-            </Button>
-          </div>
-
-          <label className="mt-4 block">
-            <span className="text-xs font-medium text-muted-foreground">
-              {t.settings.provider}
-            </span>
-            <Select
-              items={providerKeyDialogSelectItems}
-              value={providerKeyDialogProviderId}
-              onValueChange={(value) => {
-                const nextProviderId = value ?? ""
-                setProviderKeyDialogProviderId(nextProviderId)
-                setProviderKeyDialogApiKey("")
-                setProviderKeyDialogError("")
-              }}
-            >
-              <SelectTrigger
-                aria-label={t.settings.provider}
-                className="ousia-squircle-corners mt-2 w-full rounded-xl border-[0.5px] border-foreground/10 bg-white hover:bg-white"
-              >
-                <SelectValue placeholder={t.settings.chooseProvider} />
-              </SelectTrigger>
-              <SelectContent align="start">
-                <SelectGroup>
-                  {providerKeyDialogProviders.map((provider) => (
-                    <SelectItem key={provider.id} value={provider.id}>
-                      {provider.name}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </label>
-
-          <label className="mt-4 block">
-            <span className="text-xs font-medium text-muted-foreground">
-              API Key
-            </span>
-            <Input
-              aria-label="API Key"
-              className="ousia-squircle-corners mt-2 rounded-xl border-[0.5px] border-foreground/10 bg-white focus-visible:bg-white"
-              value={providerKeyDialogApiKey}
-              onChange={(event) =>
-                setProviderKeyDialogApiKey(event.target.value)
-              }
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && canSaveProviderKey) {
-                  event.preventDefault()
-                  void saveProviderKeyFromDialog()
-                }
-              }}
-              placeholder="sk-..."
-              type="password"
-            />
-            {!providerKeyDialogApiKey.trim() ? (
-              <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                {t.settings.apiKeyRequired}
-              </span>
-            ) : null}
-          </label>
-
-          {providerKeyDialogError ? (
-            <div className="mt-4 rounded-xl border-[0.5px] border-red-500/20 bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">
-              {providerKeyDialogError}
-            </div>
-          ) : null}
-
-          <DialogFooter className="mt-5">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="ousia-squircle-corners h-10 rounded-2xl border-[0.5px] border-foreground/10 bg-white px-5 text-neutral-950 hover:bg-neutral-50 active:scale-[0.96]"
-              onClick={() => setIsProviderKeyDialogOpen(false)}
-            >
-              {t.app.cancel}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="ousia-squircle-corners h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800 active:scale-[0.96]"
-              disabled={!canSaveProviderKey}
-              onClick={() => void saveProviderKeyFromDialog()}
-            >
-              {isSavingProviderKey ? t.settings.saving : t.app.add}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog
         open={isCustomToolsDialogOpen}
         onOpenChange={setIsCustomToolsDialogOpen}
       >
-        <DialogContent className="max-w-sm rounded-3xl bg-white text-neutral-950 dark:bg-white dark:text-neutral-950">
+        <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-xl">{t.chat.customTools}</DialogTitle>
-            <DialogDescription className="text-neutral-500">
+            <DialogDescription>
               {t.chat.customToolsDescription}
             </DialogDescription>
           </DialogHeader>
@@ -2430,7 +2381,7 @@ function ChatAreaComponent({
                 <button
                   key={tool}
                   type="button"
-                  className="flex h-11 items-center justify-between rounded-xl px-3 text-left text-sm hover:bg-neutral-100 focus-visible:bg-neutral-100 focus-visible:outline-none"
+                  className="hover:bg-muted focus-visible:bg-muted flex h-11 items-center justify-between rounded-md px-3 text-left text-sm focus-visible:outline-none"
                   onClick={() => toggleCustomAgentTool(tool)}
                 >
                   <span>{t.chat.agentToolNames[tool]}</span>
@@ -2438,13 +2389,16 @@ function ChatAreaComponent({
                     aria-hidden="true"
                     className={cn(
                       "relative ml-3 h-5 w-9 shrink-0 rounded-full transition-colors",
-                      isEnabled ? "bg-neutral-950" : "bg-neutral-200"
+                      isEnabled ? "bg-primary" : "bg-input",
                     )}
                   >
                     <span
                       className={cn(
-                        "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-[left]",
-                        isEnabled ? "left-[18px]" : "left-0.5"
+                        "absolute top-0.5 size-4 rounded-full shadow-sm transition-[left,background-color]",
+                        isEnabled
+                          ? "bg-primary-foreground"
+                          : "bg-background dark:bg-foreground",
+                        isEnabled ? "left-[18px]" : "left-0.5",
                       )}
                     />
                   </span>
@@ -2456,7 +2410,7 @@ function ChatAreaComponent({
             <Button
               type="button"
               size="sm"
-              className="rounded-xl px-5"
+              className="px-5"
               onClick={() => setIsCustomToolsDialogOpen(false)}
             >
               {t.app.close}

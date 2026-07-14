@@ -14,22 +14,15 @@ export const OUSIA_PI_THINKING_LEVELS = [
 export type OusiaPiThinkingLevel = (typeof OUSIA_PI_THINKING_LEVELS)[number]
 
 export type OusiaThinkingLevel = OusiaPiThinkingLevel
-export type OusiaCodexReasoningEffort = string
-export type OusiaReasoningEffort = OusiaPiThinkingLevel | string
+export type OusiaReasoningEffort = OusiaPiThinkingLevel
 
 export function isOusiaPiThinkingLevel(
-  value: unknown
+  value: unknown,
 ): value is OusiaPiThinkingLevel {
   return OUSIA_PI_THINKING_LEVELS.includes(value as OusiaPiThinkingLevel)
 }
 
-export function isOusiaCodexReasoningEffort(
-  value: unknown
-): value is OusiaCodexReasoningEffort {
-  return typeof value === "string" && value.trim().length > 0
-}
-
-export type OusiaAgentProvider = "pi" | "codex"
+export type OusiaAgentProvider = "pi"
 
 export const OUSIA_APPEARANCE_COLOR_SCALES = [
   "mist",
@@ -77,29 +70,17 @@ export const OUSIA_CHAT_MESSAGE_SPACINGS = [
 export type OusiaChatMessageSpacing =
   (typeof OUSIA_CHAT_MESSAGE_SPACINGS)[number]
 export type OusiaAgentToolName =
-  | "read"
-  | "write"
-  | "edit"
-  | "bash"
-  | "grep"
-  | "find"
-  | "ls"
+  "read" | "write" | "edit" | "bash" | "grep" | "find" | "ls"
 export type OusiaLanguage = "zh" | "en"
-export const OUSIA_FONT_FAMILIES = [
-  "system",
-  "lxgwWenkai",
-  "zhuqueFangsong",
-] as const
-export type OusiaFontFamily = (typeof OUSIA_FONT_FAMILIES)[number]
 
 export type OusiaSessionRecord = {
   agentProvider: OusiaAgentProvider
-  agentThreadId?: string
   archivedAt?: string
   id: string
   projectId?: string
   title: string
   time: string
+  workingDirectory?: string
 }
 
 export type OusiaProjectRecord = {
@@ -110,12 +91,8 @@ export type OusiaProjectRecord = {
 
 export type OusiaAppSettings = {
   defaultAgentProvider: OusiaAgentProvider
-  codexModelId: string
-  codexReasoningEffort: OusiaCodexReasoningEffort | null
   appearanceColorScale: OusiaAppearanceColorScale
   theme: OusiaThemePreference
-  appFontFamily: OusiaFontFamily
-  chatFontFamily: OusiaFontFamily
   chatFontSize: OusiaChatFontSize
   chatLineSpacing: OusiaChatLineSpacing
   chatMessageSpacing: OusiaChatMessageSpacing
@@ -182,60 +159,38 @@ export type OusiaModelRegistryResult = {
 }
 
 export type OusiaPiEnvironmentStatus = {
+  available: boolean
   agentDir: string
   authJsonExists: boolean
+  binaryPath?: string
+  binarySource?: "detected" | "managed" | "override" | "path" | "selected"
+  canInstall: boolean
   configDirExists: boolean
   configuredProviderIds: string[]
+  defaultModel?: string
+  defaultProvider?: string
   hasConfiguredCredential: boolean
+  installPrerequisiteError?: string
+  isManagedInstall: boolean
+  isOnPath: boolean
+  isPathManaged: boolean
+  managedBinaryPath?: string
   modelCount: number
   modelsJsonExists: boolean
-  runtime: "bundled"
-}
-
-export type OusiaCodexAccount =
-  | {
-      type: "apiKey"
-    }
-  | {
-      type: "chatgpt"
-      email?: string
-      planType?: string
-    }
-
-export type OusiaCodexEnvironmentStatus = {
-  account: OusiaCodexAccount | null
-  available: boolean
-  binaryPath?: string
-  codexHome?: string
-  defaultModelId?: string
+  nodePath?: string
+  nodeVersion?: string
+  npmPath?: string
+  npmVersion?: string
+  pathLinkPath?: string
+  settingsJsonExists: boolean
+  shellConfigPath?: string
   error?: string
-  models: OusiaAvailableModel[]
-  requiresOpenaiAuth: boolean
-  runtime: "downloaded"
+  runtime: "local"
   version?: string
 }
 
-export type OusiaCodexAuthResult =
-  | {
-      ok: true
-      status: OusiaCodexEnvironmentStatus
-    }
-  | {
-      ok: false
-      error: string
-      status?: OusiaCodexEnvironmentStatus
-    }
-
-export type OusiaPiProviderCredentialPayload = {
-  apiKey: string
-  provider: string
-}
-
-export type OusiaPiProviderCredentialRemovalPayload = {
-  provider: string
-}
-
-export type OusiaPiProviderCredentialResult = {
+export type OusiaPiRuntimeActionResult = {
+  canceled?: boolean
   error?: string
   ok: boolean
   status?: OusiaPiEnvironmentStatus
@@ -305,8 +260,7 @@ export type OusiaUpdateStatus =
     }
 
 export type OusiaUpdateActionResult =
-  | { ok: true }
-  | { ok: false; error: string }
+  { ok: true } | { ok: false; error: string }
 
 export type OusiaAppState = {
   schemaVersion: OusiaAppStateSchemaVersion
@@ -351,14 +305,6 @@ export type OusiaAppStateCreateSessionPayload = {
   select?: boolean
   title?: string
 }
-
-export type OusiaAppStateBindSessionAgentThreadPayload = {
-  agentThreadId: string
-  sessionId: string
-}
-
-export type OusiaAppStateBindSessionAgentThreadResult =
-  OusiaAppStateTransactionResult
 
 export type OusiaAppStateDeleteSessionPayload = {
   sessionId: string
@@ -410,25 +356,23 @@ export type OusiaAppStateReorderProjectsPayload = {
 }
 
 export const OUSIA_APP_STATE_SCHEMA_VERSION = 2
+export const PI_GUI_DEFAULT_WORK_DIR = "~/pi"
+export const PI_GUI_PREVIOUS_DEFAULT_WORK_DIR = "~"
 export const OUSIA_DEFAULT_WORK_DIR = "~/Documents/Ousia"
 export const OUSIA_LEGACY_DEFAULT_WORK_DIR = "~/.ousia/chat"
 
 export const defaultOusiaAppSettings: OusiaAppSettings = {
   defaultAgentProvider: "pi",
-  codexModelId: "",
-  codexReasoningEffort: null,
   appearanceColorScale: "mist",
   theme: "light",
-  appFontFamily: "system",
-  chatFontFamily: "system",
   chatFontSize: "standard",
   chatLineSpacing: "standard",
   chatMessageSpacing: "standard",
   chatContentWidth: "standard",
   language: "zh",
-  defaultSessionDir: OUSIA_DEFAULT_WORK_DIR,
-  defaultProjectCreationDir: OUSIA_DEFAULT_WORK_DIR,
-  sendDuringRunMode: "steer",
+  defaultSessionDir: PI_GUI_DEFAULT_WORK_DIR,
+  defaultProjectCreationDir: PI_GUI_DEFAULT_WORK_DIR,
+  sendDuringRunMode: "queue",
   agentMode: "standard",
   customAgentTools: ["read", "write", "edit", "bash", "grep", "find", "ls"],
   autoCompactContext: true,
@@ -443,7 +387,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
 }
 
 export function normalizeOusiaModelProviders(
-  settings: Partial<OusiaAppSettings>
+  settings: Partial<OusiaAppSettings>,
 ): OusiaModelProviderConfig[] {
   const providers = new Map<string, OusiaModelProviderConfig>()
 
@@ -462,7 +406,7 @@ export function normalizeOusiaModelProviders(
 }
 
 export function normalizeOusiaDisabledModelProviderIds(
-  settings: Partial<OusiaAppSettings>
+  settings: Partial<OusiaAppSettings>,
 ): string[] {
   const providerIds = new Set<string>()
 
@@ -477,16 +421,8 @@ export function normalizeOusiaDisabledModelProviderIds(
   return [...providerIds]
 }
 
-function normalizeOusiaFontFamily(
-  fontFamily: OusiaFontFamily | undefined
-): OusiaFontFamily | undefined {
-  return fontFamily && OUSIA_FONT_FAMILIES.includes(fontFamily)
-    ? fontFamily
-    : undefined
-}
-
 function normalizeOusiaChatContentWidth(
-  chatContentWidth: OusiaChatContentWidth | undefined
+  chatContentWidth: OusiaChatContentWidth | undefined,
 ): OusiaChatContentWidth | undefined {
   return chatContentWidth &&
     OUSIA_CHAT_CONTENT_WIDTHS.includes(chatContentWidth)
@@ -495,7 +431,7 @@ function normalizeOusiaChatContentWidth(
 }
 
 function normalizeOusiaChatFontSize(
-  chatFontSize: OusiaChatFontSize | undefined
+  chatFontSize: OusiaChatFontSize | undefined,
 ): OusiaChatFontSize | undefined {
   return chatFontSize && OUSIA_CHAT_FONT_SIZES.includes(chatFontSize)
     ? chatFontSize
@@ -503,7 +439,7 @@ function normalizeOusiaChatFontSize(
 }
 
 function normalizeOusiaChatLineSpacing(
-  chatLineSpacing: OusiaChatLineSpacing | undefined
+  chatLineSpacing: OusiaChatLineSpacing | undefined,
 ): OusiaChatLineSpacing | undefined {
   return chatLineSpacing && OUSIA_CHAT_LINE_SPACINGS.includes(chatLineSpacing)
     ? chatLineSpacing
@@ -511,7 +447,7 @@ function normalizeOusiaChatLineSpacing(
 }
 
 function normalizeOusiaChatMessageSpacing(
-  chatMessageSpacing: OusiaChatMessageSpacing | undefined
+  chatMessageSpacing: OusiaChatMessageSpacing | undefined,
 ): OusiaChatMessageSpacing | undefined {
   return chatMessageSpacing &&
     OUSIA_CHAT_MESSAGE_SPACINGS.includes(chatMessageSpacing)
@@ -520,41 +456,39 @@ function normalizeOusiaChatMessageSpacing(
 }
 
 export function normalizeOusiaAppSettings(
-  settings: Partial<OusiaAppSettings> & { defaultWorkDir?: string } = {}
+  // Discard removed font keys from persisted states instead of spreading them
+  // back into the normalized settings object.
+  settings: Partial<OusiaAppSettings> & {
+    appFontFamily?: unknown
+    chatFontFamily?: unknown
+    defaultWorkDir?: string
+  } = {},
 ): OusiaAppSettings {
+  const {
+    appFontFamily: _legacyAppFontFamily,
+    chatFontFamily: _legacyChatFontFamily,
+    defaultWorkDir,
+    ...currentSettings
+  } = settings
+  void _legacyAppFontFamily
+  void _legacyChatFontFamily
   const legacyDefaultWorkDir =
-    typeof settings.defaultWorkDir === "string"
-      ? settings.defaultWorkDir
-      : undefined
+    typeof defaultWorkDir === "string" ? defaultWorkDir : undefined
   const merged = {
     ...defaultOusiaAppSettings,
-    ...settings,
+    ...currentSettings,
   }
   const modelProvider =
     merged.modelProvider.trim() || defaultOusiaAppSettings.modelProvider
-  const defaultAgentProvider =
-    merged.defaultAgentProvider === "codex" ? "codex" : "pi"
-  const codexModelId =
-    typeof merged.codexModelId === "string" ? merged.codexModelId.trim() : ""
-  const codexReasoningEffort = isOusiaCodexReasoningEffort(
-    merged.codexReasoningEffort
-  )
-    ? merged.codexReasoningEffort.trim()
-    : null
+  const defaultAgentProvider: OusiaAgentProvider = "pi"
   const thinkingLevel = isOusiaPiThinkingLevel(merged.thinkingLevel)
     ? merged.thinkingLevel
     : defaultOusiaAppSettings.thinkingLevel
   const appearanceColorScale = OUSIA_APPEARANCE_COLOR_SCALES.includes(
-    merged.appearanceColorScale
+    merged.appearanceColorScale,
   )
     ? merged.appearanceColorScale
     : defaultOusiaAppSettings.appearanceColorScale
-  const appFontFamily =
-    normalizeOusiaFontFamily(settings.appFontFamily) ??
-    defaultOusiaAppSettings.appFontFamily
-  const chatFontFamily =
-    normalizeOusiaFontFamily(settings.chatFontFamily) ??
-    defaultOusiaAppSettings.chatFontFamily
   const chatFontSize =
     normalizeOusiaChatFontSize(settings.chatFontSize) ??
     defaultOusiaAppSettings.chatFontSize
@@ -567,13 +501,9 @@ export function normalizeOusiaAppSettings(
   const chatContentWidth =
     normalizeOusiaChatContentWidth(settings.chatContentWidth) ??
     defaultOusiaAppSettings.chatContentWidth
-  const {
-    showContextUsage: _showContextUsage,
-    defaultWorkDir: _legacyDefaultWorkDir,
-    ...normalizedBaseSettings
-  } = merged
+  const { showContextUsage: _showContextUsage, ...normalizedBaseSettings } =
+    merged
   void _showContextUsage
-  void _legacyDefaultWorkDir
 
   const allowedAgentTools = new Set<OusiaAgentToolName>([
     "read",
@@ -586,33 +516,33 @@ export function normalizeOusiaAppSettings(
   ])
   const customAgentTools = Array.isArray(merged.customAgentTools)
     ? merged.customAgentTools.filter((tool): tool is OusiaAgentToolName =>
-        allowedAgentTools.has(tool)
+        allowedAgentTools.has(tool),
       )
     : defaultOusiaAppSettings.customAgentTools
 
-  const normalizeDefaultDirectory = (value: string) =>
-    value.trim() === OUSIA_LEGACY_DEFAULT_WORK_DIR
-      ? OUSIA_DEFAULT_WORK_DIR
-      : value.trim()
+  const normalizeDefaultDirectory = (value: string) => {
+    const normalized = value.trim()
+    return normalized === PI_GUI_PREVIOUS_DEFAULT_WORK_DIR ||
+      normalized === OUSIA_DEFAULT_WORK_DIR ||
+      normalized === OUSIA_LEGACY_DEFAULT_WORK_DIR
+      ? PI_GUI_DEFAULT_WORK_DIR
+      : normalized
+  }
   const normalizedDefaultSessionDir = normalizeDefaultDirectory(
     settings.defaultSessionDir ??
       legacyDefaultWorkDir ??
-      defaultOusiaAppSettings.defaultSessionDir
+      defaultOusiaAppSettings.defaultSessionDir,
   )
   const normalizedDefaultProjectCreationDir = normalizeDefaultDirectory(
     settings.defaultProjectCreationDir ??
       legacyDefaultWorkDir ??
-      defaultOusiaAppSettings.defaultProjectCreationDir
+      defaultOusiaAppSettings.defaultProjectCreationDir,
   )
 
   return {
     ...normalizedBaseSettings,
     defaultAgentProvider,
-    codexModelId,
-    codexReasoningEffort,
     appearanceColorScale,
-    appFontFamily,
-    chatFontFamily,
     chatFontSize,
     chatLineSpacing,
     chatMessageSpacing,
@@ -660,18 +590,8 @@ export function normalizeOusiaAppSettings(
   }
 }
 
-export function resolveOusiaFontFamilyValue(fontFamily: OusiaFontFamily) {
-  if (fontFamily === "zhuqueFangsong") {
-    return '"Ousia Zhuque Fangsong", "Songti SC", serif'
-  }
-  if (fontFamily === "lxgwWenkai") {
-    return '"Ousia LXGW WenKai", "Kaiti SC", serif'
-  }
-  return '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
-}
-
 export function resolveOusiaChatContentWidthValue(
-  chatContentWidth: OusiaChatContentWidth
+  chatContentWidth: OusiaChatContentWidth,
 ) {
   if (chatContentWidth === "extraWide") {
     return "64rem"
@@ -696,7 +616,7 @@ export function resolveOusiaChatFontSizeValue(chatFontSize: OusiaChatFontSize) {
 }
 
 export function resolveOusiaChatLineSpacingValue(
-  chatLineSpacing: OusiaChatLineSpacing
+  chatLineSpacing: OusiaChatLineSpacing,
 ) {
   if (chatLineSpacing === "compact") {
     return "1.4"
@@ -726,19 +646,21 @@ export function requireOusiaChatMessageId(value: unknown) {
 
 export function createOusiaSession(
   title = "新会话",
-  agentProvider: OusiaAgentProvider = "pi"
+  agentProvider: OusiaAgentProvider = "pi",
+  workingDirectory?: string,
 ): OusiaSessionRecord {
   return {
     agentProvider,
     id: createOusiaId("session"),
     title,
     time: new Date().toISOString(),
+    ...(workingDirectory ? { workingDirectory } : {}),
   }
 }
 
 export function createOusiaProject(
   path: string,
-  name = ousiaProjectNameFromPath(path)
+  name = ousiaProjectNameFromPath(path),
 ): OusiaProjectRecord {
   return {
     id: createOusiaId("project"),
@@ -768,7 +690,7 @@ export function createDefaultOusiaWindowState(): OusiaWindowState {
 }
 
 export function createDefaultOusiaProject(
-  settings = defaultOusiaAppSettings
+  settings = defaultOusiaAppSettings,
 ): OusiaProjectRecord {
   return {
     id: "default-workdir",
@@ -778,7 +700,13 @@ export function createDefaultOusiaProject(
 }
 
 export function createDefaultOusiaAppState(): OusiaAppState {
-  const sessions = [createOusiaSession()]
+  const sessions = [
+    createOusiaSession(
+      "新会话",
+      "pi",
+      defaultOusiaAppSettings.defaultSessionDir,
+    ),
+  ]
 
   return {
     schemaVersion: OUSIA_APP_STATE_SCHEMA_VERSION,
@@ -826,6 +754,7 @@ export type OusiaChatAttachmentSummary = Pick<
 
 export type OusiaTextChatItem = {
   id: string
+  isPersisted?: boolean
   role: "user" | "assistant" | "thinking" | "system" | "error"
   text: string
   timestamp?: string
@@ -864,6 +793,7 @@ export type OusiaChatHistoryItem =
   | OusiaTextChatItem
   | {
       id: string
+      isPersisted?: boolean
       role: "tool"
       name: string
       text: string
@@ -959,6 +889,7 @@ export type OusiaChatEvent = {
     }
   | {
       type: "run_status"
+      generation?: number
       status: "starting" | "running" | "finished" | "error"
       text?: string
       timestamp: string
@@ -1043,6 +974,20 @@ export type OusiaChatCompactResult = {
   error?: string
 }
 
+export type OusiaChatPreparePayload = OusiaChatContext & {
+  agentMode?: OusiaAgentMode
+  customAgentTools?: OusiaAgentToolName[]
+  autoCompactContext?: boolean
+  autoRetryOnFailure?: boolean
+  deferConfiguration?: boolean
+  thinkingLevel: OusiaReasoningEffort
+  model: OusiaModelSettings
+}
+
+export type OusiaChatPrepareResult = {
+  ok: boolean
+}
+
 export type OusiaChatSendPayload = OusiaChatContext & {
   messageId: string
   prompt: string
@@ -1057,7 +1002,7 @@ export type OusiaChatSendPayload = OusiaChatContext & {
 }
 
 export function summarizeOusiaChatAttachments(
-  attachments: OusiaChatAttachment[] | undefined
+  attachments: OusiaChatAttachment[] | undefined,
 ): OusiaChatAttachmentSummary[] {
   return (attachments ?? []).map((attachment) => ({
     id: attachment.id,
@@ -1077,7 +1022,7 @@ export function createOusiaUserMessageEvent(
     "attachments" | "messageId" | "projectPath" | "prompt" | "sessionId"
   >,
   timestamp: string,
-  delivery: "optimistic" | "failed"
+  delivery: "optimistic" | "failed",
 ): Extract<OusiaChatEvent, { type: "user_message" }> {
   const attachments = summarizeOusiaChatAttachments(payload.attachments)
   return {
@@ -1098,6 +1043,7 @@ export type OusiaChatHistoryPayload = OusiaChatContext & {
   beforeItemId?: string
   includeToolPayloads?: boolean
   limit?: number
+  reconciliationReason?: "branch-preflight" | "run-settled"
 }
 
 export type OusiaChatHistoryResult = {

@@ -10,11 +10,8 @@ import {
 import {
   Ban,
   Check,
-  Eye,
-  EyeOff,
   FolderOpen,
-  Plus,
-  Trash2,
+  LoaderCircle,
 } from "@/components/icons/huge-icons"
 
 import { getMessages, languageOptions } from "@/app/i18n"
@@ -22,12 +19,6 @@ import { getConfiguredModelPresets, providerLabel } from "@/app/model-presets"
 import type { AppSettings } from "@/app/app-state"
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { useTheme, type Theme } from "@/components/theme-provider"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 import { Card } from "@/features/settings/SettingsCard"
 import {
   Dialog,
@@ -53,16 +44,14 @@ import { MAIN_PANEL_LEFT_CORNERS_CLASS } from "@/features/shell/main-panel-style
 import {
   normalizeOusiaAppSettings,
   type OusiaAgentMode,
-  type OusiaAgentProvider,
   type OusiaAppearanceColorScale,
   type OusiaChatContentWidth,
   type OusiaChatFontSize,
   type OusiaChatLineSpacing,
   type OusiaChatMessageSpacing,
-  type OusiaCodexEnvironmentStatus,
-  type OusiaFontFamily,
   type OusiaLanguage,
   type OusiaModelRegistryResult,
+  type OusiaPiEnvironmentStatus,
   type OusiaSendDuringRunMode,
 } from "@/electron/chat-types"
 import { cn } from "@/lib/utils"
@@ -90,13 +79,8 @@ const appearanceColorScales: Array<{
 
 type SettingsPageProps = {
   activeSection: SettingsSectionId
-  codexEnvironment: OusiaCodexEnvironmentStatus | undefined
-  codexEnvironmentLoading: boolean
   modelRegistry: OusiaModelRegistryResult | undefined
   onDeleteArchivedSessions: (sessionIds: string[]) => Promise<void>
-  onRefreshCodexEnvironment: () => Promise<
-    OusiaCodexEnvironmentStatus | undefined
-  >
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSettingsChange: (settings: AppSettings) => void
   onRestoreArchivedSessions: (sessionIds: string[]) => Promise<void>
@@ -186,22 +170,15 @@ function SettingsRow({
 }
 
 type ProviderRow = {
-  apiKey: string
-  authLabel?: string
-  authSource?: NonNullable<
-    OusiaModelRegistryResult["configuredProviders"][number]["authSource"]
-  >
   id: string
   isDisabled: boolean
+  modelCount: number
 }
 
 function SettingsPageComponent({
   activeSection,
-  codexEnvironment,
-  codexEnvironmentLoading,
   modelRegistry,
   onDeleteArchivedSessions,
-  onRefreshCodexEnvironment,
   onRefreshModelRegistry,
   onSettingsChange,
   onRestoreArchivedSessions,
@@ -211,20 +188,15 @@ function SettingsPageComponent({
 }: SettingsPageProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const [draft, setDraft] = useState(settings)
-  const [isAddProviderDialogOpen, setIsAddProviderDialogOpen] = useState(false)
-  const [newProviderId, setNewProviderId] = useState("")
-  const [newProviderApiKey, setNewProviderApiKey] = useState("")
-  const [visibleProviderApiKeyIds, setVisibleProviderApiKeyIds] = useState<
-    Set<string>
-  >(() => new Set())
-  const [savingProviderIds, setSavingProviderIds] = useState<Set<string>>(
-    () => new Set()
-  )
-  const [codexAction, setCodexAction] = useState<
-    "login" | "logout" | "refresh" | null
+  const [piEnvironment, setPiEnvironment] =
+    useState<OusiaPiEnvironmentStatus>()
+  const [runtimeConfirmation, setRuntimeConfirmation] = useState<
+    "install" | "uninstall" | null
   >(null)
-  const [codexError, setCodexError] = useState("")
-  const [providerError, setProviderError] = useState("")
+  const [runtimeOperation, setRuntimeOperation] = useState<
+    "install" | "path" | "select" | "uninstall" | null
+  >(null)
+  const [runtimeError, setRuntimeError] = useState("")
   const { setTheme } = useTheme()
   const t = getMessages(draft.language)
   const themeOptions: Array<{
@@ -268,14 +240,6 @@ function SettingsPageComponent({
       value: "custom",
     },
   ]
-  const fontFamilyOptions: Array<{
-    label: string
-    value: OusiaFontFamily
-  }> = [
-    { label: t.settings.fontSystem, value: "system" },
-    { label: t.settings.fontLxgwWenkai, value: "lxgwWenkai" },
-    { label: t.settings.fontZhuqueFangsong, value: "zhuqueFangsong" },
-  ]
   const chatContentWidthOptions: Array<{
     label: string
     value: OusiaChatContentWidth
@@ -316,6 +280,26 @@ function SettingsPageComponent({
     }
   }, [activeSection])
 
+  useEffect(() => {
+    if (activeSection !== "provider") return
+    let canceled = false
+    void window.ousia
+      .checkPiEnvironment()
+      .then((status) => {
+        if (!canceled) setPiEnvironment(status)
+      })
+      .catch((error: unknown) => {
+        if (!canceled) {
+          setRuntimeError(
+            error instanceof Error ? error.message : String(error)
+          )
+        }
+      })
+    return () => {
+      canceled = true
+    }
+  }, [activeSection])
+
   function updateDraft(patch: Partial<AppSettings>) {
     setDraft((current) => ({
       ...current,
@@ -338,55 +322,6 @@ function SettingsPageComponent({
   function applyThemeSetting(nextTheme: Theme) {
     setTheme(nextTheme)
     applySettings({ theme: nextTheme })
-  }
-
-  async function refreshCodexStatus() {
-    setCodexAction("refresh")
-    setCodexError("")
-    try {
-      const status = await onRefreshCodexEnvironment()
-      if (!status) {
-        setCodexError(t.chat.noElectron)
-      }
-    } catch (error) {
-      setCodexError(
-        error instanceof Error
-          ? error.message
-          : String(error ?? t.settings.codexRefreshFailed)
-      )
-    } finally {
-      setCodexAction(null)
-    }
-  }
-
-  async function runCodexAuthAction(action: "login" | "logout") {
-    if (!window.ousia) {
-      setCodexError(t.chat.noElectron)
-      return
-    }
-    setCodexAction(action)
-    setCodexError("")
-    try {
-      const result =
-        action === "login"
-          ? await window.ousia.loginCodexWithChatGPT()
-          : await window.ousia.logoutCodex()
-      if (!result.ok) {
-        setCodexError(result.error)
-      }
-      const status = await onRefreshCodexEnvironment()
-      if (!status && result.ok) {
-        setCodexError(t.settings.codexRefreshFailed)
-      }
-    } catch (error) {
-      setCodexError(
-        error instanceof Error
-          ? error.message
-          : String(error ?? t.settings.codexAuthActionFailed)
-      )
-    } finally {
-      setCodexAction(null)
-    }
   }
 
   function commitRequiredTextSetting(
@@ -421,22 +356,6 @@ function SettingsPageComponent({
     applySettings({ [key]: result.path })
   }
 
-  function rememberProviderId(providerId: string) {
-    return settings.modelProviders.some(
-      (provider) => provider.id === providerId
-    )
-      ? settings.modelProviders.map((provider) =>
-          provider.id === providerId ? { ...provider, apiKey: "" } : provider
-        )
-      : [
-          ...settings.modelProviders,
-          {
-            id: providerId,
-            apiKey: "",
-          },
-        ]
-  }
-
   function currentModelVisibilityPatch(
     modelProviders: AppSettings["modelProviders"],
     disabledModelProviderIds: string[]
@@ -463,222 +382,17 @@ function SettingsPageComponent({
       : {}
   }
 
-  async function persistProviderCredential(providerId: string, apiKey: string) {
-    if (!window.ousia) {
-      setProviderError(t.chat.noElectron)
-      return false
-    }
-    setProviderError("")
-    setSavingProviderIds((current) => new Set(current).add(providerId))
-    try {
-      const result = await window.ousia
-        .savePiProviderCredential({
-          apiKey,
-          provider: providerId,
-        })
-        .catch((error: unknown) => ({
-          ok: false as const,
-          error: error instanceof Error ? error.message : String(error),
-        }))
-      if (!result.ok) {
-        setProviderError(result.error ?? t.settings.providerSaveFailed)
-        return false
-      }
-      await onRefreshModelRegistry().catch(() => undefined)
-      return true
-    } finally {
-      setSavingProviderIds((current) => {
-        const next = new Set(current)
-        next.delete(providerId)
-        return next
-      })
-    }
-  }
-
-  async function removeProviderCredential(providerId: string) {
-    if (!window.ousia) {
-      setProviderError(t.chat.noElectron)
-      return false
-    }
-    setProviderError("")
-    setSavingProviderIds((current) => new Set(current).add(providerId))
-    try {
-      const result = await window.ousia
-        .removePiProviderCredential({
-          provider: providerId,
-        })
-        .catch((error: unknown) => ({
-          ok: false as const,
-          error: error instanceof Error ? error.message : String(error),
-        }))
-      if (!result.ok) {
-        setProviderError(result.error ?? t.settings.providerRemoveFailed)
-        return false
-      }
-      await onRefreshModelRegistry().catch(() => undefined)
-      return true
-    } finally {
-      setSavingProviderIds((current) => {
-        const next = new Set(current)
-        next.delete(providerId)
-        return next
-      })
-    }
-  }
-
-  async function addProvider() {
-    const id = newProviderId.trim()
-    const provider = modelRegistry?.providers.find((item) => item.id === id)
-    if (!provider || !newProviderApiKey.trim()) {
-      return
-    }
-    const didSave = await persistProviderCredential(
-      id,
-      newProviderApiKey.trim()
-    )
-    if (!didSave) {
-      return
-    }
-    const nextModelId = provider.models[0]?.modelId || settings.modelId
-    applySettings({
-      modelProvider: id,
-      modelId: nextModelId,
-      modelProviders: rememberProviderId(id),
-      disabledModelProviderIds: settings.disabledModelProviderIds.filter(
-        (providerId) => providerId !== id
-      ),
-    })
-    setNewProviderId("")
-    setNewProviderApiKey("")
-    setIsAddProviderDialogOpen(false)
-  }
-
-  function updateProviderDraft(providerId: string, apiKey: string) {
-    const nextModelProviders = draft.modelProviders.some(
-      (provider) => provider.id === providerId
-    )
-      ? draft.modelProviders.map((provider) =>
-          provider.id === providerId ? { ...provider, apiKey } : provider
-        )
-      : [
-          ...draft.modelProviders,
-          {
-            id: providerId,
-            apiKey,
-          },
-        ]
-    updateDraft({
-      modelProviders: nextModelProviders,
-    })
-    if (!apiKey.trim()) {
-      setVisibleProviderApiKeyIds((current) => {
-        const nextIds = new Set(current)
-        nextIds.delete(providerId)
-        return nextIds
-      })
-    }
-  }
-
-  async function commitProviderApiKey(providerId: string) {
-    const draftProvider = draft.modelProviders.find(
-      (provider) => provider.id === providerId
-    )
-    const apiKey = draftProvider?.apiKey.trim()
-    if (!draftProvider || !apiKey) {
-      return
-    }
-    const didSave = await persistProviderCredential(providerId, apiKey)
-    if (!didSave) {
-      return
-    }
-    applySettings({
-      modelProviders: rememberProviderId(providerId),
-    })
-    updateDraft({
-      modelProviders: draft.modelProviders.map((provider) =>
-        provider.id === providerId ? { ...provider, apiKey: "" } : provider
-      ),
-    })
-  }
-
-  function providerAuthDescription(provider: ProviderRow) {
-    if (provider.authSource === "stored") {
-      return t.settings.configuredInPi
-    }
-    if (provider.authSource === "environment") {
-      return t.settings.configuredFromEnvironment(provider.authLabel)
-    }
-    if (provider.authSource === "models_json_key") {
-      return t.settings.configuredFromModelsJson
-    }
-    if (provider.authSource === "models_json_command") {
-      return t.settings.configuredFromModelsJsonCommand
-    }
-    if (provider.authSource === "fallback") {
-      return t.settings.configuredFromFallback
-    }
-    if (provider.authSource === "runtime") {
-      return t.settings.configuredFromRuntime
-    }
-    return t.settings.configuredInPi
-  }
-
-  async function deleteProvider(provider: ProviderRow) {
-    const providerId = provider.id
-    if (provider.authSource && provider.authSource !== "stored") {
-      setProviderError(
-        t.settings.providerRemoveUnavailable(providerAuthDescription(provider))
-      )
-      return
-    }
-    if (provider.authSource === "stored") {
-      const didRemove = await removeProviderCredential(providerId)
-      if (!didRemove) {
-        return
-      }
-    }
-    const nextProviders = settings.modelProviders.filter(
-      (provider) => provider.id !== providerId
-    )
-    const nextDisabledProviderIds = settings.disabledModelProviderIds.filter(
-      (id) => id !== providerId
-    )
-    applySettings({
-      modelProviders: nextProviders,
-      disabledModelProviderIds: nextDisabledProviderIds,
-      ...currentModelVisibilityPatch(nextProviders, nextDisabledProviderIds),
-    })
-    setVisibleProviderApiKeyIds((current) => {
-      const nextIds = new Set(current)
-      nextIds.delete(providerId)
-      return nextIds
-    })
-  }
-
   function toggleProviderDisabled(provider: ProviderRow) {
     const providerId = provider.id
     const nextDisabledProviderIds = provider.isDisabled
       ? settings.disabledModelProviderIds.filter((id) => id !== providerId)
       : [...settings.disabledModelProviderIds, providerId]
-    setProviderError("")
     applySettings({
       disabledModelProviderIds: nextDisabledProviderIds,
       ...currentModelVisibilityPatch(
         settings.modelProviders,
         nextDisabledProviderIds
       ),
-    })
-  }
-
-  function toggleProviderApiKeyVisibility(providerId: string) {
-    setVisibleProviderApiKeyIds((current) => {
-      const nextIds = new Set(current)
-      if (nextIds.has(providerId)) {
-        nextIds.delete(providerId)
-      } else {
-        nextIds.add(providerId)
-      }
-      return nextIds
     })
   }
 
@@ -690,24 +404,15 @@ function SettingsPageComponent({
   const disabledProviderIdSet = new Set(
     draft.disabledModelProviderIds.map((id) => id.trim()).filter(Boolean)
   )
-  const configuredProviderById = new Map(
-    (modelRegistry?.configuredProviders ?? []).map((provider) => [
-      provider.id,
-      provider,
-    ])
-  )
   const providerRows: ProviderRow[] = [...configuredProviderIds]
     .filter(Boolean)
     .map((providerId) => {
-      const configuredProvider = configuredProviderById.get(providerId)
       return {
         id: providerId,
-        apiKey:
-          draft.modelProviders.find((provider) => provider.id === providerId)
-            ?.apiKey ?? "",
-        authLabel: configuredProvider?.authLabel,
-        authSource: configuredProvider?.authSource,
         isDisabled: disabledProviderIdSet.has(providerId),
+        modelCount:
+          modelRegistry?.providers.find((provider) => provider.id === providerId)
+            ?.models.length ?? 0,
       }
     })
     .sort((left, right) =>
@@ -717,74 +422,48 @@ function SettingsPageComponent({
         { sensitivity: "base" }
       )
     )
-  const configuredProviderIdSet = new Set(
-    providerRows.map((provider) => provider.id)
-  )
-  const addableProviders =
-    modelRegistry?.providers.filter(
-      (provider) =>
-        provider.models.length > 0 && !configuredProviderIdSet.has(provider.id)
-    ) ?? []
-  const addableProviderSelectItems = addableProviders.map((provider) => ({
-    label: provider.name,
-    value: provider.id,
-  }))
-  const hasAddableProvider = addableProviders.some(
-    (provider) => provider.id === newProviderId
-  )
-  const canAddProvider =
-    hasAddableProvider &&
-    Boolean(newProviderApiKey.trim()) &&
-    !savingProviderIds.has(newProviderId)
+  async function runRuntimeAction(
+    operation: NonNullable<typeof runtimeOperation>,
+    action: () => Promise<{
+      canceled?: boolean
+      error?: string
+      ok: boolean
+      status?: OusiaPiEnvironmentStatus
+    }>
+  ) {
+    setRuntimeError("")
+    setRuntimeOperation(operation)
+    try {
+      const result = await action()
+      if (result.canceled) return
+      if (!result.ok) {
+        throw new Error(result.error ?? t.settings.piRuntimeActionFailed)
+      }
+      if (result.status) setPiEnvironment(result.status)
+      await onRefreshModelRegistry()
+    } catch (error) {
+      setRuntimeError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setRuntimeOperation(null)
+      setRuntimeConfirmation(null)
+    }
+  }
 
-  function openAddProviderDialog() {
-    const defaultProvider =
-      addableProviders.find((provider) => provider.id === "deepseek") ??
-      addableProviders[0]
-    setNewProviderId(defaultProvider?.id ?? "")
-    setNewProviderApiKey("")
-    setIsAddProviderDialogOpen(true)
+  async function openPiConfigDirectory() {
+    if (!piEnvironment?.configDirExists) return
+    setRuntimeError("")
+    try {
+      await window.ousia.openDirectoryInFinder({
+        path: piEnvironment.agentDir,
+      })
+    } catch (error) {
+      setRuntimeError(error instanceof Error ? error.message : String(error))
+    }
   }
 
   const selectedColorScaleDescription = appearanceColorScales.find(
     (scale) => scale.value === draft.appearanceColorScale
   )?.description
-  const codexAccount = codexEnvironment?.account
-  const codexChatGptDetails =
-    codexAccount?.type === "chatgpt"
-      ? [codexAccount.email, codexAccount.planType].filter(Boolean).join(" · ")
-      : ""
-  const codexStatus = codexEnvironmentLoading
-    ? {
-        description: t.settings.codexDownloadingHelp,
-        label: t.settings.codexDownloading,
-      }
-    : !codexEnvironment
-      ? {
-          description: t.settings.codexUncheckedHelp,
-          label: t.settings.codexUnchecked,
-        }
-      : !codexEnvironment.available
-        ? {
-            description:
-              codexEnvironment.error || t.settings.codexUnavailableHelp,
-            label: t.settings.codexUnavailable,
-          }
-        : !codexAccount
-          ? {
-              description: t.settings.codexSignedOutHelp,
-              label: t.settings.codexSignedOut,
-            }
-          : codexAccount.type === "apiKey"
-            ? {
-                description: t.settings.codexApiKeyHelp,
-                label: t.settings.codexApiKeyAccount,
-              }
-            : {
-                description:
-                  codexChatGptDetails || t.settings.codexChatGptAccountHelp,
-                label: t.settings.codexChatGptAccount,
-              }
   const sectionTitle =
     activeSection === "general"
       ? t.settings.general
@@ -794,9 +473,7 @@ function SettingsPageComponent({
           ? t.settings.conversationSettings
           : activeSection === "archivedSessions"
             ? t.settings.archivedSessions
-            : draft.defaultAgentProvider === "pi"
-              ? t.settings.piSettings
-              : t.settings.codexSettings
+            : t.settings.piSettings
 
   return (
     <section
@@ -806,7 +483,10 @@ function SettingsPageComponent({
         SETTINGS_PANEL_SURFACE_CLASS
       )}
     >
-      <div className="window-drag h-10 shrink-0" />
+      <div
+        className="window-drag h-10 shrink-0"
+        data-tauri-drag-region="deep"
+      />
       <div
         ref={scrollContainerRef}
         className="ousia-hover-scrollbar min-h-0 flex-1 overflow-auto px-4 pt-4 @min-[720px]:px-8"
@@ -820,44 +500,6 @@ function SettingsPageComponent({
 
           {activeSection === "general" ? (
             <>
-              <SettingsGroup title={t.settings.agentHarness}>
-                <SettingsRow
-                  title={t.settings.defaultAgent}
-                  description={t.settings.defaultAgentHelp}
-                  control={
-                    <Select
-                      items={[
-                        { label: t.settings.piAgent, value: "pi" },
-                        { label: t.settings.codexAgent, value: "codex" },
-                      ]}
-                      value={draft.defaultAgentProvider}
-                      onValueChange={(value) =>
-                        applySettings({
-                          defaultAgentProvider: value as OusiaAgentProvider,
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={t.settings.agentHarness}
-                        className={settingsSelectTriggerClass}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="start" position="popper">
-                        <SelectGroup>
-                          <SelectItem value="pi">
-                            {t.settings.piAgent}
-                          </SelectItem>
-                          <SelectItem value="codex">
-                            {t.settings.codexAgent}
-                          </SelectItem>
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  }
-                />
-              </SettingsGroup>
-
               <SettingsGroup title={t.settings.languageAndRegion}>
                 <SettingsRow
                   title={t.settings.language}
@@ -910,7 +552,7 @@ function SettingsPageComponent({
                             event.currentTarget.blur()
                           }
                         }}
-                        placeholder="~/Documents/Ousia"
+                        placeholder="~/pi"
                       />
                       <Button
                         type="button"
@@ -949,7 +591,7 @@ function SettingsPageComponent({
                             event.currentTarget.blur()
                           }
                         }}
-                        placeholder="~/Documents/Ousia"
+                        placeholder="~/pi"
                       />
                       <Button
                         type="button"
@@ -1042,68 +684,6 @@ function SettingsPageComponent({
               </SettingsGroup>
 
               <SettingsGroup title={t.settings.typographyAndLayout}>
-                <SettingsRow
-                  title={t.settings.appFontFamily}
-                  description={t.settings.appFontFamilyHelp}
-                  control={
-                    <Select
-                      items={fontFamilyOptions}
-                      value={draft.appFontFamily}
-                      onValueChange={(value) =>
-                        applySettings({
-                          appFontFamily: value as OusiaFontFamily,
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={t.settings.appFontFamily}
-                        className={settingsSelectTriggerClass}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="start" position="popper">
-                        <SelectGroup>
-                          {fontFamilyOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  }
-                />
-                <SettingsRow
-                  title={t.settings.chatFontFamily}
-                  description={t.settings.chatFontFamilyHelp}
-                  control={
-                    <Select
-                      items={fontFamilyOptions}
-                      value={draft.chatFontFamily}
-                      onValueChange={(value) =>
-                        applySettings({
-                          chatFontFamily: value as OusiaFontFamily,
-                        })
-                      }
-                    >
-                      <SelectTrigger
-                        aria-label={t.settings.chatFontFamily}
-                        className={settingsSelectTriggerClass}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="start" position="popper">
-                        <SelectGroup>
-                          {fontFamilyOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  }
-                />
                 <SettingsRow
                   title={t.settings.chatContentWidth}
                   description={t.settings.chatContentWidthHelp}
@@ -1296,9 +876,140 @@ function SettingsPageComponent({
             </SettingsGroup>
           ) : null}
 
-          {activeSection === "provider" &&
-          draft.defaultAgentProvider === "pi" ? (
+          {activeSection === "provider" ? (
             <>
+              <SettingsGroup
+                title={t.settings.piRuntime}
+                description={t.settings.piRuntimeHelp}
+              >
+                <SettingsRow
+                  title={
+                    piEnvironment?.available
+                      ? t.settings.piRuntimeReady
+                      : t.settings.piRuntimeMissing
+                  }
+                  description={
+                    piEnvironment?.available
+                      ? `${piEnvironment.version ?? "Pi"} · ${piEnvironment.binaryPath}`
+                      : piEnvironment?.error ?? t.settings.piRuntimeLoading
+                  }
+                  control={
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      {runtimeOperation ? (
+                        <LoaderCircle className="animate-spin text-muted-foreground" size={16} />
+                      ) : null}
+                      {!piEnvironment?.available && piEnvironment?.canInstall ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={Boolean(runtimeOperation)}
+                          onClick={() => setRuntimeConfirmation("install")}
+                        >
+                          {t.settings.installPi}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={Boolean(runtimeOperation)}
+                        onClick={() =>
+                          void runRuntimeAction("select", () =>
+                            window.ousia.selectPiBinary()
+                          )
+                        }
+                      >
+                        {t.settings.selectExistingPi}
+                      </Button>
+                      {piEnvironment?.isManagedInstall ? (
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          disabled={Boolean(runtimeOperation)}
+                          onClick={() => setRuntimeConfirmation("uninstall")}
+                        >
+                          {t.settings.uninstallPi}
+                        </Button>
+                      ) : null}
+                    </div>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.localPiConfiguration}
+                  description={
+                    piEnvironment?.configDirExists
+                      ? t.settings.localPiConfigurationFound(
+                          piEnvironment.agentDir
+                        )
+                      : t.settings.localPiConfigurationMissing(
+                          piEnvironment?.agentDir ?? "~/.pi/agent"
+                        )
+                  }
+                  control={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={!piEnvironment?.configDirExists}
+                      onClick={() => void openPiConfigDirectory()}
+                    >
+                      <FolderOpen size={16} />
+                      {t.settings.openPiConfiguration}
+                    </Button>
+                  }
+                />
+                <SettingsRow
+                  title={t.settings.shellPath}
+                  description={
+                    piEnvironment?.isPathManaged
+                      ? t.settings.shellPathManaged(
+                          piEnvironment.pathLinkPath ?? "~/.local/bin/pi"
+                        )
+                      : piEnvironment?.isOnPath
+                        ? t.settings.shellPathAlreadyAvailable
+                        : t.settings.shellPathHelp
+                  }
+                  control={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={
+                        !piEnvironment?.available || Boolean(runtimeOperation)
+                      }
+                      onClick={() =>
+                        void runRuntimeAction("path", () =>
+                          piEnvironment?.isPathManaged
+                            ? window.ousia.removePiFromShellPath()
+                            : window.ousia.addPiToShellPath()
+                        )
+                      }
+                    >
+                      {piEnvironment?.isPathManaged
+                        ? t.settings.removeFromShellPath
+                        : t.settings.addToShellPath}
+                    </Button>
+                  }
+                />
+                {piEnvironment?.installPrerequisiteError ? (
+                  <div
+                    role="alert"
+                    className="bg-amber-500/10 px-4 py-3 text-sm leading-5 text-amber-800 dark:text-amber-300"
+                  >
+                    {piEnvironment.installPrerequisiteError}
+                  </div>
+                ) : null}
+                {runtimeError ? (
+                  <div
+                    role="alert"
+                    className="bg-destructive/10 px-4 py-3 text-sm leading-5 text-destructive"
+                  >
+                    {runtimeError}
+                  </div>
+                ) : null}
+              </SettingsGroup>
+
               <SettingsGroup title={t.settings.permissions}>
                 <SettingsRow
                   title={t.settings.agentMode}
@@ -1339,155 +1050,47 @@ function SettingsPageComponent({
                 title={t.settings.model}
                 description={t.settings.piModelProvidersHelp}
               >
-                <SettingsRow
-                  title={t.settings.providerKeys}
-                  description={t.settings.addProviderDescription}
-                  control={
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={!addableProviders.length}
-                      onClick={openAddProviderDialog}
-                    >
-                      <Plus size={16} />
-                      {t.app.add}
-                    </Button>
-                  }
-                />
-                {providerRows.map((provider) => {
-                  const providerHasApiKey = Boolean(provider.apiKey.trim())
-                  const isProviderApiKeyVisible = visibleProviderApiKeyIds.has(
-                    provider.id
-                  )
-                  const isProviderSaving = savingProviderIds.has(provider.id)
-                  const providerAuthPlaceholder =
-                    providerAuthDescription(provider)
-
-                  return (
-                    <div
+                {providerRows.length ? (
+                  providerRows.map((provider) => (
+                    <SettingsRow
                       key={provider.id}
-                      className="grid min-w-0 items-center gap-3 px-4 py-3.5 @min-[720px]:grid-cols-[minmax(0,10rem)_minmax(12rem,1fr)_auto]"
-                    >
-                      <div
-                        className={cn(
-                          "flex min-w-0 items-center gap-2 text-sm font-medium text-foreground",
-                          provider.isDisabled && "text-muted-foreground"
-                        )}
-                      >
-                        <span className="truncate">
-                          {providerLabel(modelRegistry, provider.id)}
-                        </span>
-                        {provider.isDisabled ? (
-                          <span className="shrink-0 rounded-xl bg-muted px-2 py-0.5 text-xs leading-4 font-medium text-muted-foreground">
-                            {t.settings.disabled}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="relative min-w-0">
-                        <Input
-                          aria-label={`${provider.id} API Key`}
-                          className="pr-10"
-                          disabled={isProviderSaving || provider.isDisabled}
-                          value={provider.apiKey}
-                          onChange={(event) =>
-                            updateProviderDraft(provider.id, event.target.value)
-                          }
-                          onBlur={() => void commitProviderApiKey(provider.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.currentTarget.blur()
-                            }
-                          }}
-                          placeholder={providerAuthPlaceholder}
-                          type={
-                            providerHasApiKey && isProviderApiKeyVisible
-                              ? "text"
-                              : "password"
-                          }
-                        />
-                        {providerHasApiKey ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="absolute top-1/2 right-0.5 -translate-y-1/2"
-                            aria-label={
-                              isProviderApiKeyVisible
-                                ? t.settings.hideApiKey
-                                : t.settings.showApiKey
-                            }
-                            onClick={() =>
-                              toggleProviderApiKeyVisibility(provider.id)
-                            }
-                          >
-                            {isProviderApiKeyVisible ? (
-                              <EyeOff size={16} />
-                            ) : (
-                              <Eye size={16} />
-                            )}
-                          </Button>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center justify-end gap-1">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`${
-                                  provider.isDisabled
-                                    ? t.settings.enableProvider
-                                    : t.settings.disableProvider
-                                } ${provider.id}`}
-                                disabled={isProviderSaving}
-                                onClick={() => toggleProviderDisabled(provider)}
-                              >
-                                {provider.isDisabled ? (
-                                  <Check size={16} />
-                                ) : (
-                                  <Ban size={16} />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              {provider.isDisabled
-                                ? t.settings.enableProvider
-                                : t.settings.disableProvider}
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`${t.app.delete} ${provider.id}`}
-                                disabled={isProviderSaving}
-                                onClick={() => void deleteProvider(provider)}
-                              >
-                                <Trash2 size={16} />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              {t.app.delete}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
-                    </div>
-                  )
-                })}
-                {providerError ? (
-                  <div
-                    role="alert"
-                    className="bg-destructive/10 px-4 py-3 text-sm leading-5 text-destructive"
-                  >
-                    {providerError}
-                  </div>
-                ) : null}
+                      title={providerLabel(modelRegistry, provider.id)}
+                      description={t.settings.localPiProviderModels(
+                        provider.modelCount
+                      )}
+                      control={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`${
+                            provider.isDisabled
+                              ? t.settings.enableProvider
+                              : t.settings.disableProvider
+                          } ${provider.id}`}
+                          onClick={() => toggleProviderDisabled(provider)}
+                        >
+                          {provider.isDisabled ? (
+                            <Check size={16} />
+                          ) : (
+                            <Ban size={16} />
+                          )}
+                          {provider.isDisabled
+                            ? t.settings.enableProvider
+                            : t.settings.disableProvider}
+                        </Button>
+                      }
+                    />
+                  ))
+                ) : (
+                  <SettingsRow
+                    title={t.settings.noLocalPiProviders}
+                    description={
+                      modelRegistry?.error ?? t.settings.noLocalPiProvidersHelp
+                    }
+                    control={<span />}
+                  />
+                )}
               </SettingsGroup>
 
               <SettingsGroup title={t.settings.reliability}>
@@ -1507,88 +1110,61 @@ function SettingsPageComponent({
               </SettingsGroup>
 
               <Dialog
-                open={isAddProviderDialogOpen}
-                onOpenChange={setIsAddProviderDialogOpen}
+                open={runtimeConfirmation !== null}
+                onOpenChange={(open) => {
+                  if (!open && !runtimeOperation) setRuntimeConfirmation(null)
+                }}
               >
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>{t.settings.addProvider}</DialogTitle>
+                    <DialogTitle>
+                      {runtimeConfirmation === "uninstall"
+                        ? t.settings.uninstallPi
+                        : t.settings.installPi}
+                    </DialogTitle>
                     <DialogDescription>
-                      {t.settings.addProviderDescription}
+                      {runtimeConfirmation === "uninstall"
+                        ? t.settings.uninstallPiConfirmation
+                        : t.settings.installPiConfirmation}
                     </DialogDescription>
                   </DialogHeader>
-
-                  <label className="block">
-                    <span className="text-sm font-medium">
-                      {t.settings.provider}
-                    </span>
-                    <Select
-                      items={addableProviderSelectItems}
-                      value={newProviderId}
-                      onValueChange={(value) => {
-                        setNewProviderId(value ?? "")
-                        setNewProviderApiKey("")
-                      }}
-                    >
-                      <SelectTrigger
-                        aria-label={t.settings.provider}
-                        className="mt-2 w-full"
-                      >
-                        <SelectValue placeholder={t.settings.chooseProvider} />
-                      </SelectTrigger>
-                      <SelectContent align="start" position="popper">
-                        <SelectGroup>
-                          {addableProviders.map((provider) => (
-                            <SelectItem key={provider.id} value={provider.id}>
-                              {provider.name}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  </label>
-
-                  <label className="block">
-                    <span className="text-sm font-medium">API Key</span>
-                    <Input
-                      aria-label="API Key"
-                      className="mt-2"
-                      value={newProviderApiKey}
-                      onChange={(event) =>
-                        setNewProviderApiKey(event.target.value)
-                      }
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && canAddProvider) {
-                          event.preventDefault()
-                          void addProvider()
-                        }
-                      }}
-                      placeholder="sk-..."
-                      type="password"
-                    />
-                    {!newProviderApiKey.trim() ? (
-                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">
-                        {t.settings.apiKeyRequired}
-                      </span>
-                    ) : null}
-                  </label>
-
                   <DialogFooter>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setIsAddProviderDialogOpen(false)}
+                      disabled={Boolean(runtimeOperation)}
+                      onClick={() => setRuntimeConfirmation(null)}
                     >
                       {t.app.cancel}
                     </Button>
                     <Button
                       type="button"
+                      variant={
+                        runtimeConfirmation === "uninstall"
+                          ? "destructive"
+                          : "default"
+                      }
                       size="sm"
-                      disabled={!canAddProvider}
-                      onClick={() => void addProvider()}
+                      disabled={Boolean(runtimeOperation)}
+                      onClick={() => {
+                        if (runtimeConfirmation === "uninstall") {
+                          void runRuntimeAction("uninstall", () =>
+                            window.ousia.uninstallPiRuntime()
+                          )
+                        } else {
+                          void runRuntimeAction("install", () =>
+                            window.ousia.installPiRuntime()
+                          )
+                        }
+                      }}
                     >
-                      {t.app.add}
+                      {runtimeOperation ? (
+                        <LoaderCircle className="animate-spin" size={16} />
+                      ) : null}
+                      {runtimeConfirmation === "uninstall"
+                        ? t.settings.uninstallPi
+                        : t.settings.installPi}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -1606,67 +1182,6 @@ function SettingsPageComponent({
             />
           ) : null}
 
-          {activeSection === "provider" &&
-          draft.defaultAgentProvider === "codex" ? (
-            <SettingsGroup title={t.settings.codexAuthentication}>
-              <SettingsRow
-                title={codexStatus.label}
-                description={
-                  <div aria-live="polite">
-                    <span>{codexStatus.description}</span>
-                    {codexError ? (
-                      <span
-                        role="alert"
-                        className="mt-1 block text-destructive"
-                      >
-                        {codexError}
-                      </span>
-                    ) : null}
-                  </div>
-                }
-                control={
-                  !codexEnvironment || !codexEnvironment.available ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={codexAction !== null || codexEnvironmentLoading}
-                      onClick={() => void refreshCodexStatus()}
-                    >
-                      {codexAction === "refresh" || codexEnvironmentLoading
-                        ? t.settings.downloadingCodex
-                        : codexEnvironment
-                          ? t.settings.retryCodexCheck
-                          : t.settings.checkCodex}
-                    </Button>
-                  ) : codexAccount ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={codexAction !== null || codexEnvironmentLoading}
-                      onClick={() => void runCodexAuthAction("logout")}
-                    >
-                      {codexAction === "logout"
-                        ? t.settings.signingOutCodex
-                        : t.settings.signOutCodex}
-                    </Button>
-                  ) : (
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={codexAction !== null || codexEnvironmentLoading}
-                      onClick={() => void runCodexAuthAction("login")}
-                    >
-                      {codexAction === "login"
-                        ? t.settings.signingInCodex
-                        : t.settings.signInCodex}
-                    </Button>
-                  )
-                }
-              />
-            </SettingsGroup>
-          ) : null}
         </div>
       </div>
     </section>
