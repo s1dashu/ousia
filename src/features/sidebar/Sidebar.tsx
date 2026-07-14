@@ -74,6 +74,7 @@ const sidebarRightActionRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1`
 const sidebarProjectRowXClass = sidebarRightActionRowXClass
 const sidebarListGapClass = "flex flex-col gap-0.5"
 const sidebarSectionHeaderXClass = sidebarRightActionRowXClass
+const sidebarEmptySectionRowXClass = sidebarSessionRowXClass
 const sidebarDefaultSessionPreviewCount = 10
 const sidebarProjectSessionCompactCount = 5
 const sidebarProjectSessionPreviewCount = 10
@@ -1063,7 +1064,9 @@ function SidebarComponent({
                 })
               )
             ) : (
-              <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+              <div
+                className={`h-9 text-sm leading-9 text-muted-foreground/45 ${sidebarEmptySectionRowXClass}`}
+              >
                 {t.sidebar.noSessions}
               </div>
             )}
@@ -1192,7 +1195,9 @@ function SidebarComponent({
               )
             })}
             {!projects.length ? (
-              <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
+              <div
+                className={`h-9 text-sm leading-9 text-muted-foreground/45 ${sidebarEmptySectionRowXClass}`}
+              >
                 {t.sidebar.noProjects}
               </div>
             ) : null}
