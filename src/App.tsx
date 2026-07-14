@@ -2887,7 +2887,7 @@ export function App() {
     <main
       ref={shellRef}
       data-shell-resizing={isShellResizing ? "true" : undefined}
-      className="bg-background text-foreground fixed inset-0 flex min-h-0 min-w-0 overflow-hidden rounded-[var(--ousia-window-radius)]"
+      className="bg-background text-foreground flex h-full w-full min-h-0 min-w-0 overflow-hidden rounded-[var(--ousia-window-radius)]"
     >
       <div
         aria-hidden={zoomIndicatorPercent === null}

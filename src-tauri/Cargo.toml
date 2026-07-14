@@ -1,6 +1,6 @@
 [package]
 name = "pi-gui"
-version = "0.2.0"
+version = "0.2.1"
 description = "A lightweight Tauri desktop client for a user-installed Pi agent"
 authors = ["Pi contributors"]
 edition = "2024"

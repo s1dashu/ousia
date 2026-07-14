@@ -89,16 +89,6 @@ pub fn run() {
             let main_window = app
                 .get_webview_window("main")
                 .ok_or_else(|| "Main WebView window was not created".to_string())?;
-            main_window
-                .as_ref()
-                .set_auto_resize(true)
-                .map_err(|error| format!("Failed to enable main WebView auto-resize: {error}"))?;
-            logger.record(
-                "info",
-                "window.resize",
-                "Enabled main WebView auto-resize",
-                None,
-            );
             window_chrome.initialize();
             app.manage(window_chrome);
             let event_window = main_window.clone();
