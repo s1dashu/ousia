@@ -183,6 +183,9 @@ export const messages = {
       providerApiKeyTitle: "添加供应商",
       providerApiKeyDescription: "选择供应商，并填写 API Key。",
       providerApiKeyRequiredInfo: "请先添加供应商 API Key。",
+      piRuntimeRequiredTitle: "安装 Pi 后继续",
+      piRuntimeRequiredDescription:
+        "发送消息前，需要先连接本机 Pi。你可以由应用安装，也可以选择电脑上已有的 Pi 可执行文件。",
       piConfigurationRequiredInfo:
         "本机 Pi 尚未提供可用模型。请先安装或配置 Pi，再刷新模型列表。",
       copyHistory: "复制会话历史",
@@ -491,6 +494,9 @@ export const messages = {
       providerApiKeyTitle: "Add provider",
       providerApiKeyDescription: "Choose a provider and enter an API key.",
       providerApiKeyRequiredInfo: "Add a provider API key to continue.",
+      piRuntimeRequiredTitle: "Install Pi to continue",
+      piRuntimeRequiredDescription:
+        "Connect a local Pi runtime before sending a message. Install an app-managed copy or select an existing Pi executable.",
       piConfigurationRequiredInfo:
         "Local Pi does not expose an available model yet. Install or configure Pi, then refresh the model list.",
       copyHistory: "Copy chat history",

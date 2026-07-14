@@ -2057,7 +2057,7 @@ impl PiHost {
         context: ChatContext,
         tools: &[String],
         ticket: &PrepareTicket,
-    ) -> Result<RpcClientLease, String> {
+    ) -> Result<Option<RpcClientLease>, String> {
         for client in &ticket.superseded_clients {
             if client.is_alive() {
                 client.stop().await?;
@@ -2110,17 +2110,19 @@ impl PiHost {
                     ticket.session_id
                 ));
             }
-            return Ok(lease);
+            return Ok(Some(lease));
         }
         if let Some(existing) = existing_to_stop {
             existing.stop().await?;
         }
 
         let mapping = self.resumable_mapping(&context.session_id).await?;
-        let binary = self.runtime.resolve_binary(&self.environment)?.path;
+        let Some(binary) = self.runtime.find_binary(&self.environment)? else {
+            return Ok(None);
+        };
         let (client, startup_started) = RpcClient::spawn_process(
             self.app.clone(),
-            &binary,
+            &binary.path,
             &self.environment,
             self.logger.clone(),
             context.clone(),
@@ -2166,7 +2168,7 @@ impl PiHost {
             }
             return Err(error);
         }
-        Ok(lease)
+        Ok(Some(lease))
     }
 
     pub async fn finish_prepare(&self, ticket: &PrepareTicket, client: &RpcClient) {

@@ -986,6 +986,7 @@ export type OusiaChatPreparePayload = OusiaChatContext & {
 
 export type OusiaChatPrepareResult = {
   ok: boolean
+  runtimeUnavailable?: boolean
 }
 
 export type OusiaChatSendPayload = OusiaChatContext & {

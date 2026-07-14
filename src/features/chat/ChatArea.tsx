@@ -71,6 +71,7 @@ import {
   type OusiaChatAttachment,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
+  type OusiaPiEnvironmentStatus,
   type OusiaSendDuringRunMode,
   type OusiaReasoningEffort,
 } from "@/electron/chat-types"
@@ -111,6 +112,7 @@ import {
   CHAT_HORIZONTAL_PADDING_CLASS,
   CHAT_CONTENT_MAX_WIDTH_CLASS,
 } from "@/features/chat/chat-layout"
+import { PiRuntimeSetupDialog } from "@/features/settings/PiRuntimeSetupDialog"
 import type { ChatItem } from "@/features/chat/chat-events"
 import {
   canScrollInDirection,
@@ -262,6 +264,12 @@ function ChatAreaComponent({
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null)
   const [draggingQueueId, setDraggingQueueId] = useState<string | null>(null)
   const [isSending, setIsSending] = useState(false)
+  const [isCheckingPiRuntime, setIsCheckingPiRuntime] = useState(false)
+  const [isPiRuntimeSetupOpen, setIsPiRuntimeSetupOpen] = useState(false)
+  const [piEnvironment, setPiEnvironment] = useState<OusiaPiEnvironmentStatus>()
+  const [piRuntimeAvailability, setPiRuntimeAvailability] = useState<
+    "available" | "unavailable" | "unknown"
+  >("unknown")
   const [isInterrupting, setIsInterrupting] = useState(false)
   const [isCompacting, setIsCompacting] = useState(false)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
@@ -1211,6 +1219,69 @@ function ChatAreaComponent({
     t.chat.piConfigurationRequiredInfo,
   ])
 
+  const ensurePiRuntimeAvailable = useCallback(async () => {
+    const ousia = window.ousia
+    if (!ousia || piRuntimeAvailability === "available") return true
+    setIsCheckingPiRuntime(true)
+    try {
+      const status = await ousia.checkPiEnvironment()
+      setPiEnvironment(status)
+      setPiRuntimeAvailability(status.available ? "available" : "unavailable")
+      if (status.available) return true
+
+      const trace = {
+        canInstall: status.canInstall,
+        hasInstallPrerequisiteError: Boolean(status.installPrerequisiteError),
+        sessionId: currentSession?.id,
+      }
+      console.info(
+        "[chat.pi-runtime] Opening Pi setup after a blocked send",
+        trace,
+      )
+      void ousia
+        .reportFrontendLog({
+          data: trace,
+          level: "info",
+          message:
+            "Opened Pi setup after a send was blocked by a missing runtime",
+          scope: "chat.pi-runtime",
+        })
+        .catch((error: unknown) => {
+          console.error(
+            "[chat.pi-runtime] Failed to persist the missing-runtime trace",
+            error,
+          )
+        })
+      setIsPiRuntimeSetupOpen(true)
+      return false
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error("[chat.pi-runtime] Failed to inspect Pi before send", {
+        error: message,
+        sessionId: currentSession?.id,
+      })
+      onLocalEvent({
+        type: "error",
+        id: `pi-runtime-check-${Date.now()}`,
+        text: message,
+        timestamp: new Date().toISOString(),
+      })
+      return false
+    } finally {
+      setIsCheckingPiRuntime(false)
+    }
+  }, [currentSession?.id, onLocalEvent, piRuntimeAvailability])
+
+  const handlePiEnvironmentChange = useCallback(
+    (environment: OusiaPiEnvironmentStatus) => {
+      setPiEnvironment(environment)
+      setPiRuntimeAvailability(
+        environment.available ? "available" : "unavailable",
+      )
+    },
+    [],
+  )
+
   useEffect(() => {
     if (!window.ousia || !currentProject || !currentSession || isAgentWorking) {
       return
@@ -1234,10 +1305,18 @@ function ChatAreaComponent({
           modelId: settings.modelId,
         },
       })
-      .then(() => {
-        if (!isCancelled) {
-          console.debug("[chat.prepare] Pi session is ready", context)
+      .then((result) => {
+        if (isCancelled) return
+        if (result.runtimeUnavailable) {
+          setPiRuntimeAvailability("unavailable")
+          console.debug(
+            "[chat.prepare] Skipped session preparation until Pi is installed",
+            context,
+          )
+          return
         }
+        setPiRuntimeAvailability("available")
+        console.debug("[chat.prepare] Pi session is ready", context)
       })
       .catch((error: unknown) => {
         if (isCancelled) {
@@ -1476,7 +1555,14 @@ function ChatAreaComponent({
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const text = draft.trim()
-    if ((!text && attachments.length === 0) || isSending) {
+    if (
+      (!text && attachments.length === 0) ||
+      isSending ||
+      isCheckingPiRuntime
+    ) {
+      return
+    }
+    if (!(await ensurePiRuntimeAvailable())) {
       return
     }
     if (!ensureSelectedPiModel()) {
@@ -1509,6 +1595,9 @@ function ChatAreaComponent({
     const sourceMessages = isPiQueueMessage ? piQueuedMessages : queuedMessages
     const message = sourceMessages.find((item) => item.id === id)
     if (!message) {
+      return
+    }
+    if (!(await ensurePiRuntimeAvailable())) {
       return
     }
     if (!ensureSelectedPiModel()) {
@@ -1620,24 +1709,27 @@ function ChatAreaComponent({
       return
     }
     const timer = window.setTimeout(() => {
-      if (!ensureSelectedPiModel()) {
-        setIsQueuePausedAfterInterrupt(true)
-        return
-      }
-      const [nextMessage] = queuedMessages
-      setQueuedMessages((current) => current.slice(1))
-      if (editingQueueId === nextMessage.id) {
-        setEditingQueueId(null)
-      }
-      void sendMessage({
-        text: nextMessage.text,
-        attachments: nextMessage.attachments,
-        sendBehavior: "normal",
-      })
+      void (async () => {
+        if (!(await ensurePiRuntimeAvailable()) || !ensureSelectedPiModel()) {
+          setIsQueuePausedAfterInterrupt(true)
+          return
+        }
+        const [nextMessage] = queuedMessages
+        setQueuedMessages((current) => current.slice(1))
+        if (editingQueueId === nextMessage.id) {
+          setEditingQueueId(null)
+        }
+        await sendMessage({
+          text: nextMessage.text,
+          attachments: nextMessage.attachments,
+          sendBehavior: "normal",
+        })
+      })()
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
     editingQueueId,
+    ensurePiRuntimeAvailable,
     ensureSelectedPiModel,
     isAgentWorking,
     isQueueAutoSendPaused,
@@ -2352,7 +2444,9 @@ function ChatAreaComponent({
                     type="submit"
                     size="icon-sm"
                     className="hover:bg-primary/90 size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
-                    disabled={isSending || !hasDraftContent}
+                    disabled={
+                      isSending || isCheckingPiRuntime || !hasDraftContent
+                    }
                     aria-label={t.app.send}
                   >
                     <SendArrowUp size={17} strokeWidth={1.9} />
@@ -2363,6 +2457,14 @@ function ChatAreaComponent({
           </div>
         </div>
       </form>
+      <PiRuntimeSetupDialog
+        environment={piEnvironment}
+        language={language}
+        onEnvironmentChange={handlePiEnvironmentChange}
+        onOpenChange={setIsPiRuntimeSetupOpen}
+        onRefreshModelRegistry={onRefreshModelRegistry}
+        open={isPiRuntimeSetupOpen}
+      />
       <Dialog
         open={isCustomToolsDialogOpen}
         onOpenChange={setIsCustomToolsDialogOpen}
