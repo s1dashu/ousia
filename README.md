@@ -1,9 +1,14 @@
+<p align="center"><sub><strong>MAC CLIENT FOR PI</strong></sub></p>
+
+<h1 align="center">Ousia</h1>
+
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Ousia, a lightweight Mac client for Pi with an approximately 10 MB DMG">
+  <strong>Super light. Clean by design.</strong><br>
+  A faster, smoother way to work with Pi.
 </p>
 
 <p align="center">
-  <strong>A lightweight Mac client for Pi — about 10 MB, fast by default, and designed to stay out of your way.</strong>
+  <code>≈10 MB DMG</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>DIRECT PI RPC</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>SIGNED &amp; NOTARIZED</code>
 </p>
 
 <p align="center">
@@ -12,6 +17,20 @@
   <a href="#requirements">Requirements</a>
   ·
   <a href="#development">Development</a>
+</p>
+
+## See Ousia in action
+
+### Light mode
+
+<p align="center">
+  <img src="./assets/readme/ousia-light-mode.gif" width="100%" alt="Ousia light mode streaming a Pi task and its tool output">
+</p>
+
+### Dark mode
+
+<p align="center">
+  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia dark mode streaming code generation from Pi">
 </p>
 
 ## Pi, with a better desktop experience
