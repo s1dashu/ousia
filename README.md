@@ -1,71 +1,115 @@
-# Pi
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Ousia, a lightweight Mac client for Pi with an approximately 10 MB DMG">
+</p>
 
-Pi 是一个独立的 Tauri 桌面客户端：完整复用 Ousia 的 UI/UX，但不再随应用内置 Node.js 或 Agent SDK。应用直接连接用户电脑上已有的 Pi agent runtime，因此继续使用用户自己的 Pi 配置、凭据、模型和会话目录。
+<p align="center">
+  <strong>A lightweight Mac client for Pi — about 10 MB, fast by default, and designed to stay out of your way.</strong>
+</p>
 
-Pi 从 `v0.2.0` 起接替原 Ousia Electron 桌面应用，并保留原仓库的 issue、release、tag 和 Git 历史。Electron 最终状态永久保存在 `codex/archive-ousia-electron-v0.1.32` 分支；当前 `main` 只维护 Pi。
+<p align="center">
+  <a href="https://github.com/s1dashu/ousia/releases/latest"><strong>Download for macOS</strong></a>
+  ·
+  <a href="#requirements">Requirements</a>
+  ·
+  <a href="#development">Development</a>
+</p>
 
-[下载最新的 macOS 版本](https://github.com/s1dashu/ousia/releases/latest)
+## Pi, with a better desktop experience
 
-## 当前实现
+Ousia gives Pi a focused, polished workspace on macOS. It connects directly to the Pi runtime on your Mac, so your existing configuration, credentials, models, extensions, and sessions remain the source of truth.
 
-- 原样保留 Ousia 的界面、主题、交互和设置体验。
-- 使用 Tauri 2 / Rust 取代 Electron 主进程与 preload。
-- 通过 `pi --mode rpc` 的 JSONL RPC 协议连接本机 Pi。
-- 支持聊天流式事件、工具调用、历史记录、上下文用量、打断、排队消息、压缩、分支、移动、导出、模型发现和重试设置。
-- 直接读取本机 Pi 的 `~/.pi/agent/settings.json`、`auth.json` 与登录 shell 环境；界面只展示配置来源，不复制或改写 API Key。
-- 用户可以选择已有的 Pi，或让应用在自己的数据目录安装/移除一份 Pi；两种方式都复用同一份用户配置。
-- 可以显式添加/移除由应用管理的 shell `PATH` 项，所有改动都有所有权记录并在移除前严格校验。
-- 只支持 Pi，不包含 Agent Harness 切换或 Codex 相关实现。
-- 结构化记录 Rust host、Pi 子进程、RPC 和前端未处理错误，错误不会被静默吞掉。
+The downloadable DMG is only **about 10 MB** because Ousia does not bundle Node.js or a second agent runtime.
 
-## 运行要求
+## Why Ousia
 
-连接已有 Pi 不要求 Node.js：可以从登录 shell `PATH`、常见安装位置和当前 npm 全局目录发现 Pi，也可以在设置中选择具体的可执行文件。
+- **Super lightweight** — an approximately 10 MB DMG with no bundled Node.js or Pi runtime.
+- **Cleaner, more polished UI/UX** — a calm Mac-first interface with projects, sessions, themes, streaming tool previews, and a composer that stays focused on the work.
+- **Faster, smoother performance** — a lean native host, direct Pi RPC, bounded streaming updates, and responsive conversation rendering.
+- **Improved stability and reliability** — strict protocol validation, atomic state persistence, single-instance protection, and structured runtime logs.
 
-如果本机没有 Pi，设置页可以使用用户现有的 Node.js/npm，把 `@earendil-works/pi-coding-agent` 安装到应用自己的数据目录。它不会进入 `.app`，不会改系统 npm prefix，卸载时也绝不会删除 `~/.pi`。只有执行这项可选安装时才要求 Node.js/npm。
+## Download
 
-“添加到 Shell PATH”会创建应用自己拥有的 `~/.local/bin/pi` 链接，并向 zsh 的 `~/.zprofile` 或 bash 的 `~/.bash_profile` 写入带边界标记的块。移除时只删除与所有权记录完全一致的内容；发现文件被用户修改或归属不明确时会直接报错。
+The current release supports **macOS on Apple Silicon**.
 
-开发环境还需要：
+1. Download the latest DMG from [GitHub Releases](https://github.com/s1dashu/ousia/releases/latest).
+2. Open the DMG and move the app to `Applications`.
+3. Launch it and select your existing Pi executable, or let the app install Pi into its own managed directory.
 
-- Node.js 与 npm
+Release builds are signed with a Developer ID certificate, notarized by Apple, and validated with Gatekeeper before publishing.
+
+## What you can do
+
+- Organize conversations into projects and sessions.
+- Stream assistant responses, thinking, tool calls, and file previews in real time.
+- Queue follow-up messages while Pi is working, or switch to steering mode.
+- Choose from the models and providers already configured in Pi.
+- Interrupt, compact, branch, move, archive, and export sessions.
+- Tune theme, content width, type size, line spacing, and message density.
+- Reuse the same Pi credentials, extensions, settings, and session directory across the CLI and desktop app.
+
+## How it stays light
+
+```text
+┌──────────────────────────┐        JSONL RPC        ┌──────────────────────┐
+│          Ousia           │  ───────────────────▶   │   pi --mode rpc      │
+│  interface + native host │                         │   your Pi runtime     │
+└──────────────────────────┘                         └──────────────────────┘
+                                                               │
+                                                               ▼
+                                                  config · models · sessions
+```
+
+Ousia owns the desktop experience. Pi owns the agent runtime. There is no duplicate credential store and no bundled runtime hidden inside the application package.
+
+## Requirements
+
+To connect an existing Pi installation, Ousia only needs a valid `pi` executable. It can discover Pi from your login-shell `PATH`, common install locations, the active npm global prefix, or a path selected in Settings.
+
+If Pi is not installed, Ousia can use your existing Node.js and npm to install `@earendil-works/pi-coding-agent` into an app-owned directory. This optional setup does not change the system npm prefix and never removes `~/.pi`.
+
+## Development
+
+Prerequisites:
+
+- macOS
+- Node.js and npm
 - Rust toolchain
-- macOS 的 Tauri/WebKit 系统依赖
+- Pi, or a path supplied through `PI_GUI_PI_PATH`
 
-## 开发
+Start the development app:
 
 ```sh
 npm ci
 npm run desktop:dev
 ```
 
-如果开发机上的 Pi 不在登录 shell `PATH`，可以显式传入可执行文件路径：
+Use a specific Pi executable when needed:
 
 ```sh
 PI_GUI_PI_PATH=/absolute/path/to/pi npm run desktop:dev
 ```
 
-这个变量只用于开发和诊断。路径无效时应用会明确报错，不会回退到内置运行时。
-
-## 验证与打包
+Run the required checks:
 
 ```sh
-npm run check
+npm run typecheck
+npm run lint
+cargo test --manifest-path src-tauri/Cargo.toml
 npm run build
+```
+
+Build the macOS app locally:
+
+```sh
 npm run desktop:build -- --bundles app
 ```
 
-macOS `.app` 输出到：
+The application is written with React, TypeScript, Tauri, and Rust. The desktop host communicates with Pi through strict line-delimited JSON over standard input and output.
 
-```text
-src-tauri/target/release/bundle/macos/Pi.app
-```
+<details>
+<summary><strong>Signed macOS release builds</strong></summary>
 
-当前 release `.app` 的文件内容实测约 15.2 MiB；包内不含 Node.js 和 Pi。可选的应用托管 Pi 位于应用数据目录，不计入 `.app`。空闲首屏实测常驻内存约 105 MiB，具体值会随 WebKit 与页面状态变化。
-
-## macOS 发布
-
-正式发布必须使用 Developer ID 签名并通过 Apple 公证。发布脚本会在凭据缺失、签名身份不存在、公证失败、票据未 stapled 或 Gatekeeper 校验失败时立即退出：
+Official releases require a Developer ID identity and Apple notarization credentials:
 
 ```sh
 export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
@@ -75,22 +119,18 @@ export APPLE_TEAM_ID="TEAMID"
 npm run release:mac
 ```
 
-脚本在 `src-tauri/target/release/bundle/dmg/` 生成经过验证的 arm64 DMG、包含同一已公证应用的 ZIP，以及 SHA-256 校验文件。GitHub Release 只应发布这三个文件。
+The release script fails immediately if signing, notarization, stapling, DMG verification, or Gatekeeper assessment does not succeed. It produces the DMG, a ZIP containing the same notarized app, and a SHA-256 checksum file.
 
-## 目录与数据
+</details>
 
-- `src/`：Ousia UI 与最小 Tauri 适配层。
-- `src-tauri/`：Rust host、Pi RPC、状态持久化与结构化日志。
-- 面向用户的产品名是 `Pi`；内部继续使用 `pi-gui` 标识以兼容既有应用数据与托管运行时所有权记录。
-- `~/Library/Application Support/com.sidasoftware.pi-gui/`：macOS 上的应用状态、会话映射、`pi-runtime.json` 所有权记录，以及可选的 `pi-runtime/npm/` 托管安装。
-- `~/Library/Logs/com.sidasoftware.pi-gui/pi-gui.log`：macOS 上的 JSONL 运行日志。
-- Pi 自身的配置和会话仍由用户安装的 Pi 管理，应用不创建第二份配置源。
+## Data and diagnostics
 
-## 产品边界
+- Pi remains the owner of its configuration, credentials, models, extensions, and sessions.
+- Ousia stores only desktop UI state and the mapping required to reopen Pi sessions.
+- State is written atomically.
+- Host, subprocess, RPC, and renderer failures are recorded in structured local logs.
+- Message content and tool payloads are not written to performance logs.
 
-- GitHub Release 中的 macOS 构建使用 Developer ID 签名并通过 Apple 公证；本地普通 `desktop:build` 不等同于正式发布构建。
-- 自动更新当前明确禁用，升级通过 GitHub Release 手动完成。
-- Pi RPC 协议不兼容、未知事件、损坏的 JSONL 或失效的会话映射会直接失败并写入日志；这是有意的 fail-fast 行为。
-- Pi 0.80+ 以 `agent_settled` 作为一次完整会话运行的结束事件；`agent_end` 只表示底层单次运行结束。对未发送 `agent_settled` 的旧版本仅保留有日志的兼容完成路径。
-- 日志分别记录 Pi 进程就绪、RPC 配置、会话预热、模型首字输出和完整运行耗时。进入会话后会在用户输入期间后台预热 Pi；首条消息被主会话接受后，会立即用隔离的临时 RPC 进程并行生成标题，不复用或重配活动会话。
-- UI 的来源与许可证信息见 [NOTICE](./NOTICE)。工程约束与架构单一事实源见 [AGENTS.md](./AGENTS.md)。
+## License
+
+See [LICENSE](./LICENSE) for the project license and [NOTICE](./NOTICE) for third-party notices.
