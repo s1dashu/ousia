@@ -27,16 +27,8 @@
 
 ## See Ousia in action
 
-### Light mode
-
 <p align="center">
-  <img src="./assets/readme/ousia-light-mode.gif" width="100%" alt="Ousia light mode streaming a Pi task and its tool output">
-</p>
-
-### Dark mode
-
-<p align="center">
-  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia dark mode streaming code generation from Pi">
+  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia streaming code generation from Pi">
 </p>
 
 ## Pi, with a better desktop experience
