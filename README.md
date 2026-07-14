@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <code>≈10 MB DMG</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>DIRECT PI RPC</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>SIGNED &amp; NOTARIZED</code>
+  <code>≈10 MB DOWNLOAD</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>MINIMALIST DESIGN</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>SMOOTH EXPERIENCE</code>
 </p>
 
 <p align="center">
@@ -17,6 +17,12 @@
   <a href="#requirements">Requirements</a>
   ·
   <a href="#development">Development</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.1/Pi_0.2.1_aarch64.dmg">
+    <img src="./assets/download-button-centered.svg" alt="Download Ousia for macOS" width="280" height="48">
+  </a>
 </p>
 
 ## See Ousia in action
@@ -35,16 +41,16 @@
 
 ## Pi, with a better desktop experience
 
-Ousia gives Pi a focused, polished workspace on macOS. It connects directly to the Pi runtime on your Mac, so your existing configuration, credentials, models, extensions, and sessions remain the source of truth.
+Ousia gives Pi a focused, polished workspace on macOS. It works with the Pi already on your Mac, so your models, extensions, settings, and conversations are ready to use.
 
-The downloadable DMG is only **about 10 MB** because Ousia does not bundle Node.js or a second agent runtime.
+The download is only **about 10 MB**, so Ousia is quick to install and takes up very little space.
 
 ## Why Ousia
 
-- **Super lightweight** — an approximately 10 MB DMG with no bundled Node.js or Pi runtime.
-- **Cleaner, more polished UI/UX** — a calm Mac-first interface with projects, sessions, themes, streaming tool previews, and a composer that stays focused on the work.
-- **Faster, smoother performance** — a lean native host, direct Pi RPC, bounded streaming updates, and responsive conversation rendering.
-- **Improved stability and reliability** — strict protocol validation, atomic state persistence, single-instance protection, and structured runtime logs.
+- **Super lightweight** — only about 10 MB to download, with a small footprint on your Mac.
+- **Cleaner, more polished UI/UX** — projects, conversations, light and dark themes, live tool progress, and a simple message box that keeps the focus on your work.
+- **Faster, smoother performance** — a responsive interface that stays smooth while Pi is working, even during long conversations.
+- **Improved stability and reliability** — protects saved conversations, prevents duplicate windows, and clearly tells you when something goes wrong.
 
 ## Download
 
