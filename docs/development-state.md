@@ -104,10 +104,11 @@ desktop agent client:
   available release adds an Update button to the sidebar footer; download is
   explicit, while the native app menu also provides **Check for Updates…** with
   visible success and failure results. Release checks use Electron's Chromium
-  network stack so macOS proxy settings are honored. Installation is automatic
-  only after five minutes without input, no focused Ousia window, and no running
-  agent turn. Otherwise the button becomes Restart after the update finishes
-  downloading.
+  network stack so macOS proxy settings are honored. The update response points
+  directly to the matching GitHub Release asset; Analytics reads GitHub's asset
+  counters without proxying the download. Installation is automatic only after
+  five minutes without input, no focused Ousia window, and no running agent
+  turn. Otherwise the button becomes Restart after the update finishes downloading.
 - Native application/context menus and manual-update dialogs follow the Ousia
   interface language. A successful language-settings save rebuilds the native
   menu immediately; restarting the app is not required.

@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://ousia-analytics.vercel.app/api/download?platform=darwin&amp;arch=arm64&amp;kind=manual">
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg">
     <img src="./assets/download-button-centered.svg" alt="Download for macOS" width="280" height="48"/>
   </a>
 </p>
@@ -81,7 +81,7 @@ invocation is visible inline, and everything persists across restarts.
 
 ### Download (macOS)
 
-[Download the latest `.dmg`](https://ousia-analytics.vercel.app/api/download?platform=darwin&arch=arm64&kind=manual),
+[Download the latest `.dmg`](https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg),
 open it, drag **Ousia** into **Applications**, and launch. Previous versions and
 release notes remain available on the [Releases page](https://github.com/s1dashu/ousia/releases/latest).
 

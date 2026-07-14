@@ -296,9 +296,10 @@ the next normal app launch by Squirrel.Mac.
 
 The service receives `app_opened` and `update_downloaded` events containing only
 a random installation UUID, app version, platform, and CPU architecture. It
-HMAC-hashes the UUID before persistence. Download counts come from the same
-service's validated redirect endpoint, which must be used by both the updater
-and public download links.
+HMAC-hashes the UUID before persistence. Public downloads and updater responses
+point directly to GitHub Release assets, so starting a download does not depend
+on the analytics service. The analytics dashboard reads each matching `.dmg`
+and `.zip` asset's GitHub `download_count` instead of intercepting downloads.
 
 ## App State
 
