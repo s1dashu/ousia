@@ -103,14 +103,18 @@ export function chatEventRenderInterval(event: OusiaChatEvent) {
  * Tool-input previews are already bounded to a low visual cadence. Committing
  * those snapshots at transition priority allows a sustained provider stream to
  * interrupt every render and leave the preview stuck on its initial state.
- * Keep text rendering interruptible, but promote the bounded tool-input path
- * and its lifecycle boundaries so visible progress has a hard guarantee.
+ * Keep text deltas interruptible, but promote completion boundaries and the
+ * bounded tool-input path so visible progress has a hard guarantee.
  */
 export function chatEventRequiresNonStarvableCommit(event: OusiaChatEvent) {
   return (
     event.type === "tool_start" ||
     event.type === "tool_input_end" ||
     event.type === "tool_end" ||
+    event.type === "assistant_text_end" ||
+    event.type === "thinking_end" ||
+    (event.type === "run_status" &&
+      (event.status === "finished" || event.status === "error")) ||
     (event.type === "tool_update" && event.phase === "input")
   )
 }

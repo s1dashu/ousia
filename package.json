@@ -1,7 +1,7 @@
 {
   "name": "pi-gui",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "type": "module",
   "description": "A lightweight Tauri desktop client for a user-installed Pi agent.",
   "license": "MIT",

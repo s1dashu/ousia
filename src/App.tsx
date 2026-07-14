@@ -21,6 +21,7 @@ import {
   type ProjectRecord,
   type SessionRecord,
 } from "@/app/app-state"
+import { AuthoritativeState } from "@/app/authoritative-state"
 import {
   chatKey,
   findWorkingChatSession,
@@ -112,6 +113,7 @@ type ChatEventBufferDiagnostics = {
   flushCount: number
   maxBatchSize: number
   receivedEventCount: number
+  receivedEventCountByType: Record<string, number>
 }
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
@@ -425,15 +427,16 @@ export function App() {
   const [historyPageStateBySession, setHistoryPageStateBySession] = useState<
     Record<string, ChatHistoryPageState>
   >({})
-  const itemsBySessionRef = useRef(itemsBySession)
+  const itemsBySessionSourceRef = useRef(
+    new AuthoritativeState<ChatItemsBySession>(itemsBySession),
+  )
   const updateItemsBySession = useCallback(
     (update: (current: ChatItemsBySession) => ChatItemsBySession) => {
-      const current = itemsBySessionRef.current
-      const next = update(current)
+      const current = itemsBySessionSourceRef.current.current
+      const next = itemsBySessionSourceRef.current.update(update)
       if (next === current) {
         return current
       }
-      itemsBySessionRef.current = next
       setItemsBySession(next)
       return next
     },
@@ -697,26 +700,28 @@ export function App() {
         events.length,
       )
     }
-    const applyPendingEvents = () => {
-      updateItemsBySession((current) =>
-        applyChatEventBatchBySession(current, pendingEvents),
-      )
-    }
+    const current = itemsBySessionSourceRef.current.current
+    const next = itemsBySessionSourceRef.current.update((items) =>
+      applyChatEventBatchBySession(items, pendingEvents),
+    )
     if (requiresNonStarvableCommit) {
-      // Tool input is already capped at a bounded cadence. Normal priority here
-      // guarantees visible progress while its expensive highlighting stays in
-      // the worker and independently throttled preview component.
-      applyPendingEvents()
+      // Completion boundaries and the already bounded tool-input path use
+      // normal priority so lifecycle state cannot trail reconciliation.
+      if (next !== current) {
+        setItemsBySession(next)
+      }
     } else {
       // Growing Markdown can take longer than one frame to render. Keep text
       // work interruptible so composer input stays responsive.
-      startTransition(applyPendingEvents)
+      if (next !== current) {
+        startTransition(() => setItemsBySession(next))
+      }
     }
     return [...pendingEvents.values()].reduce(
       (count, events) => count + events.length,
       0,
     )
-  }, [updateItemsBySession])
+  }, [])
   const schedulePendingChatEventsFlush = useCallback(
     (event: OusiaChatEvent) => {
       const now = performance.now()
@@ -767,8 +772,11 @@ export function App() {
         flushCount: 0,
         maxBatchSize: 0,
         receivedEventCount: 0,
+        receivedEventCountByType: {},
       }
       diagnostics.receivedEventCount += 1
+      diagnostics.receivedEventCountByType[event.type] =
+        (diagnostics.receivedEventCountByType[event.type] ?? 0) + 1
       if (wasCoalesced) {
         diagnostics.coalescedEventCount += 1
       }
@@ -951,10 +959,6 @@ export function App() {
   }, [runStatusBySession])
 
   useEffect(() => {
-    itemsBySessionRef.current = itemsBySession
-  }, [itemsBySession])
-
-  useEffect(() => {
     historyPageStateBySessionRef.current = historyPageStateBySession
   }, [historyPageStateBySession])
 
@@ -1072,7 +1076,7 @@ export function App() {
     const historySessionId = selectedSessionIdForHistory
     const pageState = historyPageStateBySessionRef.current[historyKey]
     const hasLoadedItems = Boolean(
-      itemsBySessionRef.current[historyKey]?.length,
+      itemsBySessionSourceRef.current.current[historyKey]?.length,
     )
     if (
       (draftSessionKeysRef.current.has(historyKey) && !hasLoadedItems) ||
@@ -1189,7 +1193,8 @@ export function App() {
       historyReconciliationInFlightKeysRef.current.add(targetKey)
       let failureDiagnostics: Record<string, unknown> | undefined
       try {
-        const existingItems = itemsBySessionRef.current[targetKey] ?? []
+        const existingItems =
+          itemsBySessionSourceRef.current.current[targetKey] ?? []
         const existingPersistedIds = persistedChatItemIds(existingItems)
         const seenCursors = new Set<string>()
         let beforeItemId: string | undefined
@@ -1240,7 +1245,8 @@ export function App() {
           return undefined
         }
 
-        const latestItems = itemsBySessionRef.current[targetKey] ?? []
+        const latestItems =
+          itemsBySessionSourceRef.current.current[targetKey] ?? []
         const reconciliation = reconcilePersistedChatHistory(
           latestItems,
           authoritativeItems,
@@ -2442,7 +2448,7 @@ export function App() {
     }
     const now = new Date().toISOString()
     let sourceItems =
-      itemsBySessionRef.current[selectedChatKey] ?? selectedItems
+      itemsBySessionSourceRef.current.current[selectedChatKey] ?? selectedItems
     let resolvedMessageId = messageId
     if (window.ousia) {
       try {

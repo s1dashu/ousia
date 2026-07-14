@@ -161,6 +161,22 @@ describe("chat event render buffering", () => {
     ).toBe(true)
     expect(
       chatEventRequiresNonStarvableCommit({
+        type: "assistant_text_end",
+        id: "assistant-1",
+        text: "finished text",
+        timestamp,
+      }),
+    ).toBe(true)
+    expect(
+      chatEventRequiresNonStarvableCommit({
+        type: "run_status",
+        generation: 1,
+        status: "finished",
+        timestamp,
+      }),
+    ).toBe(true)
+    expect(
+      chatEventRequiresNonStarvableCommit({
         type: "assistant_text_delta",
         id: "assistant-1",
         delta: "text",

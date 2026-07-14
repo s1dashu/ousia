@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest"
 
+import { AuthoritativeState } from "@/app/authoritative-state"
 import { reconcilePersistedChatHistory } from "@/app/chat-history-reconciliation"
 import type { OusiaChatEvent, OusiaTextChatItem } from "@/electron/chat-types"
 import {
   applyChatEvent,
   applyChatEventBatchBySession,
   type ChatItem,
+  type ChatItemsBySession,
 } from "./chat-events"
 import { toolFilePreviewFromItem } from "./chat-tool-file-preview"
 
@@ -165,6 +167,71 @@ describe("applyChatEventBatchBySession", () => {
     })
     expect(reconciliation.unmatchedTransientIds).toEqual([])
     expect(reconciliation.resolvedIds.get("text-1-0")).toBe("d65603ba-text-0")
+  })
+
+  it("reconciles from the authoritative source while rendering is delayed", () => {
+    const staleRenderedState = {
+      [targetKey]: [
+        textItem("user-live", "user", "hi"),
+        {
+          ...textItem(
+            "text-1-1-0",
+            "assistant",
+            "Hi! How can I help you today",
+          ),
+          status: "streaming" as const,
+        },
+      ],
+    }
+    const source = new AuthoritativeState<ChatItemsBySession>(
+      staleRenderedState,
+    )
+    const pendingCompletion = new Map<string, OusiaChatEvent[]>([
+      [
+        targetKey,
+        [
+          {
+            type: "assistant_text_end",
+            id: "text-1-1-0",
+            text: "Hi! How can I help you today?",
+            timestamp,
+          },
+          {
+            type: "run_status",
+            generation: 1,
+            status: "finished",
+            timestamp,
+          },
+        ],
+      ],
+    ])
+
+    const nextSource = source.update((current) =>
+      applyChatEventBatchBySession(current, pendingCompletion),
+    )
+    const reconciliation = reconcilePersistedChatHistory(
+      source.current[targetKey],
+      [
+        textItem("6caf47b3", "user", "hi", true),
+        textItem(
+          "ed983895-text-0",
+          "assistant",
+          "Hi! How can I help you today?",
+          true,
+        ),
+      ],
+    )
+
+    expect(staleRenderedState[targetKey][1]).toMatchObject({
+      status: "streaming",
+      text: "Hi! How can I help you today",
+    })
+    expect(nextSource[targetKey][1]).toMatchObject({
+      status: "finished",
+      text: "Hi! How can I help you today?",
+    })
+    expect(reconciliation.unmatchedTransientIds).toEqual([])
+    expect(reconciliation.resolvedIds.get("text-1-1-0")).toBe("ed983895-text-0")
   })
 
   it("preserves assistant message order around streamed tool calls", () => {
