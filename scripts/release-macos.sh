@@ -7,12 +7,30 @@ fail() {
   exit 1
 }
 
-for variable in APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+for variable in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
   [[ -n "${(P)variable:-}" ]] || fail "$variable is required"
 done
 
-security find-identity -v -p codesigning | rg -F -- "$APPLE_SIGNING_IDENTITY" >/dev/null ||
-  fail "Developer ID identity is not available in the login keychain: $APPLE_SIGNING_IDENTITY"
+if [[ -z "${APPLE_SIGN_IDENTITY:-}" ]]; then
+  identity_candidates=("${(@f)$(
+    security find-identity -v -p codesigning |
+      rg -o '"[^"]*Developer ID Application:[^"]+"' |
+      sed 's/^"//; s/"$//'
+  )}")
+  (( ${#identity_candidates} == 1 )) ||
+    fail "APPLE_SIGN_IDENTITY is required when the login keychain does not contain exactly one Developer ID Application identity"
+  APPLE_SIGN_IDENTITY=${identity_candidates[1]}
+  print -- "Using detected Developer ID identity: $APPLE_SIGN_IDENTITY"
+fi
+
+security find-identity -v -p codesigning | rg -F -- "$APPLE_SIGN_IDENTITY" >/dev/null ||
+  fail "Developer ID identity is not available in the login keychain: $APPLE_SIGN_IDENTITY"
+
+# Preserve Ousia's established release environment as the operator-facing
+# contract. Tauri reads these aliases from this process only; credential values
+# are never persisted by the release script.
+export APPLE_SIGNING_IDENTITY="$APPLE_SIGN_IDENTITY"
+export APPLE_PASSWORD="$APPLE_APP_SPECIFIC_PASSWORD"
 
 root_dir=${0:a:h:h}
 cd "$root_dir"
@@ -38,7 +56,7 @@ hdiutil verify "$dmg_path"
 codesign --verify --verbose=2 "$dmg_path"
 xcrun notarytool submit "$dmg_path" \
   --apple-id "$APPLE_ID" \
-  --password "$APPLE_PASSWORD" \
+  --password "$APPLE_APP_SPECIFIC_PASSWORD" \
   --team-id "$APPLE_TEAM_ID" \
   --wait
 xcrun stapler staple "$dmg_path"
