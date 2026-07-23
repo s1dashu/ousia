@@ -235,6 +235,7 @@ export type OusiaWindowThemePayload = {
 export type OusiaUpdateStatus =
   | { phase: "disabled"; reason: string }
   | { phase: "idle"; currentVersion: string }
+  | { phase: "unavailable"; currentVersion: string; message: string }
   | { phase: "checking"; currentVersion: string }
   | {
       phase: "available"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Pi",
-  "version": "0.2.1",
+  "version": "0.2.4",
   "identifier": "com.sidasoftware.pi-gui",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -29,7 +29,16 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": ["../assets/icon.icns"]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/s1dashu/ousia/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI4MEI5OTg2RkEwRUFDRQpSV1RPNnFCdm1MbUFDeFhGZ296a1Y0VzRlN0xqVS9aTmJOWVFJQW5hZU00MFg1VTdRMzlLQ1B0OAo="
+    }
   }
 }

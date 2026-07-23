@@ -12,6 +12,11 @@
 </p>
 
 <p align="center">
+  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&amp;logo=tauri&amp;logoColor=white" alt="Built with Tauri 2"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-222222?style=flat-square" alt="MIT License"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/s1dashu/ousia/releases/latest"><strong>Download for macOS</strong></a>
   ·
   <a href="#requirements">Requirements</a>

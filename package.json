@@ -1,7 +1,7 @@
 {
   "name": "pi-gui",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.4",
   "type": "module",
   "description": "A lightweight Tauri desktop client for a user-installed Pi agent.",
   "license": "MIT",
@@ -36,6 +36,8 @@
     "@pierre/diffs": "^1.2.12",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-dialog": "2.7.1",
+    "@tauri-apps/plugin-process": "^2.3.1",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.40.0",

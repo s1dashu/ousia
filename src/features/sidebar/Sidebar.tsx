@@ -1263,7 +1263,7 @@ function SidebarComponent({
         <Button
           type="button"
           variant="ghost"
-          className={`font-radix-regular h-9 min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
+          className={`font-radix-regular h-9 min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm active:!translate-y-0 ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
           <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />
@@ -1302,7 +1302,9 @@ function SidebarComponent({
                 ? t.sidebar.checkingForUpdate
                 : updateStatus.phase === "downloading"
                   ? t.sidebar.updating
-                  : t.sidebar.update}
+                  : updateStatus.phase === "error"
+                    ? t.sidebar.retryUpdate
+                    : t.sidebar.update}
           </Button>
         ) : null}
       </div>

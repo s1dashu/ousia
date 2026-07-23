@@ -47,6 +47,12 @@ import type {
   OusiaWindowZoomEvent,
 } from "@/electron/chat-types"
 import { appStateHost } from "./app-state-host"
+import {
+  downloadUpdate,
+  getUpdateStatus,
+  installUpdate,
+  onUpdateStatus,
+} from "./update-manager"
 
 function invokeWithPayload<T>(command: string, payload: unknown): Promise<T> {
   return invoke<T>(command, { payload })
@@ -283,20 +289,19 @@ const api = {
   },
 
   async getUpdateStatus(): Promise<OusiaUpdateStatus> {
-    return { phase: "disabled", reason: "Prototype builds do not self-update." }
+    return getUpdateStatus()
   },
 
   async downloadUpdate(): Promise<OusiaUpdateActionResult> {
-    return { ok: false, error: "Prototype builds do not self-update." }
+    return downloadUpdate()
   },
 
   async installUpdate(): Promise<OusiaUpdateActionResult> {
-    return { ok: false, error: "Prototype builds do not self-update." }
+    return installUpdate()
   },
 
   onUpdateStatus(callback: (status: OusiaUpdateStatus) => void) {
-    void callback
-    return () => undefined
+    return onUpdateStatus(callback)
   },
 
   onChatEvent(callback: (event: OusiaChatEvent) => void) {
