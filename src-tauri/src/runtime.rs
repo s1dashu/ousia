@@ -15,7 +15,8 @@ use tokio::{
 use crate::{
     logging::RuntimeLogger,
     paths::{
-        ShellEnvironment, executable_name, require_executable, resolve_command, resolve_pi_binary,
+        PI_NOT_FOUND_MESSAGE, ShellEnvironment, executable_name, find_pi_binary,
+        require_executable, resolve_command, resolve_pi_binary,
     },
     state::{app_data_dir, write_json_atomic},
 };
@@ -167,15 +168,25 @@ impl PiRuntimeManager {
         &self,
         environment: &ShellEnvironment,
     ) -> Result<ResolvedPiBinary, String> {
+        self.find_binary(environment)?
+            .ok_or_else(|| PI_NOT_FOUND_MESSAGE.to_string())
+    }
+
+    pub fn find_binary(
+        &self,
+        environment: &ShellEnvironment,
+    ) -> Result<Option<ResolvedPiBinary>, String> {
         // An explicit process/login-shell override remains authoritative for development and CI.
         if environment
             .get("PI_GUI_PI_PATH")
             .is_some_and(|path| !path.trim().is_empty())
             || std::env::var("PI_GUI_PI_PATH").is_ok_and(|path| !path.trim().is_empty())
         {
-            return resolve_pi_binary(environment).map(|path| ResolvedPiBinary {
-                path,
-                source: "override",
+            return resolve_pi_binary(environment).map(|path| {
+                Some(ResolvedPiBinary {
+                    path,
+                    source: "override",
+                })
             });
         }
         let selected = self
@@ -193,15 +204,17 @@ impl PiRuntimeManager {
                 .selected_source
                 .map(SelectedSource::as_str)
                 .ok_or_else(|| "Saved Pi runtime selection is missing its source.".to_string())?;
-            return Ok(ResolvedPiBinary { path, source });
+            return Ok(Some(ResolvedPiBinary { path, source }));
         }
-        resolve_pi_binary(environment).map(|path| ResolvedPiBinary {
-            source: if binary_is_on_path(environment, &path) {
-                "path"
-            } else {
-                "detected"
-            },
-            path,
+        find_pi_binary(environment).map(|path| {
+            path.map(|path| ResolvedPiBinary {
+                source: if binary_is_on_path(environment, &path) {
+                    "path"
+                } else {
+                    "detected"
+                },
+                path,
+            })
         })
     }
 
@@ -375,8 +388,10 @@ impl PiRuntimeManager {
         let output = match timeout(Duration::from_secs(600), command.output()).await {
             Ok(Ok(output)) => output,
             Ok(Err(error)) => {
-                return Err(self
-                    .cleanup_failed_install(format!("Failed to start {}: {error}", npm.display())));
+                return Err(self.cleanup_failed_install(format!(
+                    "Failed to start {}: {error}",
+                    npm.display()
+                )));
             }
             Err(_) => {
                 return Err(self.cleanup_failed_install(

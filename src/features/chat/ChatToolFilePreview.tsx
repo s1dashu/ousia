@@ -212,15 +212,12 @@ function pierreTextRows(container: HTMLElement): PierreTextRow[] {
   return rows
 }
 
-function wrapPierreTextSuffix(
+function animatePierreTextSuffix(
   node: HTMLElement,
   startOffset: number,
   elapsedMilliseconds: number,
   revealMarker: string,
 ) {
-  if (node.dataset.ousiaDiffStreamRevealApplied === revealMarker) {
-    return
-  }
   const document = node.ownerDocument
   const nodeFilter = document.defaultView?.NodeFilter
   if (!nodeFilter) {
@@ -228,36 +225,43 @@ function wrapPierreTextSuffix(
   }
 
   const walker = document.createTreeWalker(node, nodeFilter.SHOW_TEXT)
-  let remainingOffset = startOffset
-  let startNode: Text | null = null
-  let offsetInNode = 0
+  const revealTargets = new Set<HTMLElement>()
+  let renderedOffset = 0
   while (walker.nextNode()) {
     const textNode = walker.currentNode as Text
     const textLength = textNode.data.length
-    if (remainingOffset <= textLength) {
-      startNode = textNode
-      offsetInNode = remainingOffset
-      break
+    const nextOffset = renderedOffset + textLength
+    if (nextOffset > startOffset) {
+      const parent = textNode.parentElement
+      if (!parent || !node.contains(parent)) {
+        throw new Error("Streamed diff text rendered outside its source row")
+      }
+      revealTargets.add(parent === node ? node : parent)
     }
-    remainingOffset -= textLength
+    renderedOffset = nextOffset
   }
-  if (!startNode) {
+  if (renderedOffset <= startOffset || revealTargets.size === 0) {
     throw new Error("Streamed diff reveal offset exceeded the rendered row")
   }
 
-  const range = document.createRange()
-  range.setStart(startNode, offsetInNode)
-  range.setEnd(node, node.childNodes.length)
-  const fragment = range.extractContents()
-  const reveal = document.createElement("span")
-  reveal.dataset.ousiaDiffStreamReveal = ""
-  reveal.style.setProperty(
-    "--ousia-diff-stream-reveal-delay",
-    `${-Math.round(elapsedMilliseconds)}ms`,
-  )
-  reveal.append(fragment)
-  node.append(reveal)
-  node.dataset.ousiaDiffStreamRevealApplied = revealMarker
+  // Pierre replaces the row DOM whenever its worker publishes a new render.
+  // Animate existing token elements in place: extracting and re-inserting the
+  // suffix invalidates WebKit's outer scroll anchor and visibly jumps the chat.
+  if (revealTargets.has(node)) {
+    revealTargets.clear()
+    revealTargets.add(node)
+  }
+  for (const target of revealTargets) {
+    if (target.dataset.ousiaDiffStreamRevealApplied === revealMarker) {
+      continue
+    }
+    target.dataset.ousiaDiffStreamReveal = ""
+    target.dataset.ousiaDiffStreamRevealApplied = revealMarker
+    target.style.setProperty(
+      "--ousia-diff-stream-reveal-delay",
+      `${-Math.round(elapsedMilliseconds)}ms`,
+    )
+  }
 }
 
 function usePierreStreamReveal(isStreaming: boolean) {
@@ -310,7 +314,7 @@ function usePierreStreamReveal(isStreaming: boolean) {
           activeRevealsRef.current.delete(key)
           continue
         }
-        wrapPierreTextSuffix(
+        animatePierreTextSuffix(
           row.node,
           reveal.startOffset,
           elapsedMilliseconds,

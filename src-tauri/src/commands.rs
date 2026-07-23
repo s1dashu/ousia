@@ -110,7 +110,9 @@ pub async fn prepare_chat_session(
         } else {
             Some(configuration_from_payload(&payload)?)
         };
-        let client = host.prepare_client(context, &tools, &ticket).await?;
+        let Some(client) = host.prepare_client(context, &tools, &ticket).await? else {
+            return Ok(json!({ "ok": false, "runtimeUnavailable": true }));
+        };
         let configuration_result = match configuration {
             Some(configuration) => client.configure(&configuration).await,
             None => Ok(()),
@@ -141,6 +143,22 @@ pub async fn prepare_chat_session(
     }
 
     match &result {
+        Ok(value)
+            if value
+                .get("runtimeUnavailable")
+                .and_then(Value::as_bool)
+                .unwrap_or(false) =>
+        {
+            host.logger().record(
+                "info",
+                "pi.prepare.lifecycle",
+                "Skipped Pi session preparation because no Pi executable is available",
+                Some(json!({
+                    "durationMilliseconds": started.elapsed().as_millis(),
+                    "sessionId": session_id,
+                })),
+            )
+        }
         Ok(_) => host.logger().record(
             "info",
             "pi.prepare.timing",

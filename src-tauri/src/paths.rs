@@ -95,15 +95,17 @@ pub fn pi_agent_dir(environment: &ShellEnvironment) -> Result<PathBuf, String> {
         .ok_or_else(|| "Failed to resolve Pi agent directory.".to_string())
 }
 
-pub fn resolve_pi_binary(environment: &ShellEnvironment) -> Result<PathBuf, String> {
+pub const PI_NOT_FOUND_MESSAGE: &str = "Pi was not found in the login-shell PATH or the active npm global prefix. Install Pi or select its executable.";
+
+pub fn find_pi_binary(environment: &ShellEnvironment) -> Result<Option<PathBuf>, String> {
     if let Some(override_path) = environment.get("PI_GUI_PI_PATH") {
         let path = expand_home(override_path)?;
-        return require_executable(path, "PI_GUI_PI_PATH");
+        return require_executable(path, "PI_GUI_PI_PATH").map(Some);
     }
     if let Ok(override_path) = env::var("PI_GUI_PI_PATH") {
         if !override_path.trim().is_empty() {
             let path = expand_home(&override_path)?;
-            return require_executable(path, "PI_GUI_PI_PATH");
+            return require_executable(path, "PI_GUI_PI_PATH").map(Some);
         }
     }
 
@@ -111,7 +113,7 @@ pub fn resolve_pi_binary(environment: &ShellEnvironment) -> Result<PathBuf, Stri
         for directory in env::split_paths(path_value) {
             let candidate = directory.join(executable_name());
             if is_executable(&candidate) {
-                return Ok(candidate);
+                return Ok(Some(candidate));
             }
         }
     }
@@ -128,7 +130,7 @@ pub fn resolve_pi_binary(environment: &ShellEnvironment) -> Result<PathBuf, Stri
         ]);
     }
     if let Some(candidate) = candidates.into_iter().find(|path| is_executable(path)) {
-        return Ok(candidate);
+        return Ok(Some(candidate));
     }
 
     if let Some(npm) = resolve_command(environment, npm_executable_name()) {
@@ -156,14 +158,15 @@ pub fn resolve_pi_binary(environment: &ShellEnvironment) -> Result<PathBuf, Stri
             .join("bin")
             .join(executable_name());
         if is_executable(&candidate) {
-            return Ok(candidate);
+            return Ok(Some(candidate));
         }
     }
 
-    Err(
-        "Pi was not found in the login-shell PATH or the active npm global prefix. Install Pi or select its executable."
-            .to_string(),
-    )
+    Ok(None)
+}
+
+pub fn resolve_pi_binary(environment: &ShellEnvironment) -> Result<PathBuf, String> {
+    find_pi_binary(environment)?.ok_or_else(|| PI_NOT_FOUND_MESSAGE.to_string())
 }
 
 pub(crate) fn executable_name() -> &'static str {
