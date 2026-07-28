@@ -1539,6 +1539,12 @@
   scrollbar-gutter: stable both-edges;
 }
 
+.ousia-sidebar-scrollbar-gutter {
+  /* Sidebar spacing is explicit. Reserve only the scrollbar edge so classic
+   * scrollbars cannot add a second, input-device-dependent left gutter. */
+  scrollbar-gutter: stable;
+}
+
 /*
  * Compact scrollbars for portaled UI popups. Chromium's native scrollbar can
  * reserve a wide, opaque track when macOS is configured to always show

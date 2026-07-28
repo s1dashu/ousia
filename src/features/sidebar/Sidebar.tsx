@@ -63,9 +63,9 @@ const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
 const sidebarProjectActionButtonClass = "size-6 justify-self-end"
 const sidebarProjectLeadGridClass = "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
-const sidebarScrollPaddingXClass = "px-0"
+const sidebarScrollPaddingXClass = "px-2"
 const sidebarFooterPaddingXClass = "px-[7px]"
-const sidebarRowFrameXClass = "-ml-1 w-full"
+const sidebarRowFrameXClass = "w-full"
 const sidebarRowContentXClass = "pl-3 pr-2"
 const sidebarRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
 const sidebarSessionRowXClass = "mr-1 pl-2 pr-1"
@@ -1237,7 +1237,7 @@ function SidebarComponent({
 
       <div
         ref={scrollContainerRef}
-        className={`ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
+        className={`ousia-hover-scrollbar ousia-sidebar-scrollbar-gutter min-h-0 flex-1 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
       >
         <DndContext
           sensors={sensors}
