@@ -27,12 +27,12 @@
 
 <p align="center">
   <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg">
-    <img src="./assets/download-electron-button.svg" alt="Download the Electron version for macOS" width="280" height="48">
+    <img src="./assets/download-electron-button.svg" alt="Download Ousia for macOS" width="280" height="48">
   </a>
 </p>
 
 <p align="center">
-  <del><a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg">Tauri Version</a></del>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg">Tauri Version</a>
 </p>
 
 ---
