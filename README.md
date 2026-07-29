@@ -32,6 +32,7 @@
 
 ## Recent changes
 
+- [**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6) — Clearer Pi request failures, smoother sidebar dragging, and consistent sidebar text alignment.
 - [**v0.2.5**](https://github.com/s1dashu/ousia/releases/tag/v0.2.5) — Stable sidebar spacing across display and scrollbar configurations.
 - [**v0.2.4**](https://github.com/s1dashu/ousia/releases/tag/v0.2.4) — Signed in-app updates with explicit download and install controls.
 
