@@ -124,6 +124,22 @@ describe("Sidebar running actions", () => {
     expect(checking).toContain(">Checking</button>")
   })
 
+  it("shows update failures as a retry action with the concrete error", () => {
+    const html = renderSidebar({
+      updateStatus: {
+        phase: "error",
+        currentVersion: "0.1.33",
+        message: "Release check failed with HTTP 503",
+      },
+    })
+
+    expect(html).toContain('data-variant="destructive"')
+    expect(html).toContain(
+      'title="Update failed. Click to retry. Release check failed with HTTP 503"'
+    )
+    expect(html).toContain(">Update failed. Click to retry.</button>")
+  })
+
   it("insets session surfaces while keeping actions close to the right edge", () => {
     const html = renderSidebar()
 

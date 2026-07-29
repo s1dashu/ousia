@@ -1333,7 +1333,9 @@ function SidebarComponent({
                 ? t.sidebar.checkingForUpdate
                 : updateStatus.phase === "downloading"
                   ? t.sidebar.updating
-                  : t.sidebar.update}
+                  : updateStatus.phase === "error"
+                    ? t.sidebar.updateFailed
+                    : t.sidebar.update}
           </Button>
         ) : null}
       </div>
