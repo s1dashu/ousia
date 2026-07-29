@@ -20,6 +20,10 @@ cd "$root_dir"
 version=$(node -p "require('./package.json').version")
 [[ -n "$version" ]] || fail "package.json does not contain a version"
 
+product_name=$(node -p "require('./src-tauri/tauri.conf.json').productName")
+[[ -n "$product_name" ]] || fail "src-tauri/tauri.conf.json does not contain a productName"
+[[ "$product_name" != */* ]] || fail "Tauri productName must not contain a path separator"
+
 if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
   updater_key_path=${TAURI_SIGNING_PRIVATE_KEY_PATH:-"$HOME/.tauri/pi-updater.key"}
   [[ -f "$updater_key_path" ]] ||
@@ -30,14 +34,15 @@ fi
 
 npm run desktop:build -- --bundles app,dmg --config src-tauri/tauri.release.conf.json
 
-app_path="$root_dir/src-tauri/target/release/bundle/macos/Pi.app"
+app_path="$root_dir/src-tauri/target/release/bundle/macos/${product_name}.app"
 dmg_dir="$root_dir/src-tauri/target/release/bundle/dmg"
-dmg_paths=("$dmg_dir"/Pi_"$version"_*.dmg(N))
+dmg_paths=("$dmg_dir"/${product_name}_"$version"_*.dmg(N))
 updater_dir="$root_dir/src-tauri/target/release/bundle/macos"
-updater_path="$updater_dir/Pi.app.tar.gz"
+updater_path="$updater_dir/${product_name}.app.tar.gz"
 
 [[ -d "$app_path" ]] || fail "Tauri did not produce $app_path"
-(( ${#dmg_paths} == 1 )) || fail "expected exactly one Pi $version DMG, found ${#dmg_paths}"
+(( ${#dmg_paths} == 1 )) ||
+  fail "expected exactly one $product_name $version DMG, found ${#dmg_paths}"
 [[ -s "$updater_path" ]] ||
   fail "Tauri did not produce updater archive $updater_path"
 dmg_path=${dmg_paths[1]}
@@ -64,11 +69,11 @@ zip_path="${dmg_path%.dmg}.zip"
 rm -f "$zip_path"
 ditto -c -k --sequesterRsrc --keepParent "$app_path" "$zip_path"
 
-dmg_arch=${${dmg_path:t}#Pi_${version}_}
+dmg_arch=${${dmg_path:t}#${product_name}_${version}_}
 dmg_arch=${dmg_arch%.dmg}
 [[ -n "$dmg_arch" && "$dmg_arch" != "${dmg_path:t}" ]] ||
   fail "could not derive the DMG architecture from ${dmg_path:t}"
-stable_dmg_path="$dmg_dir/Pi_${dmg_arch}.dmg"
+stable_dmg_path="$dmg_dir/${product_name}_${dmg_arch}.dmg"
 rm -f "$stable_dmg_path"
 cp -p "$dmg_path" "$stable_dmg_path"
 cmp -s "$dmg_path" "$stable_dmg_path" ||
@@ -76,16 +81,16 @@ cmp -s "$dmg_path" "$stable_dmg_path" ||
 
 zip_verify_dir=$(mktemp -d)
 ditto -x -k "$zip_path" "$zip_verify_dir"
-codesign --verify --deep --strict --verbose=2 "$zip_verify_dir/Pi.app"
-spctl --assess --type execute --verbose=4 "$zip_verify_dir/Pi.app"
-xcrun stapler validate "$zip_verify_dir/Pi.app"
+codesign --verify --deep --strict --verbose=2 "$zip_verify_dir/${product_name}.app"
+spctl --assess --type execute --verbose=4 "$zip_verify_dir/${product_name}.app"
+xcrun stapler validate "$zip_verify_dir/${product_name}.app"
 rm -rf "$zip_verify_dir"
 
 updater_verify_dir=$(mktemp -d)
 tar -xzf "$updater_path" -C "$updater_verify_dir"
-updater_apps=("$updater_verify_dir"/Pi.app(N))
+updater_apps=("$updater_verify_dir"/${product_name}.app(N))
 (( ${#updater_apps} == 1 )) ||
-  fail "updater archive does not contain exactly one Pi.app"
+  fail "updater archive does not contain exactly one ${product_name}.app"
 codesign --verify --deep --strict --verbose=2 "${updater_apps[1]}"
 spctl --assess --type execute --verbose=4 "${updater_apps[1]}"
 xcrun stapler validate "${updater_apps[1]}"
@@ -104,7 +109,7 @@ node scripts/generate-latest-json.mjs \
   "$updater_signature_path" \
   "$latest_json_path"
 
-checksum_path="$dmg_dir/Pi_${version}_SHA256SUMS.txt"
+checksum_path="$dmg_dir/${product_name}_${version}_SHA256SUMS.txt"
 (
   cd "$dmg_dir"
   shasum -a 256 "${dmg_path:t}" "${stable_dmg_path:t}" "${zip_path:t}" > "${checksum_path:t}"
