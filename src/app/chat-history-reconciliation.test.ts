@@ -161,6 +161,29 @@ describe("reconcilePersistedChatHistory", () => {
     ])
   })
 
+  it("replaces a live assistant failure with its persisted history item", () => {
+    const errorText = "Pi request failed: 401 subscription required"
+    const result = reconcilePersistedChatHistory(
+      [
+        textItem("user-live", "user", "hi"),
+        textItem("pi-assistant-error-1-1", "error", errorText),
+      ],
+      [
+        textItem("user-entry", "user", "hi", true),
+        textItem("assistant-entry-error", "error", errorText, true),
+      ],
+    )
+
+    expect(result.unmatchedTransientIds).toEqual([])
+    expect(result.resolvedIds.get("pi-assistant-error-1-1")).toBe(
+      "assistant-entry-error",
+    )
+    expect(result.items).toEqual([
+      textItem("user-entry", "user", "hi", true),
+      textItem("assistant-entry-error", "error", errorText, true),
+    ])
+  })
+
   it("reports a missing anchor instead of merging unrelated histories", () => {
     const result = reconcilePersistedChatHistory(
       [textItem("old", "user", "old", true)],

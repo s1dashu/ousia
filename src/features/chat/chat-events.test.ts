@@ -22,6 +22,36 @@ function textItem(
 }
 
 describe("applyChatEventBatchBySession", () => {
+  it("upserts an assistant failure status instead of duplicating it", () => {
+    const id = "pi-assistant-error-1-1"
+    let items = applyChatEvent([], {
+      type: "status_message",
+      id,
+      role: "error",
+      status: "streaming",
+      text: "Pi request failed: temporary provider failure",
+      timestamp,
+    })
+    items = applyChatEvent(items, {
+      type: "status_message",
+      id,
+      role: "error",
+      status: "finished",
+      text: "Pi request failed: 401 subscription required",
+      timestamp,
+    })
+
+    expect(items).toEqual([
+      {
+        id,
+        role: "error",
+        status: "finished",
+        text: "Pi request failed: 401 subscription required",
+        timestamp,
+      },
+    ])
+  })
+
   it("streams content-first input for three consecutive write calls", () => {
     let items: ChatItem[] = []
 

@@ -20,6 +20,7 @@ use tokio::{
 };
 
 use crate::{
+    chat::{AssistantFailure, assistant_failure},
     logging::RuntimeLogger,
     paths::ShellEnvironment,
     runtime::PiRuntimeManager,
@@ -350,6 +351,12 @@ struct ToolCallSnapshot {
     id: String,
     name: String,
     arguments: Value,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+enum FinalAssistantTextBlock {
+    Text { content_index: u64, text: String },
+    Thinking { content_index: u64, text: String },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1357,6 +1364,59 @@ impl RpcClient {
     fn handle_message_end(&self, value: &Value) -> Result<(), String> {
         match event_message_role(value)? {
             "assistant" => {
+                let message = value
+                    .get("message")
+                    .ok_or_else(|| "Pi message_end is missing message.".to_string())?;
+                let failure = assistant_failure(message)?;
+                let final_blocks = final_assistant_text_blocks(value)?;
+                let mut final_text_block_count = 0_usize;
+                let mut final_text_bytes = 0_usize;
+                let mut final_thinking_block_count = 0_usize;
+                let mut final_thinking_bytes = 0_usize;
+                for block in final_blocks {
+                    match block {
+                        FinalAssistantTextBlock::Text {
+                            content_index,
+                            text,
+                        } => {
+                            final_text_block_count = final_text_block_count.checked_add(1).ok_or(
+                                "Pi final assistant text block count overflowed.".to_string(),
+                            )?;
+                            final_text_bytes = final_text_bytes.checked_add(text.len()).ok_or(
+                                "Pi final assistant text byte count overflowed.".to_string(),
+                            )?;
+                            self.emit_stream_event(
+                                "text",
+                                content_index,
+                                "assistant_text_end",
+                                None,
+                                Some(&text),
+                            )?;
+                        }
+                        FinalAssistantTextBlock::Thinking {
+                            content_index,
+                            text,
+                        } => {
+                            final_thinking_block_count =
+                                final_thinking_block_count.checked_add(1).ok_or(
+                                    "Pi final assistant thinking block count overflowed."
+                                        .to_string(),
+                                )?;
+                            final_thinking_bytes =
+                                final_thinking_bytes.checked_add(text.len()).ok_or(
+                                    "Pi final assistant thinking byte count overflowed."
+                                        .to_string(),
+                                )?;
+                            self.emit_stream_event(
+                                "thinking",
+                                content_index,
+                                "thinking_end",
+                                None,
+                                Some(&text),
+                            )?;
+                        }
+                    }
+                }
                 let (sequence, tool_call_count) = self
                     .assistant_stream
                     .lock()
@@ -1368,12 +1428,25 @@ impl RpcClient {
                     "Pi assistant message ended",
                     Some(json!({
                         "generation": self.run_generation.load(Ordering::SeqCst),
+                        "finalTextBlockCount": final_text_block_count,
+                        "finalTextBytes": final_text_bytes,
+                        "finalThinkingBlockCount": final_thinking_block_count,
+                        "finalThinkingBytes": final_thinking_bytes,
                         "messageSequence": sequence,
                         "sessionId": self.context.session_id,
                         "streamedToolCallCount": tool_call_count,
                     })),
                 );
-                Ok(())
+                if let Some(failure) = failure {
+                    self.emit_assistant_failure(
+                        self.run_generation.load(Ordering::SeqCst),
+                        sequence,
+                        &failure,
+                        "message_end",
+                    )
+                } else {
+                    Ok(())
+                }
             }
             "user" | "toolResult" | "custom" => Ok(()),
             role => Err(format!(
@@ -1479,19 +1552,30 @@ impl RpcClient {
                 self.handle_tool_call_input_end(event, required_content_index(index, kind)?)
             }
             "error" => {
-                self.streaming.store(false, Ordering::SeqCst);
-                self.emit(json!({
-                    "type": "error",
-                    "id": format!("assistant-error-{}", uuid::Uuid::new_v4()),
-                    "text": event.get("error").and_then(Value::as_str).unwrap_or("Pi model stream failed."),
-                    "timestamp": timestamp(),
-                }))?;
-                self.emit(json!({
-                    "type": "run_status",
-                    "status": "error",
-                    "text": event.get("error").and_then(Value::as_str).unwrap_or("Pi model stream failed."),
-                    "timestamp": timestamp(),
-                }))
+                let error_message = event
+                    .get("error")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|message| !message.is_empty())
+                    .ok_or_else(|| {
+                        "Pi assistant stream error event is missing a non-empty error.".to_string()
+                    })?;
+                let message_sequence = self
+                    .assistant_stream
+                    .lock()
+                    .map_err(|_| "Pi assistant-stream mutex was poisoned.".to_string())?
+                    .active_message_sequence()?;
+                let failure = AssistantFailure {
+                    error_message: error_message.to_string(),
+                    model_id: None,
+                    provider: None,
+                };
+                self.emit_assistant_failure(
+                    self.run_generation.load(Ordering::SeqCst),
+                    message_sequence,
+                    &failure,
+                    "message_update",
+                )
             }
             "start" | "done" => Ok(()),
             other => Err(format!("Unsupported Pi assistant stream event: {other}")),
@@ -1505,6 +1589,38 @@ impl RpcClient {
             );
         }
         emit_result
+    }
+
+    fn emit_assistant_failure(
+        &self,
+        generation: u64,
+        message_sequence: u64,
+        failure: &AssistantFailure,
+        source: &str,
+    ) -> Result<(), String> {
+        self.logger.record(
+            "error",
+            "pi.event.message",
+            "Pi assistant request failed",
+            Some(json!({
+                "error": failure.error_message,
+                "generation": generation,
+                "messageSequence": message_sequence,
+                "modelId": failure.model_id,
+                "provider": failure.provider,
+                "sessionId": self.context.session_id,
+                "source": source,
+                "stopReason": "error",
+            })),
+        );
+        self.emit(json!({
+            "type": "status_message",
+            "id": format!("pi-assistant-error-{generation}-{message_sequence}"),
+            "role": "error",
+            "status": "finished",
+            "text": failure.display_text(),
+            "timestamp": timestamp(),
+        }))
     }
 
     fn handle_tool_call_input_update(
@@ -2584,6 +2700,60 @@ fn event_message_role(value: &Value) -> Result<&str, String> {
         .ok_or_else(|| "Pi message event is missing message.role.".to_string())
 }
 
+fn final_assistant_text_blocks(value: &Value) -> Result<Vec<FinalAssistantTextBlock>, String> {
+    let content = value
+        .get("message")
+        .and_then(Value::as_object)
+        .and_then(|message| message.get("content"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "Pi assistant message_end is missing message.content array.".to_string())?;
+    let mut blocks = Vec::new();
+    for (index, block) in content.iter().enumerate() {
+        let content_index = u64::try_from(index)
+            .map_err(|_| format!("Pi assistant message content index is too large: {index}"))?;
+        let block = block.as_object().ok_or_else(|| {
+            format!("Pi assistant message content block {content_index} is not an object.")
+        })?;
+        let block_type = block.get("type").and_then(Value::as_str).ok_or_else(|| {
+            format!("Pi assistant message content block {content_index} is missing type.")
+        })?;
+        match block_type {
+            "text" => {
+                let text = block.get("text").and_then(Value::as_str).ok_or_else(|| {
+                    format!(
+                        "Pi assistant text content block {content_index} is missing string text."
+                    )
+                })?;
+                blocks.push(FinalAssistantTextBlock::Text {
+                    content_index,
+                    text: text.to_string(),
+                });
+            }
+            "thinking" => {
+                let text = block
+                    .get("thinking")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| {
+                        format!(
+                            "Pi assistant thinking content block {content_index} is missing string thinking."
+                        )
+                    })?;
+                blocks.push(FinalAssistantTextBlock::Thinking {
+                    content_index,
+                    text: text.to_string(),
+                });
+            }
+            "toolCall" => {}
+            block_type => {
+                return Err(format!(
+                    "Unsupported Pi assistant message content block type at index {content_index}: {block_type}"
+                ));
+            }
+        }
+    }
+    Ok(blocks)
+}
+
 fn required_content_index(index: Option<u64>, event_kind: &str) -> Result<u64, String> {
     index.ok_or_else(|| format!("Pi assistant {event_kind} event is missing numeric contentIndex."))
 }
@@ -2686,11 +2856,11 @@ pub fn content_text(value: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentConfiguration, AssistantStreamState, PrepareState, PrepareTicket, PromptTrace,
-        PromptTraceState, ToolCallSnapshot, ToolInputCompletionSource, content_text,
-        final_tool_call, prepare_ticket_is_current, required_bool, session_file_is_materialized,
-        should_release_idle_client, should_supersede_preparing_client, tool_call_from_partial,
-        tools_for_mode,
+        AgentConfiguration, AssistantStreamState, FinalAssistantTextBlock, PrepareState,
+        PrepareTicket, PromptTrace, PromptTraceState, ToolCallSnapshot, ToolInputCompletionSource,
+        content_text, final_assistant_text_blocks, final_tool_call, prepare_ticket_is_current,
+        required_bool, session_file_is_materialized, should_release_idle_client,
+        should_supersede_preparing_client, tool_call_from_partial, tools_for_mode,
     };
     use serde_json::{Value, json};
     use std::{fs, time::Instant};
@@ -2721,6 +2891,54 @@ mod tests {
                 {"type": "text", "text": "two"}
             ])),
             "one\ntwo"
+        );
+    }
+
+    #[test]
+    fn final_assistant_message_exposes_authoritative_text_snapshots() {
+        assert_eq!(
+            final_assistant_text_blocks(&json!({
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "thinking", "thinking": "plan"},
+                        {"type": "text", "text": "complete answer"},
+                        {
+                            "type": "toolCall",
+                            "id": "call-1",
+                            "name": "read",
+                            "arguments": {"path": "README.md"}
+                        }
+                    ]
+                }
+            }))
+            .unwrap(),
+            vec![
+                FinalAssistantTextBlock::Thinking {
+                    content_index: 0,
+                    text: "plan".to_string(),
+                },
+                FinalAssistantTextBlock::Text {
+                    content_index: 1,
+                    text: "complete answer".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn malformed_final_assistant_content_fails_fast() {
+        let error = final_assistant_text_blocks(&json!({
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text"}]
+            }
+        }))
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            "Pi assistant text content block 0 is missing string text."
         );
     }
 

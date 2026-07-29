@@ -1456,17 +1456,54 @@ function ChatAreaComponent({
           }
         }
       } catch (error) {
-        const text = error instanceof Error ? error.message : t.chat.sendFailed
-        console.error("[chat.send] Send failed", {
-          error: text,
+        const message =
+          error instanceof Error
+            ? error.message
+            : typeof error === "string" && error.trim()
+              ? error
+              : error == null
+                ? t.chat.sendFailed
+                : String(error)
+        const diagnostics = {
+          attachmentCount: outgoingAttachments.length,
+          attachments: outgoingAttachments.map((attachment) => ({
+            base64Length:
+              attachment.kind === "image"
+                ? attachment.dataBase64.length
+                : undefined,
+            kind: attachment.kind,
+            mediaType: attachment.mediaType,
+            size: attachment.size,
+          })),
           messageId: optimisticMessage.messageId,
+          modelId: settings.modelId,
+          promptCharacters: text.length,
+          provider: settings.modelProvider,
+          sendBehavior,
           sessionId: currentSession.id,
+        }
+        console.error("[chat.send] Send failed", {
+          ...diagnostics,
+          error: message,
         })
+        void ousia
+          .reportFrontendError({
+            data: diagnostics,
+            kind: "chat-send",
+            message,
+            stack: error instanceof Error ? error.stack : undefined,
+          })
+          .catch((reportingError: unknown) => {
+            console.error(
+              "[chat.send] Failed to persist send diagnostic",
+              reportingError,
+            )
+          })
         onLocalEvent({
           context,
           type: "error",
           id: `send-error-${optimisticMessage.messageId}`,
-          text,
+          text: message,
           timestamp: new Date().toISOString(),
         })
         onLocalEvent({

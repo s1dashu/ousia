@@ -11,6 +11,7 @@ use tauri::{AppHandle, State};
 use tokio::time::{Instant, sleep};
 
 use crate::{
+    chat::assistant_failure,
     paths::pi_agent_dir,
     rpc::{AgentConfiguration, PiHost, PromptTrace, content_text, tools_for_mode},
     runtime::binary_on_login_path,
@@ -190,143 +191,121 @@ pub async fn send_chat_message(
     payload: Value,
 ) -> Result<Value, String> {
     let send_started = StdInstant::now();
-    let message_id = required_string(&payload, "messageId")?.to_string();
-    if message_id.is_empty() || message_id.chars().count() > 200 {
-        return Err("Chat message id must contain between 1 and 200 characters.".to_string());
-    }
+    let diagnostics = chat_send_diagnostics(&payload);
+    host.logger().record(
+        "info",
+        "pi.send.command",
+        "Received a chat message submission",
+        Some(diagnostics.clone()),
+    );
 
-    let context_started = StdInstant::now();
-    let context = context_from_payload(&app, &payload)?;
-    let context_milliseconds = context_started.elapsed().as_millis();
-    let tools = tools_from_payload(&payload)?;
-    let client_started = StdInstant::now();
-    let client = host.client(context, &tools).await?;
-    let client_milliseconds = client_started.elapsed().as_millis();
-    let client_reused = client.reused_existing_client();
-    let configuration = configuration_from_payload(&payload)?;
-    let configuration_started = StdInstant::now();
-    client.configure(&configuration).await?;
-    let configuration_milliseconds = configuration_started.elapsed().as_millis();
-
-    let mut message = required_string(&payload, "prompt")?.trim().to_string();
-    let mut images = Vec::new();
-    for attachment in payload
-        .get("attachments")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-    {
-        match required_string(attachment, "kind")? {
-            "image" => images.push(json!({
-                "type": "image",
-                "data": required_string(attachment, "dataBase64")?,
-                "mimeType": attachment.get("mediaType").and_then(Value::as_str).unwrap_or("image/png"),
-            })),
-            "text" => {
-                let name = required_string(attachment, "name")?;
-                let media_type = attachment
-                    .get("mediaType")
-                    .and_then(Value::as_str)
-                    .unwrap_or("text/plain");
-                let size = attachment.get("size").and_then(Value::as_u64).unwrap_or(0);
-                let text = required_string(attachment, "text")?;
-                message.push_str(&format!(
-                    "\n\n<attached_file name={name:?} mediaType={media_type:?} size={size}>\n{text}\n</attached_file>"
-                ));
-            }
-            "file" => {
-                let name = required_string(attachment, "name")?;
-                let media_type = attachment
-                    .get("mediaType")
-                    .and_then(Value::as_str)
-                    .unwrap_or("application/octet-stream");
-                let size = attachment.get("size").and_then(Value::as_u64).unwrap_or(0);
-                message.push_str(&format!(
-                    "\n\nThe user attached a non-text file whose content is unavailable to this client: {name} ({media_type}, {size} bytes)."
-                ));
-            }
-            kind => return Err(format!("Unsupported attachment kind: {kind}")),
+    let mut failure_stage = "message-id-validation";
+    let result = async {
+        let message_id = required_string(&payload, "messageId")?.to_string();
+        if message_id.is_empty() || message_id.chars().count() > 200 {
+            return Err("Chat message id must contain between 1 and 200 characters.".to_string());
         }
-    }
-    if message.trim().is_empty() && images.is_empty() {
-        return Err("A chat message or image is required.".to_string());
-    }
 
-    let behavior = payload
-        .get("sendBehavior")
-        .and_then(Value::as_str)
-        .unwrap_or("normal");
-    let command = match behavior {
-        "normal" => json!({ "type": "prompt", "message": message, "images": images }),
-        "steer" => json!({ "type": "steer", "message": message, "images": images }),
-        "followUp" => json!({ "type": "follow_up", "message": message, "images": images }),
-        other => return Err(format!("Unsupported send behavior: {other}")),
-    };
-    let attachment_count = payload
-        .get("attachments")
-        .and_then(Value::as_array)
-        .map_or(0, Vec::len);
-    let prompt_started = StdInstant::now();
-    let prompt_result = if behavior == "normal" {
-        client
-            .call_prompt(
-                command,
-                PromptTrace::new(&message_id, send_started, &configuration, client_reused),
-            )
-            .await
-    } else {
-        client.call(command).await
-    };
-    if let Err(error) = prompt_result {
+        failure_stage = "message-validation";
+        let submission = prepare_chat_submission(&payload)?;
+        failure_stage = "context-resolution";
+        let context_started = StdInstant::now();
+        let context = context_from_payload(&app, &payload)?;
+        let context_milliseconds = context_started.elapsed().as_millis();
+        failure_stage = "tool-validation";
+        let tools = tools_from_payload(&payload)?;
+        failure_stage = "configuration-validation";
+        let configuration = configuration_from_payload(&payload)?;
+        failure_stage = "client-startup";
+        let client_started = StdInstant::now();
+        let client = host.client(context, &tools).await?;
+        let client_milliseconds = client_started.elapsed().as_millis();
+        let client_reused = client.reused_existing_client();
+        failure_stage = "client-configuration";
+        let configuration_started = StdInstant::now();
+        client.configure(&configuration).await?;
+        let configuration_milliseconds = configuration_started.elapsed().as_millis();
+
+        failure_stage = "prompt-submission";
+        let prompt_started = StdInstant::now();
+        let prompt_result = if submission.behavior == "normal" {
+            client
+                .call_prompt(
+                    submission.command,
+                    PromptTrace::new(&message_id, send_started, &configuration, client_reused),
+                )
+                .await
+        } else {
+            client.call(submission.command).await
+        };
+        if let Err(error) = prompt_result {
+            host.logger().record(
+                "error",
+                "pi.send",
+                "Pi rejected the submitted chat message",
+                Some(json!({
+                    "behavior": submission.behavior,
+                    "clientReused": client_reused,
+                    "durationMilliseconds": send_started.elapsed().as_millis(),
+                    "error": error,
+                    "messageId": message_id,
+                    "sessionId": client.context.session_id,
+                })),
+            );
+            return Err(error);
+        }
+        let prompt_milliseconds = prompt_started.elapsed().as_millis();
         host.logger().record(
-            "error",
-            "pi.send",
-            "Pi rejected the submitted chat message",
+            "info",
+            "pi.send.timing",
+            "Pi accepted the submitted chat message",
             Some(json!({
-                "behavior": behavior,
+                "attachmentCount": submission.attachment_count,
+                "behavior": submission.behavior,
+                "clientMilliseconds": client_milliseconds,
                 "clientReused": client_reused,
-                "durationMilliseconds": send_started.elapsed().as_millis(),
-                "error": error,
-                "messageId": message_id,
+                "configurationMilliseconds": configuration_milliseconds,
+                "contextMilliseconds": context_milliseconds,
+                "hostToPromptAcceptedMilliseconds": send_started.elapsed().as_millis(),
+                "messageId": &message_id,
+                "modelId": configuration.model_id,
+                "promptMilliseconds": prompt_milliseconds,
+                "provider": configuration.provider,
                 "sessionId": client.context.session_id,
             })),
         );
-        return Err(error);
+        failure_stage = "session-mapping";
+        let mapping_started = StdInstant::now();
+        host.capture_mapping(&client).await?;
+        host.logger().record(
+            "info",
+            "pi.send.timing",
+            "Completed host-side chat submission work",
+            Some(json!({
+                "durationMilliseconds": send_started.elapsed().as_millis(),
+                "mappingMilliseconds": mapping_started.elapsed().as_millis(),
+                "messageId": &message_id,
+                "sessionId": client.context.session_id,
+            })),
+        );
+        Ok(json!({ "ok": true, "messageId": message_id }))
     }
-    let prompt_milliseconds = prompt_started.elapsed().as_millis();
-    host.logger().record(
-        "info",
-        "pi.send.timing",
-        "Pi accepted the submitted chat message",
-        Some(json!({
-            "attachmentCount": attachment_count,
-            "behavior": behavior,
-            "clientMilliseconds": client_milliseconds,
-            "clientReused": client_reused,
-            "configurationMilliseconds": configuration_milliseconds,
-            "contextMilliseconds": context_milliseconds,
-            "hostToPromptAcceptedMilliseconds": send_started.elapsed().as_millis(),
-            "messageId": &message_id,
-            "modelId": configuration.model_id,
-            "promptMilliseconds": prompt_milliseconds,
-            "provider": configuration.provider,
-            "sessionId": client.context.session_id,
-        })),
-    );
-    let mapping_started = StdInstant::now();
-    host.capture_mapping(&client).await?;
-    host.logger().record(
-        "info",
-        "pi.send.timing",
-        "Completed host-side chat submission work",
-        Some(json!({
-            "durationMilliseconds": send_started.elapsed().as_millis(),
-            "mappingMilliseconds": mapping_started.elapsed().as_millis(),
-            "messageId": &message_id,
-            "sessionId": client.context.session_id,
-        })),
-    );
-    Ok(json!({ "ok": true, "messageId": message_id }))
+    .await;
+
+    if let Err(error) = &result {
+        host.logger().record(
+            "error",
+            "pi.send.command",
+            "Chat message submission failed",
+            Some(json!({
+                "durationMilliseconds": send_started.elapsed().as_millis(),
+                "error": error,
+                "request": diagnostics,
+                "stage": failure_stage,
+            })),
+        );
+    }
+    result
 }
 
 #[tauri::command]
@@ -1135,6 +1114,109 @@ fn tools_from_payload(payload: &Value) -> Result<Vec<String>, String> {
     )
 }
 
+#[derive(Debug)]
+struct PreparedChatSubmission {
+    attachment_count: usize,
+    behavior: String,
+    command: Value,
+}
+
+fn prepare_chat_submission(payload: &Value) -> Result<PreparedChatSubmission, String> {
+    let mut message = string_field(payload, "prompt")?.trim().to_string();
+    let attachments = match payload.get("attachments") {
+        None => &[][..],
+        Some(Value::Array(attachments)) => attachments.as_slice(),
+        Some(_) => return Err("Chat attachments must be an array.".to_string()),
+    };
+    let mut images = Vec::new();
+    for attachment in attachments {
+        match required_string(attachment, "kind")? {
+            "image" => images.push(json!({
+                "type": "image",
+                "data": required_string(attachment, "dataBase64")?,
+                "mimeType": attachment.get("mediaType").and_then(Value::as_str).unwrap_or("image/png"),
+            })),
+            "text" => {
+                let name = required_string(attachment, "name")?;
+                let media_type = attachment
+                    .get("mediaType")
+                    .and_then(Value::as_str)
+                    .unwrap_or("text/plain");
+                let size = attachment.get("size").and_then(Value::as_u64).unwrap_or(0);
+                let text = string_field(attachment, "text")?;
+                message.push_str(&format!(
+                    "\n\n<attached_file name={name:?} mediaType={media_type:?} size={size}>\n{text}\n</attached_file>"
+                ));
+            }
+            "file" => {
+                let name = required_string(attachment, "name")?;
+                let media_type = attachment
+                    .get("mediaType")
+                    .and_then(Value::as_str)
+                    .unwrap_or("application/octet-stream");
+                let size = attachment.get("size").and_then(Value::as_u64).unwrap_or(0);
+                message.push_str(&format!(
+                    "\n\nThe user attached a non-text file whose content is unavailable to this client: {name} ({media_type}, {size} bytes)."
+                ));
+            }
+            kind => return Err(format!("Unsupported attachment kind: {kind}")),
+        }
+    }
+    if message.trim().is_empty() && images.is_empty() {
+        return Err("A chat message or image is required.".to_string());
+    }
+
+    let behavior = payload
+        .get("sendBehavior")
+        .and_then(Value::as_str)
+        .unwrap_or("normal");
+    let command = match behavior {
+        "normal" => json!({ "type": "prompt", "message": message, "images": images }),
+        "steer" => json!({ "type": "steer", "message": message, "images": images }),
+        "followUp" => json!({ "type": "follow_up", "message": message, "images": images }),
+        other => return Err(format!("Unsupported send behavior: {other}")),
+    };
+    Ok(PreparedChatSubmission {
+        attachment_count: attachments.len(),
+        behavior: behavior.to_string(),
+        command,
+    })
+}
+
+fn chat_send_diagnostics(payload: &Value) -> Value {
+    let attachments = payload.get("attachments").and_then(Value::as_array);
+    let attachment_metadata = attachments
+        .into_iter()
+        .flatten()
+        .map(|attachment| {
+            json!({
+                "base64Length": attachment
+                    .get("dataBase64")
+                    .and_then(Value::as_str)
+                    .map(str::len),
+                "kind": attachment.get("kind").and_then(Value::as_str),
+                "mediaType": attachment.get("mediaType").and_then(Value::as_str),
+                "size": attachment.get("size").and_then(Value::as_u64),
+            })
+        })
+        .collect::<Vec<_>>();
+    let model = payload.get("model");
+    json!({
+        "attachmentCount": attachments.map_or(0, Vec::len),
+        "attachments": attachment_metadata,
+        "messageId": payload.get("messageId").and_then(Value::as_str),
+        "modelId": model.and_then(|value| value.get("modelId")).and_then(Value::as_str),
+        "promptCharacters": payload
+            .get("prompt")
+            .and_then(Value::as_str)
+            .map(str::chars)
+            .map(Iterator::count),
+        "provider": model.and_then(|value| value.get("provider")).and_then(Value::as_str),
+        "sendBehavior": payload.get("sendBehavior").and_then(Value::as_str),
+        "sessionId": payload.get("sessionId").and_then(Value::as_str),
+    })
+}
+
 async fn wait_until_idle(
     client: &crate::rpc::RpcClient,
     duration: StdDuration,
@@ -1178,6 +1260,13 @@ fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
         .and_then(Value::as_str)
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| format!("Missing or empty string field: {key}"))
+}
+
+fn string_field<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("Missing string field: {key}"))
 }
 
 #[derive(Clone, Debug)]
@@ -1335,6 +1424,7 @@ fn append_message_items(
             }));
         }
         "assistant" => {
+            let failure = assistant_failure(message)?;
             let content = message
                 .get("content")
                 .and_then(Value::as_array)
@@ -1402,6 +1492,16 @@ fn append_message_items(
                     }
                     Some(_) | None => {}
                 }
+            }
+            if let Some(failure) = failure {
+                items.push(json!({
+                    "id": format!("{entry_id}-error"),
+                    "isPersisted": true,
+                    "role": "error",
+                    "text": failure.display_text(),
+                    "status": "finished",
+                    "timestamp": timestamp,
+                }));
             }
         }
         "toolResult" => {
@@ -1837,10 +1937,52 @@ fn open_path(path: &Path, reveal: bool) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        BranchEntry, base_entry_id, history_items_from_branch, normalize_title, preview_tool_input,
-        thinking_levels_for_model,
+        BranchEntry, base_entry_id, history_items_from_branch, normalize_title,
+        prepare_chat_submission, preview_tool_input, thinking_levels_for_model,
     };
     use serde_json::{Value, json};
+
+    #[test]
+    fn prepares_image_only_chat_submission() {
+        let submission = prepare_chat_submission(&json!({
+            "prompt": "",
+            "attachments": [{
+                "kind": "image",
+                "dataBase64": "aW1hZ2U=",
+                "mediaType": "image/png",
+                "name": "image.png",
+                "size": 5,
+            }],
+        }))
+        .unwrap();
+
+        assert_eq!(submission.attachment_count, 1);
+        assert_eq!(submission.behavior, "normal");
+        assert_eq!(
+            submission.command,
+            json!({
+                "type": "prompt",
+                "message": "",
+                "images": [{
+                    "type": "image",
+                    "data": "aW1hZ2U=",
+                    "mimeType": "image/png",
+                }],
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_chat_submission_without_text_or_images() {
+        assert_eq!(
+            prepare_chat_submission(&json!({
+                "prompt": "",
+                "attachments": [],
+            }))
+            .unwrap_err(),
+            "A chat message or image is required."
+        );
+    }
 
     #[test]
     fn recovers_pi_entry_id_from_rendered_block_id() {
@@ -1889,6 +2031,46 @@ mod tests {
         assert!(items.iter().any(|item| {
             item.get("id").and_then(Value::as_str) == Some("assistant-entry-text-1")
         }));
+    }
+
+    #[test]
+    fn retains_assistant_failures_in_rendered_history() {
+        let branch = vec![
+            BranchEntry {
+                id: "user-entry".to_string(),
+                timestamp: Some("2026-07-29T09:02:40Z".to_string()),
+                message: Some(json!({
+                    "role": "user",
+                    "content": [{"type": "text", "text": "hi"}],
+                })),
+            },
+            BranchEntry {
+                id: "assistant-entry".to_string(),
+                timestamp: Some("2026-07-29T09:02:41Z".to_string()),
+                message: Some(json!({
+                    "role": "assistant",
+                    "content": [],
+                    "provider": "kimi-coding",
+                    "model": "kimi-for-coding-highspeed",
+                    "stopReason": "error",
+                    "errorMessage": "401 subscription required",
+                })),
+            },
+        ];
+
+        let items = history_items_from_branch(&branch, false).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(
+            items[1],
+            json!({
+                "id": "assistant-entry-error",
+                "isPersisted": true,
+                "role": "error",
+                "text": "Pi request failed: 401 subscription required",
+                "status": "finished",
+                "timestamp": "2026-07-29T09:02:41Z",
+            })
+        );
     }
 
     #[test]

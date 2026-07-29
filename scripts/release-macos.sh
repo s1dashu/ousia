@@ -28,7 +28,7 @@ if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
   export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}
 fi
 
-npm run desktop:build -- --bundles app,dmg
+npm run desktop:build -- --bundles app,dmg --config src-tauri/tauri.release.conf.json
 
 app_path="$root_dir/src-tauri/target/release/bundle/macos/Pi.app"
 dmg_dir="$root_dir/src-tauri/target/release/bundle/dmg"

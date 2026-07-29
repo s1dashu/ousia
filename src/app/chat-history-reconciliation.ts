@@ -50,7 +50,18 @@ export function reconcilePersistedChatHistory(
   const hadPersistedItems = existingItems.some((item) => item.isPersisted)
   const existingSuffix = existingItems.slice(existingAnchorIndex + 1)
   const persistedSuffix = persistedItems.slice(persistedAnchorIndex + 1)
-  const transientCandidates = existingSuffix.filter(isTransientChatContent)
+  const persistedErrorTexts = new Set(
+    persistedSuffix
+      .filter((item) => item.role === "error")
+      .map((item) => item.text),
+  )
+  const transientCandidates = existingSuffix.filter(
+    (item) =>
+      isTransientChatContent(item) ||
+      (item.role === "error" &&
+        item.id.startsWith("pi-assistant-error-") &&
+        persistedErrorTexts.has(item.text)),
+  )
   const usedTransientIds = new Set<string>()
   const resolvedIds = new Map<string, string>()
   const matchedTransientItems = new Map<string, OusiaChatHistoryItem>()
@@ -77,7 +88,9 @@ export function reconcilePersistedChatHistory(
   const unmatchedTransientIds = transientCandidates
     .filter((item) => !usedTransientIds.has(item.id))
     .map((item) => item.id)
-  const localDecorations = existingSuffix.filter(isLocalDecoration)
+  const localDecorations = existingSuffix.filter(
+    (item) => isLocalDecoration(item) && !usedTransientIds.has(item.id),
+  )
   const prefix = existingItems.slice(0, existingAnchorIndex + 1)
   if (persistedAnchorIndex >= 0 && prefix.length) {
     prefix[prefix.length - 1] = persistedItems[persistedAnchorIndex]

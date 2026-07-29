@@ -1,3 +1,4 @@
+mod chat;
 mod commands;
 mod logging;
 mod paths;
