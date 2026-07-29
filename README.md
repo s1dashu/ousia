@@ -1,180 +1,216 @@
-<p align="center"><sub><strong>MAC CLIENT FOR PI</strong></sub></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/media/ousia-logo.png">
+    <img src="./docs/media/ousia-logo.png" alt="Ousia" width="96" />
+  </picture>
+</p>
 
 <h1 align="center">Ousia</h1>
 
 <p align="center">
-  <strong>Super light. Clean by design.</strong><br>
-  A faster, smoother way to work with Pi.
+  <strong>A minimalist desktop for Pi and Codex coding agents.</strong>
 </p>
 
 <p align="center">
-  <code>≈10 MB DOWNLOAD</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>MINIMALIST DESIGN</code>&nbsp;&nbsp;·&nbsp;&nbsp;<code>SMOOTH EXPERIENCE</code>
+  <a href="https://github.com/s1dashu/ousia/releases/latest"><img src="https://img.shields.io/github/v/release/s1dashu/ousia?color=222222" alt="GitHub Release"></a>
+  <img src="https://img.shields.io/badge/platform-macOS-222222" alt="Platform">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-222222" alt="License"></a>
+  <img src="https://img.shields.io/badge/built_with-Electron-47848f?logo=electron&logoColor=white" alt="Electron">
+  <img src="https://img.shields.io/badge/stack-React%2019-087ea4?logo=react" alt="React">
 </p>
 
 <p align="center">
-  <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&amp;logo=tauri&amp;logoColor=white" alt="Built with Tauri 2"></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-222222?style=flat-square" alt="MIT License"></a>
+  <a href="#-quick-start">Run from source</a>
+  &nbsp;·&nbsp;
+  <a href="#-development">Development</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg"><strong>Download Electron</strong></a>
-  ·
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg"><strong>Download Tauri</strong></a>
-  ·
-  <a href="#development">Development</a>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg">
+    <img src="./assets/download-electron-button.svg" alt="Download the Electron version for macOS" width="280" height="48">
+  </a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg"><strong>Download Ousia Electron v0.1.32</strong></a><br>
-  <sub>Original Electron edition · macOS Apple Silicon</sub>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg">
+    <img src="./assets/download-tauri-button.svg" alt="Download the Tauri version for macOS" width="280" height="48">
+  </a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg"><strong>Download Pi Tauri v0.2.6</strong></a><br>
-  <sub>Current lightweight Tauri edition · macOS Apple Silicon</sub>
-</p>
+---
 
-## Recent changes
+## What is Ousia
 
-- [**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6) — Clearer Pi request failures, smoother sidebar dragging, and consistent sidebar text alignment.
-- [**v0.2.5**](https://github.com/s1dashu/ousia/releases/tag/v0.2.5) — Stable sidebar spacing across display and scrollbar configurations.
-- [**v0.2.4**](https://github.com/s1dashu/ousia/releases/tag/v0.2.4) — Signed in-app updates with explicit download and install controls.
+**Ousia** is a minimalist desktop for the
+[Pi Coding Agent](https://github.com/earendil-works/pi) and OpenAI Codex. It
+wraps each Agent in a clean macOS app with project-aware sessions, streaming
+Markdown, and persistent chat history — so you can keep the conversation going
+without leaving your codebase.
 
-[View all releases →](https://github.com/s1dashu/ousia/releases)
-
-## See Ousia in action
-
-<p align="center">
-  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia streaming code generation from Pi">
-</p>
-
-## Pi, with a better desktop experience
-
-Ousia gives Pi a focused, polished workspace on macOS. It works with the Pi already on your Mac, so your models, extensions, settings, and conversations are ready to use.
-
-The download is only **about 10 MB**, so Ousia is quick to install and takes up very little space.
+Think of it as a focused GUI layer for coding agents. No tabs, no extensions,
+no hidden panels. Just your projects and your selected Agent, side by side.
 
 ## Why Ousia
 
-- **Super lightweight** — only about 10 MB to download, with a small footprint on your Mac.
-- **Cleaner, more polished UI/UX** — projects, conversations, light and dark themes, live tool progress, and a simple message box that keeps the focus on your work.
-- **Faster, smoother performance** — a responsive interface that stays smooth while Pi is working, even during long conversations.
-- **Improved stability and reliability** — protects saved conversations, prevents duplicate windows, and clearly tells you when something goes wrong.
+Coding agents are great in the terminal, but bouncing between your editor,
+terminal, and the Agent's output creates constant friction. Ousia gives Pi and
+Codex a dedicated desktop surface so conversations stay in context, tool
+invocation is visible inline, and everything persists across restarts.
 
-## Download
+### In practice
 
-Both editions support **macOS on Apple Silicon**.
+- **Project-first sessions** — Every chat session is bound to a project
+  directory. The agent reads, writes, and runs tools inside your project. Switch
+  projects and the agent context follows.
+- **Persistent everything** — Sessions, sidebar layout, window position, color
+  theme, font preferences — all restored on relaunch.
+- **Streaming Markdown** — Assistant responses render live with
+  [Streamdown](https://streamdown.ai), including fenced code blocks, tables,
+  and expandable tool-call summaries. Watch the agent think in real time.
+- **Attachments in composer** — Drag files and images directly into a message
+  when your model supports multimodal input.
+- **Per-session Agent choice** — New sessions use either Pi or Codex. The
+  provider is immutable after creation, so history and runtime identity remain
+  traceable.
+- **Model flexibility** — Configure Pi-compatible providers (Anthropic,
+  OpenAI, Gemini, etc.) or use the Codex model catalog. Model and reasoning
+  controls follow the selected session's provider.
+- **Shared Pi config** — Ousia reads credentials and model config from your
+  local Pi agent directory (`~/.pi/agent`). Providers set up in the Pi CLI or
+  TUI work in Ousia automatically — and vice versa.
+- **Codex-owned authentication** — Codex sign-in goes through the bundled
+  official app-server. Ousia never reads or writes Codex credential files.
+- **Local desktop state** — Ousia keeps its project/session index and debug
+  logs locally under its isolated application data and `~/.ousia/logs/`.
 
-### Ousia Electron v0.1.32
+## 🚀 Quick start
 
-[Download the Electron DMG](https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg)
+### Download (macOS)
 
-This is the latest published release of the Electron application.
+[Download the latest `.dmg`](https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg),
+open it, drag **Ousia** into **Applications**, and launch. Previous versions and
+release notes remain available on the [Releases page](https://github.com/s1dashu/ousia/releases/latest).
 
-### Pi Tauri v0.2.6
+> ⚠️ Ousia is pre-release software. You'll hit rough edges. We ship fast and
+> iterate faster.
 
-[Download the Tauri v0.2.6 DMG](https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg)
+### Run from source
 
-This is the current lightweight Tauri application with signed in-app updates.
-
-Open the downloaded DMG, move the app to `Applications`, then launch it. The Tauri edition can use your existing Pi executable or install Pi into its own managed directory.
-
-Release builds are signed with a Developer ID certificate, notarized by Apple, and validated with Gatekeeper before publishing.
-
-## What you can do
-
-- Organize conversations into projects and sessions.
-- Stream assistant responses, thinking, tool calls, and file previews in real time.
-- Queue follow-up messages while Pi is working, or switch to steering mode.
-- Choose from the models and providers already configured in Pi.
-- Interrupt, compact, branch, move, archive, and export sessions.
-- Tune theme, content width, type size, line spacing, and message density.
-- Reuse the same Pi credentials, extensions, settings, and session directory across the CLI and desktop app.
-
-## How it stays light
-
-```text
-┌──────────────────────────┐        JSONL RPC        ┌──────────────────────┐
-│          Ousia           │  ───────────────────▶   │   pi --mode rpc      │
-│  interface + native host │                         │   your Pi runtime     │
-└──────────────────────────┘                         └──────────────────────┘
-                                                               │
-                                                               ▼
-                                                  config · models · sessions
+```bash
+# Requirements: Node.js ≥ 24, npm ≥ 11
+git clone https://github.com/s1dashu/ousia.git
+cd ousia
+git checkout codex/archive-ousia-electron-v0.1.32
+npm install
+npm start
 ```
 
-Ousia owns the desktop experience. Pi owns the agent runtime. There is no duplicate credential store and no bundled runtime hidden inside the application package.
+Active Electron development currently lives on the
+[`codex/archive-ousia-electron-v0.1.32`](https://github.com/s1dashu/ousia/tree/codex/archive-ousia-electron-v0.1.32)
+branch. The branch name is historical; it is the maintained Electron source.
 
-## Requirements
+On first launch, Ousia asks for a default workspace folder (defaults to
+`~/Documents/Ousia`). Configure Pi providers or sign in to Codex from
+**Settings**, choose the default Agent for new sessions, and start a session.
 
-To connect an existing Pi installation, Ousia only needs a valid `pi` executable. It can discover Pi from your login-shell `PATH`, common install locations, the active npm global prefix, or a path selected in Settings.
+## 🧱 Architecture
 
-If Pi is not installed, Ousia can use your existing Node.js and npm to install `@earendil-works/pi-coding-agent` into an app-owned directory. This optional setup does not change the system npm prefix and never removes `~/.pi`.
+| Layer    | Stack                                                                 |
+| -------- | --------------------------------------------------------------------- |
+| Shell    | Electron 42 + Electron Forge + Vite                                   |
+| UI       | React 19 + Tailwind CSS 4 + shadcn/ui + Framer Motion                 |
+| Markdown | Streamdown (streaming + static modes)                                 |
+| Agent    | Pi Coding Agent and Codex app-server, hosted in Electron main process |
+| Icons    | HugeIcons Core Free                                                   |
+| State    | Local JSON via `Electron.app.getPath('userData')`                     |
 
-## Development
+The renderer talks to Agent providers through a narrow `window.ousia` IPC
+bridge. Electron main resolves every session's canonical project before routing
+the request to Pi or Codex, so renderer paths cannot expand an Agent's workspace.
 
-Prerequisites:
-
-- macOS
-- Node.js and npm
-- Rust toolchain
-- Pi, or a path supplied through `PI_GUI_PI_PATH`
-
-Start the development app:
-
-```sh
-npm ci
-npm run desktop:dev
+```
+┌─────────────────────────────────────┐
+│  Renderer Process                   │
+│  ┌──────────┐  ┌──────────────────┐ │
+│  │ Sidebar  │  │     Chat         │ │
+│  │ Projects │  │  ┌────────────┐  │ │
+│  │ Sessions │  │  │ Streamdown │  │ │
+│  │ Settings │  │  │ Tool calls │  │ │
+│  └──────────┘  │  │ Composer   │  │ │
+│                 │  └────────────┘  │ │
+│                 └──────────────────┘ │
+└──────────┬──────────────────────────┘
+           │ window.ousia (IPC)
+┌──────────▼──────────────────────────┐
+│  Electron Main Process              │
+│  ┌──────────────────────────────┐   │
+│  │  Pi / Codex Agent Sessions   │   │
+│  │  (canonical session +        │   │
+│  │   project cwd routing)       │   │
+│  └──────────────────────────────┘   │
+│  ┌──────────────────────────────┐   │
+│  │  App State Store (JSON)      │   │
+│  └──────────────────────────────┘   │
+└─────────────────────────────────────┘
 ```
 
-Use a specific Pi executable when needed:
+## 🛠 Development
 
-```sh
-PI_GUI_PI_PATH=/absolute/path/to/pi npm run desktop:dev
+The commands below run from the active Electron branch linked above.
+
+```bash
+npm run typecheck    # Type-check all TypeScript targets
+npm run lint         # ESLint across the project
+npm run check        # Both of the above
+
+npm run package      # Production app bundle → out/
+npm run make         # Local unsigned DMG (fast iteration)
 ```
 
-Run the required checks:
+### Release build (macOS signed + notarized)
 
-```sh
-npm run typecheck
-npm run lint
-cargo test --manifest-path src-tauri/Cargo.toml
-npm run build
-```
-
-Build the macOS app locally:
-
-```sh
-npm run desktop:build -- --bundles app
-```
-
-The application is written with React, TypeScript, Tauri, and Rust. The desktop host communicates with Pi through strict line-delimited JSON over standard input and output.
-
-<details>
-<summary><strong>Signed macOS release builds</strong></summary>
-
-Official releases require a Developer ID identity and Apple notarization credentials:
-
-```sh
-export APPLE_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+```bash
+# Apple Developer credentials
+export APPLE_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 export APPLE_ID="you@example.com"
-export APPLE_PASSWORD="app-specific-password"
+export APPLE_APP_SPECIFIC_PASSWORD="app-specific-password"
 export APPLE_TEAM_ID="TEAMID"
-npm run release:mac
+
+npm run make:dmg:notarized   # Signed DMG + notarization
 ```
 
-The release script fails immediately if signing, notarization, stapling, DMG verification, or Gatekeeper assessment does not succeed. It produces the DMG, a ZIP containing the same notarized app, and a SHA-256 checksum file.
+## 📖 Docs
 
-</details>
+| File | Covers |
+| --- | --- |
+| [`AGENTS.md`](./AGENTS.md) | Repository product direction and branch responsibilities |
+| [`docs/product-context.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/docs/product-context.md) | Scope, product boundaries, glossary |
+| [`docs/design.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/docs/design.md) | Design system, token ownership, and UI rules |
+| [`docs/technical-architecture.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/docs/technical-architecture.md) | Stack, IPC model, state schema, logging |
+| [`docs/streamdown.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/docs/streamdown.md) | Markdown rendering config and link handling |
+| [`docs/shadcn-reference.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/docs/shadcn-reference.md) | Local shadcn/ui reference workflow |
+| [`docs/development-state.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/docs/development-state.md) | Current implementation state and commands |
 
-## Data and diagnostics
+## 🤝 Contributing
 
-- Pi remains the owner of its configuration, credentials, models, extensions, and sessions.
-- Ousia stores only desktop UI state and the mapping required to reopen Pi sessions.
-- State is written atomically.
-- Host, subprocess, RPC, and renderer failures are recorded in structured local logs.
-- Message content and tool payloads are not written to performance logs.
+Contributions are welcome. Before opening a PR:
 
-## License
+1. Read the Electron
+   [`CONTRIBUTING.md`](https://github.com/s1dashu/ousia/blob/codex/archive-ousia-electron-v0.1.32/CONTRIBUTING.md)
+   and this branch's [`AGENTS.md`](./AGENTS.md)
+2. Run `npm run check` to verify types and linting
+3. For packaging changes, also run `npm run package`
+4. Keep changes aligned with the current product direction (no extensions,
+   no workspace panels)
 
-See [LICENSE](./LICENSE) for the project license and [NOTICE](./NOTICE) for third-party notices.
+## 📄 License
+
+Ousia is [MIT](./LICENSE) © 2026 Ousia Desktop contributors.
+
+Bundled CJK fonts are under [SIL OFL 1.1](./NOTICE).
+
+---
+
+<p align="center">
+  <sub>Built with Electron, React, Pi, and Codex. Styled with Tailwind CSS & shadcn/ui.</sub>
+</p>
