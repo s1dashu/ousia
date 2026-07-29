@@ -19,7 +19,7 @@
 <p align="center">
   <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg"><strong>Download Electron</strong></a>
   ·
-  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg"><strong>Download Tauri</strong></a>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg"><strong>Download Tauri</strong></a>
   ·
   <a href="#development">Development</a>
 </p>
@@ -30,7 +30,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg"><strong>Download Pi Tauri v0.2.6</strong></a><br>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg"><strong>Download Pi Tauri v0.2.6</strong></a><br>
   <sub>Current lightweight Tauri edition · macOS Apple Silicon</sub>
 </p>
 
@@ -73,7 +73,7 @@ This is the latest published release of the Electron application.
 
 ### Pi Tauri v0.2.6
 
-[Download the latest Tauri DMG](https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg)
+[Download the Tauri v0.2.6 DMG](https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg)
 
 This is the current lightweight Tauri application with signed in-app updates.
 
