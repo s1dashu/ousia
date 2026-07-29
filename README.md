@@ -32,9 +32,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg">
-    <img src="./assets/download-tauri-button.svg" alt="Download the Tauri version for macOS" width="280" height="48">
-  </a>
+  <del><a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg">Tauri Version</a></del>
 </p>
 
 ---
