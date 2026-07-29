@@ -8,7 +8,7 @@
 <h1 align="center">Ousia</h1>
 
 <p align="center">
-  <strong>A minimalist desktop for Pi and Codex coding agents.</strong>
+  <strong>A minimalist desktop for the Pi Coding Agent.</strong>
 </p>
 
 <p align="center">
@@ -37,6 +37,16 @@
 
 ---
 
+## Recent changes
+
+Latest published Pi Tauri releases:
+
+- [**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6) — Clearer Pi request failures with durable history recovery, smoother sidebar drag-and-drop, consistent sidebar text alignment, and cleaner separation between daily builds and signed updater artifacts.
+- [**v0.2.5**](https://github.com/s1dashu/ousia/releases/tag/v0.2.5) — Stable sidebar spacing across display and scrollbar configurations.
+- [**v0.2.4**](https://github.com/s1dashu/ousia/releases/tag/v0.2.4) — Signed in-app updates with explicit download, install, and relaunch controls.
+
+[View all releases →](https://github.com/s1dashu/ousia/releases)
+
 ## See Ousia in action
 
 <p align="center">
@@ -45,21 +55,23 @@
 
 ## What is Ousia
 
-**Ousia** is a minimalist desktop for the
-[Pi Coding Agent](https://github.com/earendil-works/pi) and OpenAI Codex. It
-wraps each Agent in a clean macOS app with project-aware sessions, streaming
-Markdown, and persistent chat history — so you can keep the conversation going
-without leaving your codebase.
+**Ousia** is a minimalist macOS desktop client for the
+[Pi Coding Agent](https://github.com/earendil-works/pi). It wraps Pi in a clean
+app with project-aware sessions, streaming Markdown, and persistent chat history
+— so you can keep the conversation going without leaving your codebase.
 
-Think of it as a focused GUI layer for coding agents. No tabs, no extensions,
-no hidden panels. Just your projects and your selected Agent, side by side.
+Think of it as a focused GUI for Pi. No tabs, no workspace extensions, no hidden
+panels. Just your projects and Pi, side by side.
 
 ## Why Ousia
 
-Coding agents are great in the terminal, but bouncing between your editor,
-terminal, and the Agent's output creates constant friction. Ousia gives Pi and
-Codex a dedicated desktop surface so conversations stay in context, tool
-invocation is visible inline, and everything persists across restarts.
+Pi is powerful in the terminal, but bouncing between your editor, terminal, and
+its output creates constant friction. Ousia gives Pi a dedicated desktop surface
+so conversations stay in context, tool invocation is visible inline, and
+everything persists across restarts.
+
+Ousia works with the Pi setup already on your Mac, so your providers, models,
+credentials, resources, and session history stay in the same Pi ecosystem.
 
 ### In practice
 
@@ -73,17 +85,17 @@ invocation is visible inline, and everything persists across restarts.
   and expandable tool-call summaries. Watch the agent think in real time.
 - **Attachments in composer** — Drag files and images directly into a message
   when your model supports multimodal input.
-- **Per-session Agent choice** — New sessions use either Pi or Codex. The
-  provider is immutable after creation, so history and runtime identity remain
-  traceable.
+- **Pi session controls** — Interrupt or compact a conversation, branch from an
+  earlier message, move sessions between projects, and archive them without
+  losing history.
+- **Queue or steer** — Choose whether a new message waits as a follow-up or
+  intervenes in the task Pi is currently running.
 - **Model flexibility** — Configure Pi-compatible providers (Anthropic,
-  OpenAI, Gemini, etc.) or use the Codex model catalog. Model and reasoning
-  controls follow the selected session's provider.
+  OpenAI, Gemini, etc.), then choose the model and thinking level for each
+  session.
 - **Shared Pi config** — Ousia reads credentials and model config from your
   local Pi agent directory (`~/.pi/agent`). Providers set up in the Pi CLI or
   TUI work in Ousia automatically — and vice versa.
-- **Codex-owned authentication** — Codex sign-in goes through the bundled
-  official app-server. Ousia never reads or writes Codex credential files.
 - **Local desktop state** — Ousia keeps its project/session index and debug
   logs locally under its isolated application data and `~/.ousia/logs/`.
 
@@ -114,8 +126,8 @@ Active Electron development currently lives on the
 branch. The branch name is historical; it is the maintained Electron source.
 
 On first launch, Ousia asks for a default workspace folder (defaults to
-`~/Documents/Ousia`). Configure Pi providers or sign in to Codex from
-**Settings**, choose the default Agent for new sessions, and start a session.
+`~/Documents/Ousia`). Configure your Pi providers and default model in
+**Settings**, then start a session.
 
 ## 🧱 Architecture
 
@@ -124,13 +136,13 @@ On first launch, Ousia asks for a default workspace folder (defaults to
 | Shell    | Electron 42 + Electron Forge + Vite                                   |
 | UI       | React 19 + Tailwind CSS 4 + shadcn/ui + Framer Motion                 |
 | Markdown | Streamdown (streaming + static modes)                                 |
-| Agent    | Pi Coding Agent and Codex app-server, hosted in Electron main process |
+| Agent    | Pi Coding Agent, hosted in Electron main process                      |
 | Icons    | HugeIcons Core Free                                                   |
 | State    | Local JSON via `Electron.app.getPath('userData')`                     |
 
-The renderer talks to Agent providers through a narrow `window.ousia` IPC
-bridge. Electron main resolves every session's canonical project before routing
-the request to Pi or Codex, so renderer paths cannot expand an Agent's workspace.
+The renderer talks to Pi through a narrow `window.ousia` IPC bridge. Electron
+main resolves every session's canonical project before routing the request, so
+renderer paths cannot expand Pi's workspace.
 
 ```
 ┌─────────────────────────────────────┐
@@ -148,7 +160,7 @@ the request to Pi or Codex, so renderer paths cannot expand an Agent's workspace
 ┌──────────▼──────────────────────────┐
 │  Electron Main Process              │
 │  ┌──────────────────────────────┐   │
-│  │  Pi / Codex Agent Sessions   │   │
+│  │  Pi Agent Sessions           │   │
 │  │  (canonical session +        │   │
 │  │   project cwd routing)       │   │
 │  └──────────────────────────────┘   │
@@ -183,6 +195,17 @@ export APPLE_TEAM_ID="TEAMID"
 npm run make:dmg:notarized   # Signed DMG + notarization
 ```
 
+## Data and diagnostics
+
+- Pi remains the source of truth for its providers, credentials, models,
+  resources, and session history.
+- Ousia writes desktop state atomically and keeps project/session restoration
+  observable.
+- Host, IPC, persistence, and renderer failures are recorded in structured
+  local logs.
+- Prompts, responses, tool payloads, credentials, and private file contents are
+  excluded from diagnostic logs.
+
 ## 📖 Docs
 
 | File | Covers |
@@ -216,5 +239,5 @@ Bundled CJK fonts are under [SIL OFL 1.1](./NOTICE).
 ---
 
 <p align="center">
-  <sub>Built with Electron, React, Pi, and Codex. Styled with Tailwind CSS & shadcn/ui.</sub>
+  <sub>Built with Electron, React, and Pi. Styled with Tailwind CSS & shadcn/ui.</sub>
 </p>

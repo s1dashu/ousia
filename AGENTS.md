@@ -11,6 +11,11 @@
 
 ## Product direction
 
+- Ousia is a Pi Coding Agent desktop client. User-facing positioning and future
+  agent work are Pi-only; do not advertise Codex or add another agent harness.
+  The active Electron branch still contains legacy Codex integration from the
+  previous product direction. Remove or migrate it only through explicit,
+  observable work that preserves existing sessions and fails clearly.
 - Ousia Electron is again the primary maintained product, with active development on `codex/archive-ousia-electron-v0.1.32`. The branch name is historical and no longer means the Electron code is read-only.
 - This branch preserves the standalone Tauri application Pi at `v0.2.6`. Treat it as frozen except for explicit compatibility, security, or release-transition work; do not add Tauri features by default.
 - Future Electron tags use an explicit `electron-v...` prefix and become GitHub Latest. Future Tauri tags, if any, use `tauri-v...` and remain non-Latest. Before the first new Electron Latest release, preserve a transition path for installed Tauri builds whose updater still reads `/releases/latest/download/latest.json`.
