@@ -39,6 +39,12 @@
 
 ---
 
+## See Ousia in action
+
+<p align="center">
+  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia streaming code generation from Pi">
+</p>
+
 ## What is Ousia
 
 **Ousia** is a minimalist desktop for the
