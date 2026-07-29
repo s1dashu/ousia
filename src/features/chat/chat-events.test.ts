@@ -64,7 +64,9 @@ describe("applyChatEvent", () => {
 
     expect(repeated).toBe(optimistic)
     expect(repeated).toHaveLength(1)
-    expect(repeated[0].timestamp).toBe("2026-07-07T00:00:00.000Z")
+    expect(repeated[0]).toMatchObject({
+      timestamp: "2026-07-07T00:00:00.000Z",
+    })
     expect(repeated[0].status).toBe("finished")
     expect(
       applyChatEvent(repeated, {
@@ -94,7 +96,9 @@ describe("applyChatEvent", () => {
     })
 
     expect(optimisticSecond).toHaveLength(1)
-    expect(optimisticSecond[0].timestamp).toBe("2026-07-07T00:00:00.000Z")
+    expect(optimisticSecond[0]).toMatchObject({
+      timestamp: "2026-07-07T00:00:00.000Z",
+    })
     expect(optimisticSecond[0].status).toBe("finished")
   })
 
@@ -144,12 +148,14 @@ describe("applyChatEvent", () => {
 
   it("keeps equal user message text when client ids differ", () => {
     const first = applyChatEvent([], {
+      delivery: "optimistic",
       id: "user-client-1",
       text: "same text",
       timestamp: "2026-07-07T00:00:00.000Z",
       type: "user_message",
     })
     const second = applyChatEvent(first, {
+      delivery: "optimistic",
       id: "user-client-2",
       text: "same text",
       timestamp: "2026-07-07T00:00:01.000Z",
@@ -164,6 +170,7 @@ describe("applyChatEvent", () => {
 
   it("fails fast when a user confirmation reuses an id with new content", () => {
     const optimistic = applyChatEvent([], {
+      delivery: "optimistic",
       id: "user-client-1",
       text: "original",
       timestamp: "2026-07-07T00:00:00.000Z",
@@ -172,6 +179,7 @@ describe("applyChatEvent", () => {
 
     expect(() =>
       applyChatEvent(optimistic, {
+        delivery: "optimistic",
         id: "user-client-1",
         text: "changed",
         timestamp: "2026-07-07T00:00:01.000Z",
@@ -183,6 +191,7 @@ describe("applyChatEvent", () => {
   it("fails fast when a user message collides with another event role", () => {
     expect(() =>
       applyChatEvent([{ id: "shared-id", role: "assistant", text: "answer" }], {
+        delivery: "optimistic",
         id: "shared-id",
         text: "question",
         timestamp: "2026-07-07T00:00:00.000Z",

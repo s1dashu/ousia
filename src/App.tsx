@@ -42,6 +42,7 @@ import {
   type OusiaChatEvent,
   type OusiaCodexEnvironmentStatus,
   type OusiaModelRegistryResult,
+  type OusiaSequencedChatEvent,
   type OusiaSidebarSectionId,
   type OusiaUpdateStatus,
 } from "@/electron/chat-types"
@@ -414,6 +415,9 @@ export function App() {
   const itemsBySessionRef = useRef(itemsBySession)
   const historyPageStateBySessionRef = useRef(historyPageStateBySession)
   const historyInFlightKeysRef = useRef<Set<string>>(new Set())
+  const historyRequestGenerationBySessionRef = useRef<Map<string, number>>(
+    new Map()
+  )
   const historyRetryAttemptsRef = useRef<Map<string, number>>(new Map())
   const historyRetryTimersRef = useRef<Map<string, number>>(new Map())
   const pendingChatEventsRef = useRef<Map<string, OusiaChatEvent[]>>(new Map())
@@ -1033,6 +1037,12 @@ export function App() {
     }
 
     historyInFlightKeysRef.current.add(historyKey)
+    const requestGeneration =
+      (historyRequestGenerationBySessionRef.current.get(historyKey) ?? 0) + 1
+    historyRequestGenerationBySessionRef.current.set(
+      historyKey,
+      requestGeneration
+    )
     queueMicrotask(() => {
       setHistoryPageStateBySession((current) => ({
         ...current,
@@ -1049,6 +1059,12 @@ export function App() {
           sessionId: historySessionId,
         })
         .then((history) => {
+          if (
+            historyRequestGenerationBySessionRef.current.get(historyKey) !==
+            requestGeneration
+          ) {
+            return
+          }
           historyRetryAttemptsRef.current.delete(historyKey)
           startTransition(() => {
             setItemsBySession((current) => ({
@@ -1065,6 +1081,12 @@ export function App() {
           })
         })
         .catch((error: unknown) => {
+          if (
+            historyRequestGenerationBySessionRef.current.get(historyKey) !==
+            requestGeneration
+          ) {
+            return
+          }
           console.error("[chat.history] Failed to load session history", error)
           const errorMessage =
             error instanceof Error ? error.message : String(error)
@@ -1110,8 +1132,67 @@ export function App() {
     selectedSessionIdForHistory,
   ])
 
-  useEffect(() => {
-    return window.ousia?.onChatEvent((event) => {
+  const reconcileCompletedChatHistory = useCallback(
+    async (
+      context: { projectPath: string; sessionId: string },
+      targetKey: string
+    ) => {
+      if (!window.ousia) {
+        return
+      }
+      const requestGeneration =
+        (historyRequestGenerationBySessionRef.current.get(targetKey) ?? 0) + 1
+      historyRequestGenerationBySessionRef.current.set(
+        targetKey,
+        requestGeneration
+      )
+      console.debug("[chat.recovery] Reconciling completed session history", {
+        projectPath: context.projectPath,
+        sessionId: context.sessionId,
+      })
+      try {
+        const history = await window.ousia.getChatHistory({
+          includeToolPayloads: false,
+          limit: CHAT_HISTORY_PAGE_SIZE,
+          ...context,
+        })
+        if (
+          historyRequestGenerationBySessionRef.current.get(targetKey) !==
+          requestGeneration
+        ) {
+          return
+        }
+        startTransition(() => {
+          setItemsBySession((current) => ({
+            ...current,
+            [targetKey]: history.items,
+          }))
+          setHistoryPageStateBySession((current) => ({
+            ...current,
+            [targetKey]: historyPageStateFromResult(history.items, history),
+          }))
+        })
+        console.debug("[chat.recovery] Reconciled completed session history", {
+          itemCount: history.items.length,
+          projectPath: context.projectPath,
+          sessionId: context.sessionId,
+        })
+      } catch (error) {
+        console.error(
+          "[chat.recovery] Failed to reconcile completed session history",
+          {
+            error: error instanceof Error ? error.message : String(error),
+            projectPath: context.projectPath,
+            sessionId: context.sessionId,
+          }
+        )
+      }
+    },
+    []
+  )
+
+  const handleChatEvent = useCallback(
+    (event: OusiaChatEvent) => {
       const target = resolveChatEventTarget(
         sessionsRef.current,
         event.context,
@@ -1151,6 +1232,18 @@ export function App() {
         runStatusBySessionRef.current = {
           ...runStatusBySessionRef.current,
           [targetKey]: nextStatus,
+        }
+        if (nextStatus === "working") {
+          setHistoryPageStateBySession((current) => {
+            if (current[targetKey]?.status !== "empty") {
+              return current
+            }
+            const next = { ...current }
+            delete next[targetKey]
+            return next
+          })
+        } else if (event.status === "finished" && event.context) {
+          void reconcileCompletedChatHistory(event.context, targetKey)
         }
         if (
           targetSession &&
@@ -1215,8 +1308,67 @@ export function App() {
           })
       }
       queueChatItemEvent(targetKey, event)
+    },
+    [queueChatItemEvent, reconcileCompletedChatHistory]
+  )
+
+  useEffect(() => {
+    if (!window.ousia || !isAppStateLoaded) {
+      return
+    }
+    let isDisposed = false
+    let hasReplayedSnapshot = false
+    const bufferedEvents: OusiaSequencedChatEvent[] = []
+    const unsubscribe = window.ousia.onChatEvent((entry) => {
+      if (!hasReplayedSnapshot) {
+        bufferedEvents.push(entry)
+        return
+      }
+      handleChatEvent(entry.event)
     })
-  }, [queueChatItemEvent])
+
+    void window.ousia
+      .getActiveChatEvents()
+      .then((snapshot) => {
+        if (isDisposed) {
+          return
+        }
+        for (const entry of snapshot.events) {
+          handleChatEvent(entry.event)
+        }
+        const eventsAfterSnapshot = bufferedEvents
+          .filter((entry) => entry.sequence > snapshot.latestSequence)
+          .sort((left, right) => left.sequence - right.sequence)
+        hasReplayedSnapshot = true
+        for (const entry of eventsAfterSnapshot) {
+          handleChatEvent(entry.event)
+        }
+        console.debug("[chat.recovery] Replayed active chat events", {
+          bufferedEventCount: eventsAfterSnapshot.length,
+          latestSequence: snapshot.latestSequence,
+          replayedEventCount: snapshot.events.length,
+        })
+      })
+      .catch((error: unknown) => {
+        if (isDisposed) {
+          return
+        }
+        console.error("[chat.recovery] Failed to replay active chat events", {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        hasReplayedSnapshot = true
+        for (const entry of bufferedEvents.sort(
+          (left, right) => left.sequence - right.sequence
+        )) {
+          handleChatEvent(entry.event)
+        }
+      })
+
+    return () => {
+      isDisposed = true
+      unsubscribe()
+    }
+  }, [handleChatEvent, isAppStateLoaded])
 
   useEffect(() => {
     return () => {
@@ -2122,7 +2274,7 @@ export function App() {
       selectedSession,
       sessionsRef.current
     )
-    let branchSession = {
+    let branchSession: SessionRecord = {
       ...createSession(branchTitle, selectedSession.agentProvider),
       projectId: selectedSession.projectId,
       time: now,

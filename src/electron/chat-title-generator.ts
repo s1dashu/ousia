@@ -1,8 +1,6 @@
 import "./pi-package-dir.js"
-import { completeSimple } from "@earendil-works/pi-ai"
 import type { Api, AssistantMessage, Model } from "@earendil-works/pi-ai"
-import { ModelRegistry } from "@earendil-works/pi-coding-agent"
-import { join } from "node:path"
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent"
 
 import type {
   OusiaChatGenerateTitlePayload,
@@ -14,10 +12,7 @@ import {
   normalizeGeneratedChatTitle,
 } from "./chat-title-policy.js"
 import { normalizeProviderModelId } from "./model-compat.js"
-import {
-  createReadOnlyPiAuthStorage,
-  resolvePiAgentDir,
-} from "./pi-environment.js"
+import { createPiModelRuntime, resolvePiAgentDir } from "./pi-environment.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 import {
   getVercelAiGatewayModelIds,
@@ -31,7 +26,6 @@ type UtilityModelCandidate = {
 }
 
 type SelectedTitleModel = {
-  auth: Awaited<ReturnType<ModelRegistry["getApiKeyAndHeaders"]>>
   model: Model<Api>
   reason: string
 }
@@ -89,15 +83,15 @@ function modelCost(model: Model<Api>) {
 }
 
 async function findCheapestTextModel(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   candidate: UtilityModelCandidate
 ) {
   const vercelModelIds =
     candidate.provider === "vercel-ai-gateway"
       ? await getVercelAiGatewayModelIds()
       : undefined
-  const providerModels = modelRegistry
-    .getAll()
+  const providerModels = modelRuntime
+    .getModels()
     .filter(
       (model) =>
         model.provider === candidate.provider &&
@@ -113,7 +107,8 @@ async function findCheapestTextModel(
   }
 
   const matched = providerModels.filter(
-    (model) => candidate.match.test(model.id) || candidate.match.test(model.name)
+    (model) =>
+      candidate.match.test(model.id) || candidate.match.test(model.name)
   )
   const pool = matched.length ? matched : providerModels
   return pool.sort((a, b) => modelCost(a) - modelCost(b))[0]
@@ -129,7 +124,9 @@ function uniqueProviders(preferredProvider: string) {
 
 function candidateForProvider(provider: string) {
   return (
-    utilityModelCandidates.find((candidate) => candidate.provider === provider) ??
+    utilityModelCandidates.find(
+      (candidate) => candidate.provider === provider
+    ) ??
     ({
       provider,
       preferredModelIds: [],
@@ -139,7 +136,7 @@ function candidateForProvider(provider: string) {
 }
 
 async function findConfiguredTitleModel(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   provider: string,
   modelId: string
 ) {
@@ -149,11 +146,11 @@ async function findConfiguredTitleModel(
   ) {
     return undefined
   }
-  return modelRegistry.find(provider, modelId)
+  return modelRuntime.getModel(provider, modelId)
 }
 
 async function selectTitleModel(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   chatModel: OusiaModelSettings
 ): Promise<SelectedTitleModel | undefined> {
   const chatProvider = chatModel.provider.trim()
@@ -165,24 +162,22 @@ async function selectTitleModel(
     const candidate = candidateForProvider(provider)
     const model =
       provider === chatProvider
-        ? (await findCheapestTextModel(modelRegistry, candidate)) ??
+        ? ((await findCheapestTextModel(modelRuntime, candidate)) ??
           (await findConfiguredTitleModel(
-            modelRegistry,
+            modelRuntime,
             chatProvider,
             chatModelId
-          ))
-        : await findCheapestTextModel(modelRegistry, candidate)
+          )))
+        : await findCheapestTextModel(modelRuntime, candidate)
     if (!model) {
       continue
     }
 
-    const auth = await modelRegistry.getApiKeyAndHeaders(model)
-    if (!auth.ok || (!auth.apiKey && !auth.headers)) {
+    if (!(await modelRuntime.getAuth(model))) {
       continue
     }
 
     return {
-      auth,
       model,
       reason:
         provider === chatProvider
@@ -210,16 +205,16 @@ export async function generateChatTitleWithUtilityModel(
   }
 
   const agentDir = resolvePiAgentDir()
-  const authStorage = createReadOnlyPiAuthStorage(agentDir)
+  const modelRuntime = await createPiModelRuntime(agentDir)
   if (payload.model.apiKey?.trim()) {
-    authStorage.setRuntimeApiKey(payload.model.provider, payload.model.apiKey.trim())
+    await modelRuntime.setRuntimeApiKey(
+      payload.model.provider,
+      payload.model.apiKey.trim(),
+      { allowNetwork: false }
+    )
   }
-  const modelRegistry = ModelRegistry.create(
-    authStorage,
-    join(agentDir, "models.json")
-  )
 
-  const selected = await selectTitleModel(modelRegistry, payload.model)
+  const selected = await selectTitleModel(modelRuntime, payload.model)
   if (!selected) {
     const error = "没有找到可用于会话命名的已认证轻量模型。"
     writeRuntimeLog("chat.title", "warn", error, {
@@ -236,7 +231,7 @@ export async function generateChatTitleWithUtilityModel(
 
   try {
     const titleRequest = buildPlainChatTitleRequest(payload.language, prompt)
-    const message = await completeSimple(
+    const message = await modelRuntime.completeSimple(
       selected.model,
       {
         systemPrompt: titleRequest.systemPrompt,
@@ -249,9 +244,7 @@ export async function generateChatTitleWithUtilityModel(
         ],
       },
       {
-        apiKey: selected.auth.ok ? selected.auth.apiKey : undefined,
         cacheRetention: "none",
-        headers: selected.auth.ok ? selected.auth.headers : undefined,
         maxTokens: 32,
         reasoning: "minimal",
         temperature: 0.2,

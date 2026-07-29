@@ -10,6 +10,7 @@ export const OUSIA_PI_THINKING_LEVELS = [
   "medium",
   "high",
   "xhigh",
+  "max",
 ] as const
 export type OusiaPiThinkingLevel = (typeof OUSIA_PI_THINKING_LEVELS)[number]
 
@@ -991,6 +992,16 @@ export type OusiaChatEvent = {
       timestamp: string
     }
 )
+
+export type OusiaSequencedChatEvent = {
+  event: OusiaChatEvent
+  sequence: number
+}
+
+export type OusiaChatEventReplaySnapshot = {
+  events: OusiaSequencedChatEvent[]
+  latestSequence: number
+}
 
 export type OusiaChatSendResult = {
   error?: string

@@ -26,6 +26,7 @@ describe("Base UI migration adapters", () => {
     expect(html).toContain('data-slot="button"')
     expect(html).not.toContain("<button")
     expect(html).not.toContain('type="button"')
+    expect(html).not.toMatch(/active:[^\s"]*(?:translate|scale)/)
   })
 
   it("composes a menu trigger through the preserved asChild API", () => {

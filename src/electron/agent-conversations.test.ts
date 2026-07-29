@@ -23,6 +23,7 @@ import {
   createAgentConversationModule,
   deletePersistedPiSessionFile,
   disposePiSessionBundle,
+  historyItemsFromActivePiSession,
 } from "./agent-conversations.js"
 
 describe("Pi agent conversation boundaries", () => {
@@ -82,6 +83,38 @@ describe("Pi agent conversation boundaries", () => {
     ).toThrow("unsubscribe failed")
     expect(unsubscribe).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it("reads unflushed history from an active Pi session manager", () => {
+    const session = {
+      sessionManager: {
+        getBranch: () => [
+          {
+            type: "message",
+            id: "pi-user-1",
+            parentId: null,
+            timestamp: "2026-07-29T00:00:00.000Z",
+            message: {
+              role: "user",
+              content: [{ type: "text", text: "survives HMR" }],
+              timestamp: Date.parse("2026-07-29T00:00:00.000Z"),
+            },
+          },
+        ],
+      },
+    } as never
+
+    expect(historyItemsFromActivePiSession(session, false)).toEqual([
+      {
+        attachments: undefined,
+        id: "pi-user-1",
+        role: "user",
+        status: "finished",
+        text: "survives HMR",
+        timestamp: "2026-07-29T00:00:00.000Z",
+      },
+    ])
+    expect(historyItemsFromActivePiSession(undefined, false)).toBeUndefined()
   })
 
   it("contains an invalid Codex reasoning effort at the Pi provider boundary", async () => {

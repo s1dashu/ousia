@@ -64,12 +64,15 @@ function createScanState(): PiToolInputScanState {
 
 export class PiToolInputTracker {
   private readonly completedIds = new Set<string>()
+  private readonly parseCompleteJson: typeof isCompletePiToolInputJson
   private readonly scanStateByContentIndex = new Map<
     number,
     PiToolInputScanState
   >()
 
-  constructor(private readonly parseCompleteJson = isCompletePiToolInputJson) {}
+  constructor(parseCompleteJson = isCompletePiToolInputJson) {
+    this.parseCompleteJson = parseCompleteJson
+  }
 
   reset() {
     this.completedIds.clear()

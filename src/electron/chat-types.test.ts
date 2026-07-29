@@ -179,7 +179,7 @@ describe("normalizeOusiaAppSettings", () => {
 describe("agent reasoning types", () => {
   it("keeps Codex effort strings out of the Pi thinking-level boundary", () => {
     expect(isOusiaPiThinkingLevel("xhigh")).toBe(true)
-    expect(isOusiaPiThinkingLevel("max")).toBe(false)
+    expect(isOusiaPiThinkingLevel("max")).toBe(true)
     expect(isOusiaPiThinkingLevel("ultra")).toBe(false)
     expect(isOusiaCodexReasoningEffort("future-depth")).toBe(true)
     expect(isOusiaCodexReasoningEffort("   ")).toBe(false)

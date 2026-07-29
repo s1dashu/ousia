@@ -19,6 +19,12 @@ import {
   AttachmentTitle,
 } from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { OusiaChatAttachment } from "@/electron/chat-types"
 import { formatBytes } from "@/features/chat/chat-format"
 import { cn } from "@/lib/utils"
@@ -27,12 +33,29 @@ export const CHAT_COMPOSER_INPUT_CLASS =
   "ousia-chat-composer-input ousia-hover-scrollbar -mr-4 [field-sizing:fixed] min-h-12 w-[calc(100%+1rem)] resize-none rounded-none border-0 bg-transparent py-0 pr-2 pl-0 text-sm leading-6 shadow-none placeholder:text-muted-foreground/55 focus-visible:ring-0 dark:bg-transparent"
 
 export const CHAT_COMPOSER_SHELL_CLASS =
-  "shrink-0 bg-white pb-4 dark:bg-card"
+  "shrink-0 bg-white pb-4 dark:bg-[var(--ousia-chat-panel-surface)]"
 
 export type QueuedChatMessage = {
   id: string
   text: string
   attachments: OusiaChatAttachment[]
+}
+
+function ComposerActionTooltip({
+  children,
+  label,
+}: {
+  children: React.ReactElement
+  label: string
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side="top">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 }
 
 export function QueuedMessageList({
@@ -114,7 +137,7 @@ export function QueuedMessageList({
                 className="shrink-0 cursor-grab"
               />
             )}
-            <span className="shrink-0 tabular-nums text-muted-foreground/75">
+            <span className="shrink-0 text-muted-foreground/75 tabular-nums">
               {index + 1}
             </span>
             <span className="min-w-0 flex-1 truncate">
@@ -127,36 +150,42 @@ export function QueuedMessageList({
             ) : null}
             {readOnly ? null : (
               <div className="flex shrink-0 items-center gap-0.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t.chat.sendNow}
-                  className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
-                  onClick={() => onSendNow(message.id)}
-                >
-                  <SendHorizontal size={14} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t.app.edit}
-                  className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
-                  onClick={() => onEdit(message.id)}
-                >
-                  <Pencil size={14} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t.app.delete}
-                  className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
-                  onClick={() => onDelete(message.id)}
-                >
-                  <Trash2 size={14} />
-                </Button>
+                <ComposerActionTooltip label={t.chat.sendNow}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t.chat.sendNow}
+                    className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                    onClick={() => onSendNow(message.id)}
+                  >
+                    <SendHorizontal size={14} />
+                  </Button>
+                </ComposerActionTooltip>
+                <ComposerActionTooltip label={t.app.edit}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t.app.edit}
+                    className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                    onClick={() => onEdit(message.id)}
+                  >
+                    <Pencil size={14} />
+                  </Button>
+                </ComposerActionTooltip>
+                <ComposerActionTooltip label={t.app.delete}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={t.app.delete}
+                    className="size-5 rounded-md text-muted-foreground hover:text-foreground [&_svg]:size-3.5"
+                    onClick={() => onDelete(message.id)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </ComposerActionTooltip>
               </div>
             )}
           </div>
@@ -200,13 +229,17 @@ export function AttachmentStrip({
             </AttachmentDescription>
           </AttachmentContent>
           <AttachmentActions>
-            <AttachmentAction
-              type="button"
-              aria-label={t.chat.removeAttachment(attachment.name)}
-              onClick={() => onRemove(attachment.id)}
+            <ComposerActionTooltip
+              label={t.chat.removeAttachment(attachment.name)}
             >
-              <X />
-            </AttachmentAction>
+              <AttachmentAction
+                type="button"
+                aria-label={t.chat.removeAttachment(attachment.name)}
+                onClick={() => onRemove(attachment.id)}
+              >
+                <X />
+              </AttachmentAction>
+            </ComposerActionTooltip>
           </AttachmentActions>
         </Attachment>
       ))}

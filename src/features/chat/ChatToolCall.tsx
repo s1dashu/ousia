@@ -695,7 +695,10 @@ function formatToolTargetSummary(
 
 function filePreviewPath(item: ToolChatItem, verb: string) {
   const preview = item.filePreview ?? toolFilePreviewFromItem(item)
-  const path = preview && "path" in preview ? preview.path : ""
+  const path =
+    preview && "path" in preview && typeof preview.path === "string"
+      ? preview.path
+      : ""
   const trimmed = path.trim()
   return trimmed && trimmed !== verb ? trimmed : ""
 }

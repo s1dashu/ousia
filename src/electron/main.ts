@@ -38,6 +38,7 @@ import {
 import { createCodexAgentProvider } from "./codex-agent-provider.js"
 import { createCodexRuntimeManager } from "./codex-runtime-manager.js"
 import { createChatEventBatcher } from "./chat-event-batcher.js"
+import { createChatEventReplayStore } from "./chat-event-replay.js"
 import type {
   OusiaAppStateCreateProjectPayload,
   OusiaAppStateArchiveProjectPayload,
@@ -130,13 +131,12 @@ const updateManagerRef: {
   current?: ReturnType<typeof createUpdateManager>
 } = {}
 
+const chatEventReplay = createChatEventReplayStore()
 const chatEventBatcher = createChatEventBatcher<ReturnType<typeof setTimeout>>({
   cancel: (handle) => globalThis.clearTimeout(handle),
   emit(event, context) {
-    mainWindow?.webContents.send(
-      "ousia:chat:event",
-      context ? { ...event, context } : event
-    )
+    const sequencedEvent = chatEventReplay.record(event, context)
+    mainWindow?.webContents.send("ousia:chat:event", sequencedEvent)
   },
   schedule: (callback) => globalThis.setTimeout(callback, 16),
 })
@@ -259,14 +259,16 @@ async function releaseRemovedAgentSessions(
   await Promise.all(
     result.removedSessions.map(async (session) => {
       try {
+        const context = {
+          projectPath: removedSessionProjectPath(result, session),
+          sessionId: session.id,
+        }
+        chatEventReplay.clear(context)
         const provider =
           session.agentProvider === "codex"
             ? codexAgentProvider
             : piAgentConversations
-        await provider.releaseChatSession?.({
-          projectPath: removedSessionProjectPath(result, session),
-          sessionId: session.id,
-        })
+        await provider.releaseChatSession?.(context)
       } catch (error) {
         // The state deletion is already durable, so cleanup failures are
         // observable without misreporting the completed transaction.
@@ -406,6 +408,8 @@ ipcMain.handle(
   (_event, payload: OusiaChatHistoryPayload) =>
     agentConversations.getChatHistory(payload)
 )
+
+ipcMain.handle("ousia:chat:events:active", () => chatEventReplay.snapshot())
 
 ipcMain.handle(
   "ousia:chat:tool-payload",

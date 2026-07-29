@@ -287,13 +287,26 @@
 }
 
 .dark .ousia-main-panel {
+    --ousia-chat-panel-surface: color-mix(
+        in srgb,
+        var(--ousia-app-card) 98%,
+        white
+    );
     --ousia-composer-surface: oklch(0.205 0 0);
     --ousia-chat-composer-ring-color: rgba(255, 255, 255, 0.018);
     --ousia-chat-composer-border: rgba(255, 255, 255, 0.04);
     --ousia-chat-composer-border-focus: rgba(255, 255, 255, 0.065);
     --ousia-main-panel-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.018), 0 8px 18px -15px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.012);
-    --ousia-chat-composer-shadow: 0 2px 4px -2px rgb(0 0 0 / 0.28), 0 10px 24px -12px rgb(0 0 0 / 0.52);
-    --ousia-chat-composer-shadow-focus: 0 2px 5px -2px rgb(0 0 0 / 0.32), 0 12px 28px -12px rgb(0 0 0 / 0.6);
+    --ousia-chat-composer-shadow:
+        0 0 0 1px rgb(0 0 0 / 0.28),
+        0 6px 18px -6px rgb(0 0 0 / 0.72),
+        0 20px 44px -18px rgb(0 0 0 / 0.86),
+        inset 0 1px 0 rgb(255 255 255 / 0.025);
+    --ousia-chat-composer-shadow-focus:
+        0 0 0 1px rgb(0 0 0 / 0.34),
+        0 8px 22px -6px rgb(0 0 0 / 0.78),
+        0 24px 52px -18px rgb(0 0 0 / 0.9),
+        inset 0 1px 0 rgb(255 255 255 / 0.035);
     --ousia-floating-panel-border: rgba(255, 255, 255, 0.04);
     --ousia-floating-panel-shadow: 0 -2px 10px -8px rgba(0, 0, 0, 0.42), 0 2px 7px -5px rgba(0, 0, 0, 0.5), 0 12px 28px -18px rgba(0, 0, 0, 0.72);
 }
@@ -1446,6 +1459,12 @@
 
 .ousia-stable-scrollbar-gutter {
   scrollbar-gutter: stable both-edges;
+}
+
+.ousia-sidebar-scrollbar-gutter {
+  /* Sidebar spacing is explicit. Reserve only the scrollbar edge so classic
+   * scrollbars cannot add a second, input-device-dependent left gutter. */
+  scrollbar-gutter: stable;
 }
 
 /*

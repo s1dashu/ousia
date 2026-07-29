@@ -290,7 +290,7 @@ export function applyChatEvent(
         errorText: event.isError ? result || existingItem.errorText : undefined,
         filePreview: event.filePreview ?? existingItem.filePreview,
         status: event.isError ? "failed" : "finished",
-      }
+      } satisfies ChatItem
       if (
         updated.name === existingItem.name &&
         updated.text === existingItem.text &&

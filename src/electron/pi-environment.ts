@@ -1,13 +1,13 @@
 import "./pi-package-dir.js"
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 
+import type { AuthInteraction } from "@earendil-works/pi-ai"
 import {
-  AuthStorage,
   getAgentDir,
-  ModelRegistry,
+  ModelRuntime,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent"
 
@@ -21,34 +21,16 @@ import type {
 } from "./chat-types.js"
 import { isDeprecatedProviderModelId } from "./model-compat.js"
 
-type PiAuthStorageData = NonNullable<Parameters<typeof AuthStorage.inMemory>[0]>
-
 export function resolvePiAgentDir() {
   return getAgentDir()
 }
 
-function readAuthStorageData(authPath: string): PiAuthStorageData {
-  if (!existsSync(authPath)) {
-    return {}
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(authPath, "utf8")) as unknown
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as PiAuthStorageData)
-      : {}
-  } catch {
-    return {}
-  }
-}
-
-export function createReadOnlyPiAuthStorage(agentDir: string) {
-  return AuthStorage.inMemory(readAuthStorageData(join(agentDir, "auth.json")))
-}
-
-export function createWritablePiAuthStorage(agentDir: string) {
-  mkdirSync(agentDir, { recursive: true })
-  return AuthStorage.create(join(agentDir, "auth.json"))
+export function createPiModelRuntime(agentDir = resolvePiAgentDir()) {
+  return ModelRuntime.create({
+    authPath: join(agentDir, "auth.json"),
+    modelsPath: join(agentDir, "models.json"),
+    modelsStorePath: join(agentDir, "models-store.json"),
+  })
 }
 
 function createPiSettingsManager() {
@@ -75,11 +57,11 @@ export async function savePiRetrySettings(
   }
 }
 
-function configuredProvidersFromRegistry(modelRegistry: ModelRegistry) {
+function configuredProvidersFromRuntime(modelRuntime: ModelRuntime) {
   const configuredProviderIds = new Set<string>()
   let modelCount = 0
 
-  for (const model of modelRegistry.getAvailable()) {
+  for (const model of modelRuntime.getAvailableSnapshot()) {
     const provider = model.provider.trim()
     const modelId = model.id.trim()
     if (
@@ -103,9 +85,8 @@ export async function checkPiEnvironment(): Promise<OusiaPiEnvironmentStatus> {
   const agentDir = resolvePiAgentDir()
   const authJsonPath = join(agentDir, "auth.json")
   const modelsJsonPath = join(agentDir, "models.json")
-  const authStorage = createReadOnlyPiAuthStorage(agentDir)
-  const modelRegistry = ModelRegistry.create(authStorage, modelsJsonPath)
-  const configured = configuredProvidersFromRegistry(modelRegistry)
+  const modelRuntime = await createPiModelRuntime(agentDir)
+  const configured = configuredProvidersFromRuntime(modelRuntime)
 
   return {
     agentDir,
@@ -130,8 +111,22 @@ export async function savePiProviderCredential(
 
   try {
     const agentDir = resolvePiAgentDir()
-    const authStorage = createWritablePiAuthStorage(agentDir)
-    authStorage.set(provider, { type: "api_key", key: apiKey })
+    mkdirSync(agentDir, { recursive: true })
+    const modelRuntime = await createPiModelRuntime(agentDir)
+    let promptCount = 0
+    const interaction: AuthInteraction = {
+      async prompt(prompt) {
+        promptCount += 1
+        if (promptCount !== 1 || prompt.type !== "secret") {
+          throw new Error(
+            `供应商 ${provider} 需要交互式认证流程，Ousia 暂不支持。`
+          )
+        }
+        return apiKey
+      },
+      notify() {},
+    }
+    await modelRuntime.login(provider, "api_key", interaction)
     return {
       ok: true,
       status: await checkPiEnvironment(),
@@ -154,8 +149,8 @@ export async function removePiProviderCredential(
 
   try {
     const agentDir = resolvePiAgentDir()
-    const authStorage = createWritablePiAuthStorage(agentDir)
-    authStorage.remove(provider)
+    const modelRuntime = await createPiModelRuntime(agentDir)
+    await modelRuntime.logout(provider)
     return {
       ok: true,
       status: await checkPiEnvironment(),

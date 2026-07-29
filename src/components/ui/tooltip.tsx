@@ -54,11 +54,15 @@ type TooltipTriggerProps = React.HTMLAttributes<HTMLElement> & {
   asChild?: boolean
 }
 
-type TooltipContentProps = React.HTMLAttributes<HTMLSpanElement> & {
-  align?: "start" | "center" | "end"
-  side?: TooltipSide
-  sideOffset?: number
-}
+type TooltipContentProps = Omit<
+  React.ComponentPropsWithoutRef<typeof motion.span>,
+  "children"
+> &
+  React.PropsWithChildren<{
+    align?: "start" | "center" | "end"
+    side?: TooltipSide
+    sideOffset?: number
+  }>
 
 export const TOOLTIP_CONTENT_LAYOUT_CLASS_NAME = "w-fit max-w-xs"
 export const TOOLTIP_TEXT_LAYOUT_CLASS_NAME =

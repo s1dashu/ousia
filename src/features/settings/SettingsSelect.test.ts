@@ -26,7 +26,7 @@ describe("settings Vega primitive styling", () => {
     const switchSource = readSettingsSource("SettingsSwitch.tsx")
 
     expect(button).toContain("rounded-md")
-    expect(button).toContain("active:not-aria-[haspopup]:translate-y-px")
+    expect(button).not.toMatch(/active:[^\s"]*(?:translate|scale)/)
     expect(input).toContain("h-9 w-full min-w-0 rounded-md")
     expect(input).toContain("bg-transparent")
     expect(card).toContain("rounded-xl bg-card")

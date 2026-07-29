@@ -27,7 +27,7 @@ import {
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
-  Archive,
+  ArchiveAction,
   ChevronDown,
   Folder,
   FolderOpen,
@@ -47,6 +47,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type {
   OusiaLanguage,
   OusiaSidebarSectionId,
@@ -56,6 +62,7 @@ import type {
 const sidebarAddIconSize = 18
 const sidebarFolderIconSize = 18
 const sidebarMenuIconSize = 18
+const sidebarMenuIconXClass = "-translate-x-0.5"
 const sidebarSectionIconSize = 14
 const sidebarIconStrokeWidth = 1.5
 const sidebarActionButtonClass = "size-6 justify-self-end"
@@ -63,7 +70,7 @@ const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
 const sidebarProjectActionButtonClass = "size-6 justify-self-end"
 const sidebarProjectLeadGridClass = "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 const sidebarProjectSessionGridClass = "grid-cols-[24px_minmax(0,1fr)_24px]"
-const sidebarScrollPaddingXClass = "px-0"
+const sidebarScrollPaddingXClass = "pl-2 pr-0"
 const sidebarFooterPaddingXClass = "px-[7px]"
 const sidebarRowFrameXClass = "-ml-1 w-full"
 const sidebarRowContentXClass = "pl-3 pr-2"
@@ -85,8 +92,8 @@ const sidebarProjectRowStateClass =
   "relative text-sidebar-accent-foreground before:pointer-events-none before:absolute before:inset-0 before:rounded-md before:bg-transparent hover:before:bg-[var(--sidebar-accent)] focus-within:before:bg-[var(--sidebar-accent)] [&>*]:relative [&>*]:z-[1]"
 const sidebarSelectedRowClass =
   "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
-const sidebarGhostActionClass =
-  "hover:bg-[var(--sidebar-accent)] hover:text-sidebar-accent-foreground"
+const sidebarActionHoverClass =
+  "hover:bg-muted hover:text-sidebar-accent-foreground"
 const sidebarDragPlaceholderClass =
   "!bg-neutral-500/12 !text-transparent !shadow-none hover:!bg-neutral-500/12 focus-within:!bg-neutral-500/12 dark:!bg-white/10 dark:!text-transparent dark:hover:!bg-white/10 dark:focus-within:!bg-white/10 [&>*]:opacity-0"
 const sidebarCompletionAccentClass = "bg-blue-500"
@@ -191,6 +198,23 @@ type SortableSidebarSectionProps = {
 
 function handleTextButtonMouseDown(event: MouseEvent<HTMLButtonElement>) {
   event.preventDefault()
+}
+
+function SidebarActionTooltip({
+  children,
+  label,
+}: {
+  children: React.ReactElement
+  label: string
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 }
 
 function SidebarRunningIndicator({
@@ -454,29 +478,31 @@ function SortableSessionRow({
                 />
               </div>
             ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className={[
-                "absolute inset-0",
-                sidebarActionButtonClass,
-                sidebarGhostActionClass,
-                "opacity-0 transition-opacity group-focus-within/session:opacity-100 group-hover/session:opacity-100",
-              ].join(" ")}
-              aria-label={t.sidebar.archiveSession(session.title)}
-              onClick={(event) => {
-                event.stopPropagation()
-                onArchiveSession(session.id)
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <Archive
-                className="text-sidebar-accent-foreground"
-                size={sidebarMenuIconSize}
-                strokeWidth={sidebarIconStrokeWidth}
-              />
-            </Button>
+            <SidebarActionTooltip label={t.sidebar.archiveSessionTooltip}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className={[
+                  "absolute inset-0",
+                  sidebarActionButtonClass,
+                  sidebarActionHoverClass,
+                  "opacity-0 transition-opacity group-focus-within/session:opacity-100 group-hover/session:opacity-100",
+                ].join(" ")}
+                aria-label={t.sidebar.archiveSession(session.title)}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onArchiveSession(session.id)
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <ArchiveAction
+                  className="text-sidebar-accent-foreground"
+                  size={sidebarMenuIconSize}
+                  strokeWidth={sidebarIconStrokeWidth}
+                />
+              </Button>
+            </SidebarActionTooltip>
           </>
         )}
       </div>
@@ -552,23 +578,25 @@ function SortableProjectSection({
           <span className="block min-w-0 flex-1 truncate">{project.name}</span>
         </button>
         <DropdownMenu modal={false}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
-              aria-label={t.sidebar.projectActions(project.name)}
-              onClick={(event) => event.stopPropagation()}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              <MoreHorizontal
-                className="text-sidebar-accent-foreground"
-                size={sidebarMenuIconSize}
-                strokeWidth={sidebarIconStrokeWidth}
-              />
-            </Button>
-          </DropdownMenuTrigger>
+          <SidebarActionTooltip label={t.sidebar.projectActions(project.name)}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className={`${sidebarProjectActionButtonClass} ${sidebarActionHoverClass} project-row-action shrink-0 opacity-0 transition-opacity`}
+                aria-label={t.sidebar.projectActions(project.name)}
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                <MoreHorizontal
+                  className={`${sidebarMenuIconXClass} text-sidebar-accent-foreground`}
+                  size={sidebarMenuIconSize}
+                  strokeWidth={sidebarIconStrokeWidth}
+                />
+              </Button>
+            </DropdownMenuTrigger>
+          </SidebarActionTooltip>
           <DropdownMenuContent align="end" className="w-auto min-w-44">
             <DropdownMenuItem onClick={() => onShowProjectInFolder(project.id)}>
               <FolderOpen className="text-muted-foreground" />
@@ -578,7 +606,7 @@ function SortableProjectSection({
               disabled={hasWorkingSession}
               onClick={() => onArchiveProject(project.id)}
             >
-              <Archive className="text-muted-foreground" />
+              <ArchiveAction className="text-muted-foreground" />
               {t.sidebar.archiveProject}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -592,24 +620,26 @@ function SortableProjectSection({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={`${sidebarProjectActionButtonClass} ${sidebarGhostActionClass} project-row-action shrink-0 opacity-0 transition-opacity`}
-          aria-label={t.sidebar.newProjectSession(project.name)}
-          onClick={(event) => {
-            event.stopPropagation()
-            onCreateProjectSession(project.id)
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <Plus
-            className="text-sidebar-accent-foreground"
-            size={sidebarAddIconSize}
-            strokeWidth={sidebarIconStrokeWidth}
-          />
-        </Button>
+        <SidebarActionTooltip label={t.sidebar.newProjectSession(project.name)}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={`${sidebarProjectActionButtonClass} ${sidebarActionHoverClass} project-row-action shrink-0 opacity-0 transition-opacity`}
+            aria-label={t.sidebar.newProjectSession(project.name)}
+            onClick={(event) => {
+              event.stopPropagation()
+              onCreateProjectSession(project.id)
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <Plus
+              className="text-sidebar-accent-foreground"
+              size={sidebarAddIconSize}
+              strokeWidth={sidebarIconStrokeWidth}
+            />
+          </Button>
+        </SidebarActionTooltip>
       </div>
       {children}
     </section>
@@ -688,28 +718,30 @@ function SortableSidebarSection({
           <span className="sr-only">{toggleLabel}</span>
         </div>
         {beforeAction}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className={sidebarActionButtonClass}
-          aria-label={actionLabel}
-          onMouseDown={handleTextButtonMouseDown}
-          onClick={(event) => {
-            event.stopPropagation()
-            if (isCollapsed) {
-              onToggleCollapsed(id)
-            }
-            onAction()
-          }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <Plus
-            className="text-muted-foreground"
-            size={sidebarSectionIconSize}
-            strokeWidth={sidebarIconStrokeWidth}
-          />
-        </Button>
+        <SidebarActionTooltip label={actionLabel}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className={sidebarActionButtonClass}
+            aria-label={actionLabel}
+            onMouseDown={handleTextButtonMouseDown}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (isCollapsed) {
+                onToggleCollapsed(id)
+              }
+              onAction()
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <Plus
+              className="text-muted-foreground"
+              size={sidebarSectionIconSize}
+              strokeWidth={sidebarIconStrokeWidth}
+            />
+          </Button>
+        </SidebarActionTooltip>
       </div>
       {isCollapsed || isDragging ? null : children}
     </section>
@@ -1020,23 +1052,25 @@ function SidebarComponent({
         beforeAction={
           isDefaultSessionSelected ? (
             <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className={`${sidebarActionButtonClass} ${sidebarGhostActionClass}`}
-                  aria-label={t.sidebar.defaultSessionActions}
-                  onClick={(event) => event.stopPropagation()}
-                  onPointerDown={(event) => event.stopPropagation()}
-                >
-                  <MoreHorizontal
-                    className="text-muted-foreground"
-                    size={sidebarMenuIconSize}
-                    strokeWidth={sidebarIconStrokeWidth}
-                  />
-                </Button>
-              </DropdownMenuTrigger>
+              <SidebarActionTooltip label={t.sidebar.defaultSessionActions}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
+                    aria-label={t.sidebar.defaultSessionActions}
+                    onClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                  >
+                    <MoreHorizontal
+                      className={`${sidebarMenuIconXClass} text-muted-foreground`}
+                      size={sidebarMenuIconSize}
+                      strokeWidth={sidebarIconStrokeWidth}
+                    />
+                  </Button>
+                </DropdownMenuTrigger>
+              </SidebarActionTooltip>
               <DropdownMenuContent align="end" className="w-auto min-w-44">
                 <DropdownMenuItem
                   onClick={(event) => {
@@ -1234,7 +1268,7 @@ function SidebarComponent({
 
       <div
         ref={scrollContainerRef}
-        className={`ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
+        className={`ousia-hover-scrollbar ousia-sidebar-scrollbar-gutter min-h-0 flex-1 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
       >
         <DndContext
           sensors={sensors}

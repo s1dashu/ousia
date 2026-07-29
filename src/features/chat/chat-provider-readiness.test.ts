@@ -11,7 +11,7 @@ function status(
     available: true,
     models: [],
     requiresOpenaiAuth: true,
-    runtime: "bundled",
+    runtime: "downloaded",
     ...overrides,
   }
 }

@@ -21,7 +21,7 @@ import type {
   OusiaChatCompactPayload,
   OusiaChatCompactResult,
   OusiaChatContext,
-  OusiaChatEvent,
+  OusiaChatEventReplaySnapshot,
   OusiaChatContextUsageResult,
   OusiaChatExportPayload,
   OusiaChatExportResult,
@@ -37,6 +37,7 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaSequencedChatEvent,
   OusiaCodexAuthResult,
   OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
@@ -210,6 +211,9 @@ const api = {
   ): Promise<OusiaChatHistoryResult> {
     return ipcRenderer.invoke("ousia:chat:history", payload)
   },
+  getActiveChatEvents(): Promise<OusiaChatEventReplaySnapshot> {
+    return ipcRenderer.invoke("ousia:chat:events:active")
+  },
   getChatToolPayload(
     payload: OusiaChatToolPayloadPayload
   ): Promise<OusiaChatToolPayloadResult> {
@@ -318,9 +322,11 @@ const api = {
     ipcRenderer.on("ousia:update:status", listener)
     return () => ipcRenderer.off("ousia:update:status", listener)
   },
-  onChatEvent(callback: (event: OusiaChatEvent) => void): () => void {
-    const listener = (_event: IpcRendererEvent, payload: OusiaChatEvent) =>
-      callback(payload)
+  onChatEvent(callback: (event: OusiaSequencedChatEvent) => void): () => void {
+    const listener = (
+      _event: IpcRendererEvent,
+      payload: OusiaSequencedChatEvent
+    ) => callback(payload)
     ipcRenderer.on("ousia:chat:event", listener)
     return () => {
       ipcRenderer.off("ousia:chat:event", listener)

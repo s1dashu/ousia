@@ -21,7 +21,7 @@ import type {
   OusiaChatCompactPayload,
   OusiaChatCompactResult,
   OusiaChatContext,
-  OusiaChatEvent,
+  OusiaChatEventReplaySnapshot,
   OusiaChatContextUsageResult,
   OusiaChatExportPayload,
   OusiaChatExportResult,
@@ -37,6 +37,7 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaSequencedChatEvent,
   OusiaCodexAuthResult,
   OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
@@ -121,6 +122,7 @@ declare global {
       getChatHistory(
         payload: OusiaChatHistoryPayload
       ): Promise<OusiaChatHistoryResult>
+      getActiveChatEvents(): Promise<OusiaChatEventReplaySnapshot>
       getChatToolPayload(
         payload: OusiaChatToolPayloadPayload
       ): Promise<OusiaChatToolPayloadResult>
@@ -178,7 +180,9 @@ declare global {
       downloadUpdate(): Promise<OusiaUpdateActionResult>
       installUpdate(): Promise<OusiaUpdateActionResult>
       onUpdateStatus(callback: (status: OusiaUpdateStatus) => void): () => void
-      onChatEvent(callback: (event: OusiaChatEvent) => void): () => void
+      onChatEvent(
+        callback: (event: OusiaSequencedChatEvent) => void
+      ): () => void
       onWindowFullscreenChange(
         callback: (event: OusiaWindowFullscreenEvent) => void
       ): () => void

@@ -1,7 +1,6 @@
 import "./pi-package-dir.js"
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai"
-import { ModelRegistry } from "@earendil-works/pi-coding-agent"
-import { join } from "node:path"
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent"
 
 import {
   isOusiaPiThinkingLevel,
@@ -12,10 +11,7 @@ import {
   type OusiaThinkingLevel,
 } from "./chat-types.js"
 import { isDeprecatedProviderModelId } from "./model-compat.js"
-import {
-  createReadOnlyPiAuthStorage,
-  resolvePiAgentDir,
-} from "./pi-environment.js"
+import { createPiModelRuntime, resolvePiAgentDir } from "./pi-environment.js"
 import { getVercelAiGatewayModelIds } from "./vercel-ai-gateway-models.js"
 
 function toOusiaThinkingLevels(levels: string[]): OusiaThinkingLevel[] {
@@ -23,7 +19,7 @@ function toOusiaThinkingLevels(levels: string[]): OusiaThinkingLevel[] {
 }
 
 function toOusiaAuthSource(
-  source: ReturnType<ModelRegistry["getProviderAuthStatus"]>["source"]
+  source: ReturnType<ModelRuntime["getProviderAuthStatus"]>["source"]
 ): OusiaModelProviderAuthSource | undefined {
   if (
     source === "stored" ||
@@ -40,11 +36,7 @@ function toOusiaAuthSource(
 
 export async function listPiModels(): Promise<OusiaModelRegistryResult> {
   const agentDir = resolvePiAgentDir()
-  const authStorage = createReadOnlyPiAuthStorage(agentDir)
-  const modelRegistry = ModelRegistry.create(
-    authStorage,
-    join(agentDir, "models.json")
-  )
+  const modelRuntime = await createPiModelRuntime(agentDir)
   const vercelModelIds = await getVercelAiGatewayModelIds()
   const providerModels = new Map<
     string,
@@ -55,7 +47,7 @@ export async function listPiModels(): Promise<OusiaModelRegistryResult> {
     }
   >()
 
-  for (const model of modelRegistry.getAll()) {
+  for (const model of modelRuntime.getModels()) {
     const provider = model.provider.trim()
     const modelId = model.id.trim()
     if (
@@ -69,7 +61,7 @@ export async function listPiModels(): Promise<OusiaModelRegistryResult> {
     ) {
       continue
     }
-    const providerName = modelRegistry.getProviderDisplayName(provider)
+    const providerName = modelRuntime.getProvider(provider)?.name ?? provider
     const entry =
       providerModels.get(provider) ??
       providerModels
@@ -103,15 +95,15 @@ export async function listPiModels(): Promise<OusiaModelRegistryResult> {
 
   const configuredProviderIds = [
     ...new Set(
-      modelRegistry
-        .getAvailable()
+      modelRuntime
+        .getAvailableSnapshot()
         .map((model) => model.provider.trim())
         .filter(Boolean)
     ),
   ].sort()
   const configuredProviders: OusiaConfiguredModelProvider[] =
     configuredProviderIds.map((providerId) => {
-      const authStatus = modelRegistry.getProviderAuthStatus(providerId)
+      const authStatus = modelRuntime.getProviderAuthStatus(providerId)
       return {
         id: providerId,
         authLabel: authStatus.label,
@@ -123,6 +115,6 @@ export async function listPiModels(): Promise<OusiaModelRegistryResult> {
     configuredProviderIds,
     configuredProviders,
     providers,
-    error: modelRegistry.getError(),
+    error: modelRuntime.getError(),
   }
 }

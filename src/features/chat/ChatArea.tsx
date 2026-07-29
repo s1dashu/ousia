@@ -1063,6 +1063,7 @@ function ChatAreaComponent({
           : { modelProvider: model.provider, modelId: model.modelId }),
       })
     )
+    setIsModelMenuOpen(false)
   }
 
   const openProviderKeyDialog = useCallback(() => {
@@ -1851,7 +1852,7 @@ function ChatAreaComponent({
   return (
     <section
       className={cn(
-        "ousia-main-panel @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-card",
+        "ousia-main-panel @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-[var(--ousia-chat-panel-surface)]",
         MAIN_PANEL_LEFT_CORNERS_CLASS
       )}
       style={style}
@@ -1881,7 +1882,7 @@ function ChatAreaComponent({
       <div
         ref={scrollRef}
         className={cn(
-          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto bg-white pt-4 pb-16 select-text dark:bg-card",
+          "ousia-hover-scrollbar ousia-stable-scrollbar-gutter min-h-0 flex-1 overflow-auto bg-white pt-4 pb-16 select-text dark:bg-[var(--ousia-chat-panel-surface)]",
           CHAT_HORIZONTAL_PADDING_CLASS
         )}
         onScroll={handleChatScroll}
@@ -1933,10 +1934,7 @@ function ChatAreaComponent({
       ) : null}
 
       <form
-        className={cn(
-          CHAT_COMPOSER_SHELL_CLASS,
-          CHAT_HORIZONTAL_PADDING_CLASS
-        )}
+        className={cn(CHAT_COMPOSER_SHELL_CLASS, CHAT_HORIZONTAL_PADDING_CLASS)}
         onSubmit={handleSubmit}
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
@@ -2015,32 +2013,50 @@ function ChatAreaComponent({
               />
               <div className="mt-2 flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-6"
-                    aria-label={t.chat.addAttachment}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Plus size={18} />
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-6"
+                          aria-label={t.chat.addAttachment}
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Plus size={18} />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        {t.chat.addAttachment}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                   <DropdownMenu
                     modal={false}
                     open={isComposerSettingsOpen}
                     onOpenChange={setIsComposerSettingsOpen}
                   >
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="size-6"
-                        aria-label={t.chat.composerSettings}
-                      >
-                        <SlidersHorizontal size={18} />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className="size-6"
+                              aria-label={t.chat.composerSettings}
+                            >
+                              <SlidersHorizontal size={18} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {t.chat.composerSettings}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <DropdownMenuContent
                       side="top"
                       sideOffset={8}
@@ -2317,7 +2333,7 @@ function ChatAreaComponent({
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="ousia-squircle-corners mt-0.5 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950 active:scale-[0.96]"
+              className="ousia-squircle-corners mt-0.5 rounded-lg text-neutral-500 hover:bg-neutral-100 hover:text-neutral-950"
               aria-label={t.app.close}
               onClick={() => setIsProviderKeyDialogOpen(false)}
             >
@@ -2395,7 +2411,7 @@ function ChatAreaComponent({
               type="button"
               variant="outline"
               size="sm"
-              className="ousia-squircle-corners h-10 rounded-2xl border-[0.5px] border-foreground/10 bg-white px-5 text-neutral-950 hover:bg-neutral-50 active:scale-[0.96]"
+              className="ousia-squircle-corners h-10 rounded-2xl border-[0.5px] border-foreground/10 bg-white px-5 text-neutral-950 hover:bg-neutral-50"
               onClick={() => setIsProviderKeyDialogOpen(false)}
             >
               {t.app.cancel}
@@ -2403,7 +2419,7 @@ function ChatAreaComponent({
             <Button
               type="button"
               size="sm"
-              className="ousia-squircle-corners h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800 active:scale-[0.96]"
+              className="ousia-squircle-corners h-10 rounded-2xl bg-neutral-950 px-5 text-white hover:bg-neutral-800"
               disabled={!canSaveProviderKey}
               onClick={() => void saveProviderKeyFromDialog()}
             >

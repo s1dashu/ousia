@@ -1407,26 +1407,37 @@ function SettingsPageComponent({
                           }
                         />
                         {providerHasApiKey ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="absolute top-1/2 right-0.5 -translate-y-1/2"
-                            aria-label={
-                              isProviderApiKeyVisible
-                                ? t.settings.hideApiKey
-                                : t.settings.showApiKey
-                            }
-                            onClick={() =>
-                              toggleProviderApiKeyVisibility(provider.id)
-                            }
-                          >
-                            {isProviderApiKeyVisible ? (
-                              <EyeOff size={16} />
-                            ) : (
-                              <Eye size={16} />
-                            )}
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  className="absolute top-1/2 right-0.5 -translate-y-1/2"
+                                  aria-label={
+                                    isProviderApiKeyVisible
+                                      ? t.settings.hideApiKey
+                                      : t.settings.showApiKey
+                                  }
+                                  onClick={() =>
+                                    toggleProviderApiKeyVisibility(provider.id)
+                                  }
+                                >
+                                  {isProviderApiKeyVisible ? (
+                                    <EyeOff size={16} />
+                                  ) : (
+                                    <Eye size={16} />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                {isProviderApiKeyVisible
+                                  ? t.settings.hideApiKey
+                                  : t.settings.showApiKey}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
                         ) : null}
                       </div>
                       <div className="flex items-center justify-end gap-1">

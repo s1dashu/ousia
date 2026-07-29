@@ -9,6 +9,7 @@ import ArrowShrinkIcon from "@hugeicons/core-free-icons/ArrowShrinkIcon"
 import ArrowUp02Icon from "@hugeicons/core-free-icons/ArrowUp02Icon"
 import ArrowUpIcon from "@hugeicons/core-free-icons/ArrowUp01Icon"
 import Archive02Icon from "@hugeicons/core-free-icons/Archive02Icon"
+import Archive03Icon from "@hugeicons/core-free-icons/Archive03Icon"
 import ArchiveRestoreIcon from "@hugeicons/core-free-icons/ArchiveRestoreIcon"
 import BanIcon from "@hugeicons/core-free-icons/BanIcon"
 import BubbleChatIcon from "@hugeicons/core-free-icons/BubbleChatIcon"
@@ -96,6 +97,7 @@ export const ArrowLeft = createHugeIcon(ArrowLeft02Icon)
 export const ArrowShrink = createHugeIcon(ArrowShrinkIcon)
 export const ArrowUp = createHugeIcon(ArrowUpIcon)
 export const Archive = createHugeIcon(Archive02Icon)
+export const ArchiveAction = createHugeIcon(Archive03Icon)
 export const ArchiveRestore = createHugeIcon(ArchiveRestoreIcon)
 export const SendArrowDown = createHugeIcon(ArrowDown02Icon)
 export const SendArrowUp = createHugeIcon(ArrowUp02Icon)

@@ -6,11 +6,12 @@ export function chatMessageIdFingerprint(messageId: string) {
 
 export class ChatMessageReplayGuard {
   private readonly messagesBySession = new Map<string, Map<string, true>>()
+  private readonly maxMessagesPerSession: number
+  private readonly maxSessions: number
 
-  constructor(
-    private readonly maxMessagesPerSession = 512,
-    private readonly maxSessions = 128
-  ) {
+  constructor(maxMessagesPerSession = 512, maxSessions = 128) {
+    this.maxMessagesPerSession = maxMessagesPerSession
+    this.maxSessions = maxSessions
     if (
       !Number.isInteger(maxMessagesPerSession) ||
       maxMessagesPerSession <= 0 ||

@@ -24,6 +24,8 @@
 - Packaging: Electron Forge plus the scripts in `scripts/`.
 - The preload bridge is the renderer trust boundary. Keep context isolation and validate IPC inputs in the host.
 - Pi and Codex integrations are explicit agent providers. Do not silently route a failed provider to another provider.
+- The main process owns sequenced replay snapshots for active chat streams. Renderer reloads must subscribe before replay hydration, then reconcile provider history when a run finishes.
+- Pi history reads must use the active `SessionManager` branch while a session is running; the on-disk JSONL file is not authoritative until Pi flushes the turn.
 - Persistence and session deletion must remain atomic, observable, and covered by tests.
 - Runtime and Sentry diagnostics must not log prompt, response, tool payload, credential, or private file content.
 

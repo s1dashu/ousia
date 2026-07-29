@@ -83,9 +83,30 @@ describe("design token boundaries", () => {
     expect(css).toContain("--ousia-composer-surface: #fff")
     expect(css).toContain(".dark .ousia-main-panel")
     expect(css).toContain("--ousia-composer-surface: oklch(0.205 0 0)")
+    expect(css).toContain("0 20px 44px -18px rgb(0 0 0 / 0.86)")
+    expect(css).toContain("0 24px 52px -18px rgb(0 0 0 / 0.9)")
     expect(chat).toContain("bg-[var(--ousia-composer-surface)]")
     expect(chat).not.toContain(
       "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-sidebar)]"
+    )
+  })
+
+  it("slightly lifts only the dark chat panel surface", () => {
+    const chat = readSource("src/features/chat/ChatArea.tsx")
+    const chatHeader = readSource("src/features/chat/ChatHeader.tsx")
+    const chatComposer = readSource("src/features/chat/ChatComposerParts.tsx")
+
+    expect(css).toMatch(
+      /\.dark \.ousia-main-panel\s*\{[^}]*--ousia-chat-panel-surface:\s*color-mix\(\s*in srgb,\s*var\(--ousia-app-card\) 98%,\s*white\s*\)/s,
+    )
+    expect(chat).toContain("bg-white")
+    expect(chat).toContain("dark:bg-[var(--ousia-chat-panel-surface)]")
+    expect(chat).not.toContain("dark:bg-card")
+    expect(chatHeader).toContain(
+      "dark:bg-[var(--ousia-chat-panel-surface)]"
+    )
+    expect(chatComposer).toContain(
+      "dark:bg-[var(--ousia-chat-panel-surface)]"
     )
   })
 

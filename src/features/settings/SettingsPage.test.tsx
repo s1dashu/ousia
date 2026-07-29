@@ -27,9 +27,13 @@ function renderProviderSettings(
       codexEnvironment={undefined}
       codexEnvironmentLoading={codexEnvironmentLoading}
       modelRegistry={undefined}
+      onDeleteArchivedSessions={async () => undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
+      onRestoreArchivedSessions={async () => undefined}
       onSettingsChange={vi.fn()}
+      projects={[]}
+      sessions={[]}
       settings={{
         ...defaultSettings,
         defaultAgentProvider: agentProvider,
@@ -46,9 +50,13 @@ function renderGeneralSettings() {
       codexEnvironment={undefined}
       codexEnvironmentLoading={false}
       modelRegistry={undefined}
+      onDeleteArchivedSessions={async () => undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
+      onRestoreArchivedSessions={async () => undefined}
       onSettingsChange={vi.fn()}
+      projects={[]}
+      sessions={[]}
       settings={{ ...defaultSettings, language: "zh" }}
     />
   )
@@ -61,9 +69,13 @@ function renderConversationSettings() {
       codexEnvironment={undefined}
       codexEnvironmentLoading={false}
       modelRegistry={undefined}
+      onDeleteArchivedSessions={async () => undefined}
       onRefreshCodexEnvironment={async () => undefined}
       onRefreshModelRegistry={async () => undefined}
+      onRestoreArchivedSessions={async () => undefined}
       onSettingsChange={vi.fn()}
+      projects={[]}
+      sessions={[]}
       settings={{ ...defaultSettings, language: "zh" }}
     />
   )

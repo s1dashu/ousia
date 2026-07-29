@@ -204,12 +204,15 @@ agent sandbox boundary.
 Ousia hosts the bundled Pi coding agent runtime in Electron main and uses the
 user's local Pi agent directory as resolved by the Pi SDK (`~/.pi/agent`,
 honoring `PI_CODING_AGENT_DIR`) for model config, credentials, resources, and
-session history.
+session history. Model discovery, provider authentication, request assembly,
+and session creation go through Pi's asynchronous `ModelRuntime`; Ousia does
+not maintain a parallel provider registry.
 
 Ousia maps its sidebar `sessionId` to a Pi session with the same id in Pi's
 default session directory for the project cwd. If the Pi session already exists,
 it is opened; otherwise Ousia creates a new Pi session with that id. Provider
-API keys entered through Ousia are saved through Pi's auth storage API as a
+API keys entered through Ousia are saved through Pi's provider-owned
+`ModelRuntime` login/logout flow as a
 single-provider merge, preserving unrelated existing Pi credentials. For users,
 the supported configuration entry points are Pi itself, usually through the Pi
 TUI/login flow, and Ousia's settings UI; the concrete auth storage file is a

@@ -52,8 +52,8 @@ export function ChatHeader({
       className={cn(
         "window-drag relative z-30 grid h-[var(--ousia-titlebar-height)] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-4 transition-[background-color,box-shadow,backdrop-filter] select-none",
         isScrolled
-          ? "bg-white shadow-none dark:bg-card"
-          : "bg-white shadow-none dark:bg-card"
+          ? "bg-white shadow-none dark:bg-[var(--ousia-chat-panel-surface)]"
+          : "bg-white shadow-none dark:bg-[var(--ousia-chat-panel-surface)]"
       )}
     >
       <div className="window-drag absolute inset-0" aria-hidden="true" />

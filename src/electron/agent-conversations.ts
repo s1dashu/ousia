@@ -8,13 +8,12 @@ import type { ImageContent } from "@earendil-works/pi-ai"
 import {
   createAgentSession,
   DefaultResourceLoader,
-  ModelRegistry,
   SessionManager,
   SettingsManager,
   CURRENT_SESSION_VERSION,
-  type AuthStorage,
   type AgentSession,
   type AgentSessionEvent,
+  type ModelRuntime,
   type SessionMessageEntry,
 } from "@earendil-works/pi-coding-agent"
 
@@ -59,7 +58,7 @@ import {
   type PiToolInputCompletionSource,
 } from "./pi-tool-input.js"
 import {
-  createWritablePiAuthStorage,
+  createPiModelRuntime,
   resolvePiAgentDir,
 } from "./pi-environment.js"
 import {
@@ -71,8 +70,7 @@ import { isVercelAiGatewayModelAvailable } from "./vercel-ai-gateway-models.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 type AgentSessionBundle = {
-  authStorage: AuthStorage
-  modelRegistry: ModelRegistry
+  modelRuntime: ModelRuntime
   runtimeApiKeyProvider?: string
   session: AgentSession
   unsubscribe: () => void
@@ -429,7 +427,7 @@ function toolsForAgentMode(
   return ["read", "write", "edit", "bash", "grep", "find", "ls"]
 }
 
-function applyRuntimeApiKey(
+async function applyRuntimeApiKey(
   bundle: AgentSessionBundle,
   model: OusiaModelSettings
 ) {
@@ -438,16 +436,18 @@ function applyRuntimeApiKey(
     bundle.runtimeApiKeyProvider &&
     bundle.runtimeApiKeyProvider !== nextProvider
   ) {
-    bundle.authStorage.removeRuntimeApiKey(bundle.runtimeApiKeyProvider)
+    await bundle.modelRuntime.removeRuntimeApiKey(bundle.runtimeApiKeyProvider)
   }
   if (model.apiKey) {
-    bundle.authStorage.setRuntimeApiKey(model.provider, model.apiKey)
+    await bundle.modelRuntime.setRuntimeApiKey(model.provider, model.apiKey, {
+      allowNetwork: false,
+    })
   }
   bundle.runtimeApiKeyProvider = nextProvider
 }
 
 async function findConfiguredModel(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   model: OusiaModelSettings
 ) {
   if (
@@ -458,7 +458,7 @@ async function findConfiguredModel(
       `Vercel AI Gateway 当前不支持模型：${model.modelId}。请重新选择一个模型。`
     )
   }
-  const selected = modelRegistry.find(model.provider, model.modelId)
+  const selected = modelRuntime.getModel(model.provider, model.modelId)
   if (!selected) {
     throw new Error(`未知模型：${model.provider}/${model.modelId}`)
   }
@@ -478,8 +478,8 @@ async function configureSessionBundle(
   if (!model.provider || !model.modelId) {
     throw new Error("模型服务商和模型 ID 不能为空。")
   }
-  applyRuntimeApiKey(bundle, model)
-  const selectedModel = await findConfiguredModel(bundle.modelRegistry, model)
+  await applyRuntimeApiKey(bundle, model)
+  const selectedModel = await findConfiguredModel(bundle.modelRuntime, model)
   if (
     bundle.session.model?.provider !== selectedModel.provider ||
     bundle.session.model?.id !== selectedModel.id
@@ -824,6 +824,22 @@ function branchEntriesToHistoryItems(
   })
 }
 
+export function historyItemsFromActivePiSession(
+  session: Pick<AgentSession, "sessionManager"> | undefined,
+  includeToolPayloads: boolean
+) {
+  if (!session) {
+    return undefined
+  }
+  const items: OusiaChatHistoryItem[] = []
+  branchEntriesToHistoryItems(
+    session.sessionManager.getBranch(),
+    items,
+    includeToolPayloads
+  )
+  return items
+}
+
 function piEntryIdFromChatItemId(messageId: string) {
   return messageId.replace(/-text-\d+$/, "").replace(/-thinking-\d+$/, "")
 }
@@ -1075,9 +1091,20 @@ export function createAgentConversationModule({
   ) {
     const key = sessionKey(context)
     const activeBundle = await sessionPromises.get(key)?.catch(() => undefined)
-    let sessionFile =
-      activeBundle?.session.sessionManager.getSessionFile() ??
-      sessionFileByKey.get(key)
+    const activeItems = historyItemsFromActivePiSession(
+      activeBundle?.session,
+      includeToolPayloads
+    )
+    if (activeItems) {
+      writeRuntimeLog("chat.history", "debug", {
+        itemCount: activeItems.length,
+        message: "Read Pi history from the active in-memory session.",
+        sessionId: context.sessionId,
+      })
+      return activeItems
+    }
+
+    let sessionFile = sessionFileByKey.get(key)
     let fileStat: Stats | undefined
 
     if (sessionFile) {
@@ -1918,11 +1945,7 @@ export function createAgentConversationModule({
     mkdirSync(cwd, { recursive: true })
     mkdirSync(agentDir, { recursive: true })
 
-    const authStorage = createWritablePiAuthStorage(agentDir)
-    const modelRegistry = ModelRegistry.create(
-      authStorage,
-      join(agentDir, "models.json")
-    )
+    const modelRuntime = await createPiModelRuntime(agentDir)
     const settingsManager = SettingsManager.create(cwd, agentDir)
     const resourceLoader = new DefaultResourceLoader({
       cwd,
@@ -1931,18 +1954,19 @@ export function createAgentConversationModule({
     })
     await resourceLoader.reload()
     if (model.apiKey) {
-      authStorage.setRuntimeApiKey(model.provider, model.apiKey)
+      await modelRuntime.setRuntimeApiKey(model.provider, model.apiKey, {
+        allowNetwork: false,
+      })
     }
     const selectedModel =
       model.provider && model.modelId
-        ? await findConfiguredModel(modelRegistry, model)
+        ? await findConfiguredModel(modelRuntime, model)
         : undefined
 
     const { session, modelFallbackMessage } = await createAgentSession({
-      authStorage,
       cwd,
       agentDir,
-      modelRegistry,
+      modelRuntime,
       resourceLoader,
       sessionManager: sessionFileByKey.get(key)
         ? SessionManager.open(sessionFileByKey.get(key)!)
@@ -1980,8 +2004,7 @@ export function createAgentConversationModule({
       translateAgentEvent(event, context, key)
     )
     return {
-      authStorage,
-      modelRegistry,
+      modelRuntime,
       runtimeApiKeyProvider: model.apiKey ? model.provider : undefined,
       session,
       unsubscribe,
