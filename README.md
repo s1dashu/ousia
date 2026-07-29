@@ -25,8 +25,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.1/Pi_0.2.1_aarch64.dmg">
-    <img src="./assets/download-button-centered.svg" alt="Download Ousia for macOS" width="280" height="48">
+  <a href="https://github.com/s1dashu/ousia/releases/latest">
+    <img src="./assets/download-button-centered.svg" alt="Download Pi for macOS" width="280" height="48">
   </a>
 </p>
 
