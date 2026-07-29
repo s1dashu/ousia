@@ -64,6 +64,16 @@ zip_path="${dmg_path%.dmg}.zip"
 rm -f "$zip_path"
 ditto -c -k --sequesterRsrc --keepParent "$app_path" "$zip_path"
 
+dmg_arch=${${dmg_path:t}#Pi_${version}_}
+dmg_arch=${dmg_arch%.dmg}
+[[ -n "$dmg_arch" && "$dmg_arch" != "${dmg_path:t}" ]] ||
+  fail "could not derive the DMG architecture from ${dmg_path:t}"
+stable_dmg_path="$dmg_dir/Pi_${dmg_arch}.dmg"
+rm -f "$stable_dmg_path"
+cp -p "$dmg_path" "$stable_dmg_path"
+cmp -s "$dmg_path" "$stable_dmg_path" ||
+  fail "stable DMG is not byte-identical to the verified versioned DMG"
+
 zip_verify_dir=$(mktemp -d)
 ditto -x -k "$zip_path" "$zip_verify_dir"
 codesign --verify --deep --strict --verbose=2 "$zip_verify_dir/Pi.app"
@@ -97,11 +107,12 @@ node scripts/generate-latest-json.mjs \
 checksum_path="$dmg_dir/Pi_${version}_SHA256SUMS.txt"
 (
   cd "$dmg_dir"
-  shasum -a 256 "${dmg_path:t}" "${zip_path:t}" > "${checksum_path:t}"
+  shasum -a 256 "${dmg_path:t}" "${stable_dmg_path:t}" "${zip_path:t}" > "${checksum_path:t}"
 )
 
 print -- "Verified release artifacts:"
 print -- "$dmg_path"
+print -- "$stable_dmg_path"
 print -- "$zip_path"
 print -- "$updater_path"
 print -- "$updater_signature_path"

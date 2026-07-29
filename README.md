@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/latest"><strong>Download for macOS</strong></a>
+  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg"><strong>Download for macOS</strong></a>
   ·
   <a href="#requirements">Requirements</a>
   ·
@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/latest">
+  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg">
     <img src="./assets/download-button-centered.svg" alt="Download Pi for macOS" width="280" height="48">
   </a>
 </p>
@@ -60,7 +60,7 @@ The download is only **about 10 MB**, so Ousia is quick to install and takes up 
 
 The current release supports **macOS on Apple Silicon**.
 
-1. Download the latest DMG from [GitHub Releases](https://github.com/s1dashu/ousia/releases/latest).
+1. [Download the latest DMG](https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg).
 2. Open the DMG and move the app to `Applications`.
 3. Launch it and select your existing Pi executable, or let the app install Pi into its own managed directory.
 
