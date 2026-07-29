@@ -17,17 +17,21 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg"><strong>Download for macOS</strong></a>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg"><strong>Download Electron</strong></a>
   ·
-  <a href="#requirements">Requirements</a>
+  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg"><strong>Download Tauri</strong></a>
   ·
   <a href="#development">Development</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg">
-    <img src="./assets/download-button-centered.svg" alt="Download Pi for macOS" width="280" height="48">
-  </a>
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg"><strong>Download Ousia Electron v0.1.32</strong></a><br>
+  <sub>Original Electron edition · macOS Apple Silicon</sub>
+</p>
+
+<p align="center">
+  <a href="https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg"><strong>Download Pi Tauri v0.2.6</strong></a><br>
+  <sub>Current lightweight Tauri edition · macOS Apple Silicon</sub>
 </p>
 
 ## Recent changes
@@ -59,11 +63,21 @@ The download is only **about 10 MB**, so Ousia is quick to install and takes up 
 
 ## Download
 
-The current release supports **macOS on Apple Silicon**.
+Both editions support **macOS on Apple Silicon**.
 
-1. [Download the latest DMG](https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg).
-2. Open the DMG and move the app to `Applications`.
-3. Launch it and select your existing Pi executable, or let the app install Pi into its own managed directory.
+### Ousia Electron v0.1.32
+
+[Download the Electron DMG](https://github.com/s1dashu/ousia/releases/download/v0.1.32/Ousia-0.1.32-arm64.dmg)
+
+This is the latest published release of the Electron application.
+
+### Pi Tauri v0.2.6
+
+[Download the latest Tauri DMG](https://github.com/s1dashu/ousia/releases/latest/download/Pi_aarch64.dmg)
+
+This is the current lightweight Tauri application with signed in-app updates.
+
+Open the downloaded DMG, move the app to `Applications`, then launch it. The Tauri edition can use your existing Pi executable or install Pi into its own managed directory.
 
 Release builds are signed with a Developer ID certificate, notarized by Apple, and validated with Gatekeeper before publishing.
 
