@@ -91,7 +91,7 @@ describe("desktopSentryVite", () => {
     )
     expect(config).toMatchObject({
       buildVerificationMarker:
-        "desktop-sentry-build:disabled:ousia-desktop@0.1.33",
+        "desktop-sentry-build:disabled:ousia-desktop@0.1.34",
       dsn: "",
       enabled: false,
       environment: "development",
