@@ -58,6 +58,15 @@ import type {
   OusiaSidebarSectionId,
   OusiaUpdateStatus,
 } from "@/electron/chat-types"
+import {
+  defaultSessionGroupId,
+  escapeAttributeSelectorValue,
+  getSortableData,
+  isSidebarSectionId,
+  normalizeSidebarSectionOrder,
+  projectIdFromSessionGroup,
+  type SidebarSortableData,
+} from "@/features/sidebar/sidebar-dnd"
 
 const sidebarAddIconSize = 18
 const sidebarFolderIconSize = 18
@@ -98,15 +107,6 @@ const sidebarDragPlaceholderClass =
   "!bg-neutral-500/12 !text-transparent !shadow-none hover:!bg-neutral-500/12 focus-within:!bg-neutral-500/12 dark:!bg-white/10 dark:!text-transparent dark:hover:!bg-white/10 dark:focus-within:!bg-white/10 [&>*]:opacity-0"
 const sidebarCompletionAccentClass = "bg-blue-500"
 const sidebarDragOverlayZIndex = 1000
-const defaultSessionGroupId = "default"
-
-type SidebarSortableData = {
-  kind: "project" | "section" | "session"
-  label: string
-  groupId?: string
-  projectChild?: boolean
-}
-
 type SidebarDragPreview = SidebarSortableData & {
   id: string
 }
@@ -234,53 +234,6 @@ function SidebarRunningIndicator({
       <span className="size-3.5 animate-spin rounded-full border-2 border-sidebar-accent-foreground/20 border-t-sidebar-accent-foreground motion-reduce:animate-none" />
     </div>
   )
-}
-
-function getSortableData(value: unknown): SidebarSortableData | null {
-  if (!value || typeof value !== "object") {
-    return null
-  }
-  const data = value as Partial<SidebarSortableData>
-  if (
-    data.kind !== "project" &&
-    data.kind !== "section" &&
-    data.kind !== "session"
-  ) {
-    return null
-  }
-  if (typeof data.label !== "string") {
-    return null
-  }
-  return {
-    kind: data.kind,
-    label: data.label,
-    ...(typeof data.groupId === "string" ? { groupId: data.groupId } : {}),
-    ...(typeof data.projectChild === "boolean"
-      ? { projectChild: data.projectChild }
-      : {}),
-  }
-}
-
-function isSidebarSectionId(value: string): value is OusiaSidebarSectionId {
-  return value === "sessions" || value === "projects"
-}
-
-function normalizeSidebarSectionOrder(
-  sectionOrder: OusiaSidebarSectionId[]
-): OusiaSidebarSectionId[] {
-  return [
-    ...new Set(
-      [...sectionOrder, "sessions", "projects"].filter(isSidebarSectionId)
-    ),
-  ]
-}
-
-function escapeAttributeSelectorValue(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-}
-
-function projectIdFromSessionGroup(groupId: string | undefined) {
-  return groupId && groupId !== defaultSessionGroupId ? groupId : undefined
 }
 
 function DragPreview({ preview }: { preview: SidebarDragPreview }) {
