@@ -49,6 +49,10 @@ import {
 } from "@/electron/chat-types"
 import { getMessages, isDefaultSessionTitle } from "@/app/i18n"
 import { getConfiguredModelPresets } from "@/app/model-presets"
+import {
+  applyPendingChatEvents,
+  queuePendingChatEvent,
+} from "@/features/chat/pending-chat-events"
 import { ChatArea } from "@/features/chat/ChatArea"
 import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
 import type { SettingsSectionId } from "@/features/settings/settings-navigation"
@@ -90,10 +94,6 @@ type ChatHistoryPageState = {
   status: "loading-initial" | "ready" | "loading-older" | "empty" | "error"
   totalItems?: number
 }
-type TextDeltaChatEvent = Extract<
-  OusiaChatEvent,
-  { type: "assistant_text_delta" | "thinking_delta" }
->
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
@@ -166,25 +166,6 @@ function mergePersistedChatItems(
     ...persistedItems,
     ...existingItems.filter((item) => !persistedIds.has(item.id)),
   ]
-}
-
-function isTextDeltaEvent(
-  event: OusiaChatEvent | undefined
-): event is TextDeltaChatEvent {
-  return (
-    event?.type === "assistant_text_delta" || event?.type === "thinking_delta"
-  )
-}
-
-function canMergeTextDeltaEvents(
-  previousEvent: OusiaChatEvent | undefined,
-  nextEvent: TextDeltaChatEvent
-): previousEvent is TextDeltaChatEvent {
-  return (
-    isTextDeltaEvent(previousEvent) &&
-    previousEvent.type === nextEvent.type &&
-    previousEvent.id === nextEvent.id
-  )
 }
 
 function reorderById<T extends { id: string }>(
@@ -661,43 +642,11 @@ export function App() {
     }
 
     pendingChatEventsRef.current = new Map()
-    setItemsBySession((current) => {
-      let nextBySession = current
-      for (const [targetKey, events] of pendingEvents) {
-        let nextItems = current[targetKey] ?? []
-        for (const event of events) {
-          nextItems = applyChatEvent(nextItems, event)
-        }
-        if (nextItems !== current[targetKey]) {
-          if (nextBySession === current) {
-            nextBySession = { ...current }
-          }
-          nextBySession[targetKey] = nextItems
-        }
-      }
-      return nextBySession
-    })
+    setItemsBySession((current) => applyPendingChatEvents(current, pendingEvents))
   }, [])
   const queueChatItemEvent = useCallback(
     (targetKey: string, event: OusiaChatEvent) => {
-      const pendingEvents = pendingChatEventsRef.current
-      const targetEvents = pendingEvents.get(targetKey)
-      if (targetEvents) {
-        const previousEvent = targetEvents[targetEvents.length - 1]
-        if (
-          isTextDeltaEvent(event) &&
-          canMergeTextDeltaEvents(previousEvent, event)
-        ) {
-          targetEvents[targetEvents.length - 1] = {
-            ...event,
-            delta: previousEvent.delta + event.delta,
-          } as TextDeltaChatEvent
-          return
-        }
-        targetEvents.push(event)
-      } else {
-        pendingEvents.set(targetKey, [event])
-      }
+      queuePendingChatEvent(pendingChatEventsRef.current, targetKey, event)
       if (pendingChatEventsFrameRef.current) {
         return
       }

@@ -111,7 +111,13 @@ async function findCheapestTextModel(
       candidate.match.test(model.id) || candidate.match.test(model.name)
   )
   const pool = matched.length ? matched : providerModels
-  return pool.sort((a, b) => modelCost(a) - modelCost(b))[0]
+  // Prefer non-reasoning models: title generation uses a tiny maxTokens
+  // budget, and reasoning models can spend it all on thinking, yielding an
+  // empty title (observed with kimi-coding/k3-256k).
+  return pool.sort(
+    (a, b) =>
+      Number(a.reasoning) - Number(b.reasoning) || modelCost(a) - modelCost(b)
+  )[0]
 }
 
 function uniqueProviders(preferredProvider: string) {
@@ -245,7 +251,7 @@ export async function generateChatTitleWithUtilityModel(
       },
       {
         cacheRetention: "none",
-        maxTokens: 32,
+        maxTokens: selected.model.reasoning ? 1024 : 32,
         reasoning: "minimal",
         temperature: 0.2,
       }
