@@ -23,8 +23,8 @@ import {
   createAgentConversationModule,
   deletePersistedPiSessionFile,
   disposePiSessionBundle,
-  historyItemsFromActivePiSession,
 } from "./agent-conversations.js"
+import { historyItemsFromActivePiSession } from "./agent-conversation-history.js"
 
 describe("Pi agent conversation boundaries", () => {
   it("permanently deletes only the exact Pi session file in its canonical directory", async () => {
