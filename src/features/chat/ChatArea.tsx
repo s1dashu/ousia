@@ -94,6 +94,10 @@ import {
   type QueuedChatMessage,
 } from "@/features/chat/ChatComposerParts"
 import { ChatHeader, type ChatCopyStatus } from "@/features/chat/ChatHeader"
+import {
+  formatContextUsagePercent,
+  getContextUsagePercent,
+} from "@/features/chat/chat-context-usage"
 import { ChatMessageList } from "@/features/chat/ChatMessageList"
 import {
   chatAttachmentFromFile,
@@ -172,40 +176,6 @@ type ChatAreaProps = {
   }
   settings: AppSettings
   style: CSSProperties
-}
-
-type ContextUsage = NonNullable<ChatAreaProps["contextUsage"]>
-
-function clampPercentage(value: number) {
-  return Math.max(0, Math.min(100, value))
-}
-
-function getContextUsagePercent(usage: ContextUsage | undefined) {
-  if (
-    usage &&
-    typeof usage.percent === "number" &&
-    Number.isFinite(usage.percent) &&
-    usage.percent >= 0
-  ) {
-    return clampPercentage(usage.percent)
-  }
-
-  if (
-    usage &&
-    typeof usage.tokens === "number" &&
-    Number.isFinite(usage.tokens) &&
-    usage.tokens > 0 &&
-    Number.isFinite(usage.contextWindow) &&
-    usage.contextWindow > 0
-  ) {
-    return clampPercentage((usage.tokens / usage.contextWindow) * 100)
-  }
-
-  return undefined
-}
-
-function formatContextUsagePercent(percent: number) {
-  return percent < 10 ? percent.toFixed(1) : Math.round(percent).toString()
 }
 
 function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
