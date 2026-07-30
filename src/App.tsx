@@ -32,6 +32,7 @@ import {
   shouldRetryChatHistoryAfterSelection,
   shouldScheduleAutomaticChatHistoryRetry,
 } from "@/app/chat-history-state"
+import { discardSupersededPendingChatEvents } from "@/app/chat-recovery-state"
 import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
@@ -706,6 +707,21 @@ export function App() {
     },
     [flushPendingChatEvents]
   )
+  const discardPendingChatItemEvents = useCallback((targetKey: string) => {
+    const discarded = discardSupersededPendingChatEvents(
+      pendingChatEventsRef.current,
+      targetKey
+    )
+    if (
+      discarded.eventCount &&
+      !pendingChatEventsRef.current.size &&
+      pendingChatEventsFrameRef.current
+    ) {
+      window.cancelAnimationFrame(pendingChatEventsFrameRef.current)
+      pendingChatEventsFrameRef.current = 0
+    }
+    return discarded
+  }, [])
 
   useEffect(() => {
     if (!window.ousia) return
@@ -1162,6 +1178,8 @@ export function App() {
         ) {
           return
         }
+        const discardedPendingEvents =
+          discardPendingChatItemEvents(targetKey)
         startTransition(() => {
           setItemsBySession((current) => ({
             ...current,
@@ -1173,6 +1191,8 @@ export function App() {
           }))
         })
         console.debug("[chat.recovery] Reconciled completed session history", {
+          discardedPendingEventCount: discardedPendingEvents.eventCount,
+          discardedPendingEventTypes: discardedPendingEvents.eventTypes,
           itemCount: history.items.length,
           projectPath: context.projectPath,
           sessionId: context.sessionId,
@@ -1188,7 +1208,7 @@ export function App() {
         )
       }
     },
-    []
+    [discardPendingChatItemEvents]
   )
 
   const handleChatEvent = useCallback(
