@@ -19,14 +19,15 @@ export const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 export const sidebarProjectSessionGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px]"
-export const sidebarScrollPaddingXClass = "pl-2 pr-0"
+export const sidebarScrollPaddingXClass = "px-2"
 export const sidebarFooterPaddingXClass = "px-[7px]"
-export const sidebarRowFrameXClass = "-ml-1 w-full"
-export const sidebarRowContentXClass = "pl-3 pr-2"
+export const sidebarRowFrameXClass = "w-full"
+export const sidebarRowLeadingInsetClass = "pl-3"
+export const sidebarRowContentXClass = `${sidebarRowLeadingInsetClass} pr-2`
 export const sidebarRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
-export const sidebarSessionRowXClass = "mr-1 pl-2 pr-1"
+export const sidebarSessionRowXClass = `mr-1 ${sidebarRowLeadingInsetClass} pr-1`
 export const sidebarSessionDragPreviewXClass = "px-3"
-export const sidebarRightActionRowXClass = `${sidebarRowFrameXClass} pl-3 pr-1`
+export const sidebarRightActionRowXClass = `${sidebarRowFrameXClass} ${sidebarRowLeadingInsetClass} pr-1`
 export const sidebarProjectRowXClass = sidebarRightActionRowXClass
 export const sidebarListGapClass = "flex flex-col gap-0.5"
 export const sidebarSectionHeaderXClass = sidebarRightActionRowXClass

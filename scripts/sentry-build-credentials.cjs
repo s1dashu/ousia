@@ -3,6 +3,18 @@ const { spawnSync } = require("node:child_process")
 const SENTRY_KEYCHAIN_ACCOUNT = "source-map-upload"
 const SENTRY_KEYCHAIN_SERVICE = "sidasoftware-sentry-build"
 
+function shouldLoadSentryBuildToken({
+  environment = process.env,
+  requireSentry = false,
+} = {}) {
+  return Boolean(
+    requireSentry ||
+      environment.SENTRY_AUTH_TOKEN?.trim() ||
+      environment.SENTRY_ORG?.trim() ||
+      environment.OUSIA_SENTRY_PROJECT?.trim()
+  )
+}
+
 function loadSentryBuildToken({
   environment = process.env,
   platform = process.platform,
@@ -37,4 +49,5 @@ module.exports = {
   loadSentryBuildToken,
   SENTRY_KEYCHAIN_ACCOUNT,
   SENTRY_KEYCHAIN_SERVICE,
+  shouldLoadSentryBuildToken,
 }

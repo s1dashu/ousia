@@ -15,6 +15,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core"
 import {
@@ -22,6 +23,16 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
+import {
+  animate,
+  motion,
+  useMotionValue,
+  useReducedMotion,
+  useSpring,
+  useTransform,
+  useVelocity,
+  type MotionValue,
+} from "framer-motion"
 import {
   FolderOpen,
   MoreHorizontal,
@@ -53,6 +64,10 @@ import {
   projectIdFromSessionGroup,
   sidebarCollisionDetection,
 } from "@/features/sidebar/sidebar-dnd"
+import {
+  createSidebarDropAnimation,
+  SIDEBAR_DRAG_LAND_EASE,
+} from "@/features/sidebar/sidebar-drag-motion"
 import {
   DragPreview,
   SidebarActionTooltip,
@@ -90,6 +105,9 @@ type SidebarMoveSessionTarget = {
   targetSessionId?: string
 }
 
+const sidebarDragTiltAt = 800
+const sidebarDragTiltMax = 2.5
+
 type SidebarProps = {
   onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
@@ -123,6 +141,60 @@ type SidebarProps = {
   language: OusiaLanguage
   updateStatus: OusiaUpdateStatus
   style: CSSProperties
+}
+
+function AnimatedDragPreview({
+  lift,
+  preview,
+  reduceMotion,
+  screenX,
+  tiltGain,
+}: {
+  lift: MotionValue<number>
+  preview: SidebarDragPreview
+  reduceMotion: boolean
+  screenX: MotionValue<number>
+  tiltGain: MotionValue<number>
+}) {
+  const velocityX = useVelocity(screenX)
+  const tiltTarget = useTransform(
+    velocityX,
+    [-sidebarDragTiltAt, sidebarDragTiltAt],
+    [-sidebarDragTiltMax, sidebarDragTiltMax],
+    { clamp: true }
+  )
+  const tiltSpring = useSpring(tiltTarget, {
+    stiffness: 300,
+    damping: 30,
+    mass: 0.6,
+  })
+  const tilt = useTransform(() =>
+    reduceMotion ? 0 : tiltSpring.get() * tiltGain.get()
+  )
+  const scale = useTransform(lift, [0, 1], [1, 1.02])
+  const y = useTransform(lift, [0, 1], [0, -2])
+
+  return (
+    <motion.div
+      data-sidebar-drag-preview=""
+      className="relative will-change-transform"
+      style={{
+        rotate: tilt,
+        scale,
+        transformOrigin: "50% 65%",
+        y,
+      }}
+    >
+      <motion.div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-[var(--ousia-sidebar-selected-radius)] shadow-[0_14px_30px_-17px_rgba(24,24,27,0.34),0_5px_14px_-8px_rgba(24,24,27,0.2)] dark:shadow-[0_16px_34px_-16px_rgba(0,0,0,0.8),0_5px_15px_-7px_rgba(0,0,0,0.58)]"
+        style={{ opacity: lift }}
+      />
+      <div className="relative">
+        <DragPreview preview={preview} />
+      </div>
+    </motion.div>
+  )
 }
 
 function SidebarComponent({
@@ -170,6 +242,11 @@ function SidebarComponent({
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(
     null
   )
+  const reduceDragMotion = useReducedMotion() ?? false
+  const dragScreenX = useMotionValue(0)
+  const dragLift = useMotionValue(0)
+  const dragTiltGain = useMotionValue(0)
+  const shouldAnimateDrop = useMotionValue(false)
   const editingInputRef = useRef<HTMLInputElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const defaultSessions = sessions.filter((session) => !session.projectId)
@@ -193,6 +270,10 @@ function SidebarComponent({
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
+  )
+  const dropAnimation = useMemo(
+    () => createSidebarDropAnimation(shouldAnimateDrop),
+    [shouldAnimateDrop]
   )
   const visibleExpandedProjectIds = useMemo(() => {
     const projectIds = new Set(projects.map((project) => project.id))
@@ -314,9 +395,44 @@ function SidebarComponent({
     if (!data) {
       return
     }
+    shouldAnimateDrop.jump(false)
+    dragScreenX.jump(0)
+    dragLift.jump(0)
+    dragTiltGain.jump(reduceDragMotion ? 0 : 1)
+    if (!reduceDragMotion) {
+      animate(dragLift, 1, {
+        type: "spring",
+        stiffness: 420,
+        damping: 32,
+        mass: 0.55,
+      })
+    }
     setDragPreview({
       ...data,
       id: String(event.active.id),
+    })
+  }
+
+  function handleDragMove(event: DragMoveEvent) {
+    if (!reduceDragMotion) {
+      dragScreenX.set(event.delta.x)
+    }
+  }
+
+  function settleDragPreview(animateLanding: boolean) {
+    shouldAnimateDrop.jump(animateLanding && !reduceDragMotion)
+    if (!shouldAnimateDrop.get()) {
+      dragLift.jump(0)
+      dragTiltGain.jump(0)
+      return
+    }
+    animate(dragTiltGain, 0, {
+      duration: 0.11,
+      ease: SIDEBAR_DRAG_LAND_EASE,
+    })
+    animate(dragLift, 0, {
+      duration: 0.15,
+      ease: SIDEBAR_DRAG_LAND_EASE,
     })
   }
 
@@ -324,11 +440,15 @@ function SidebarComponent({
     const activeData = getSortableData(event.active.data.current)
     const overData = getSortableData(event.over?.data.current)
     if (!activeData || !overData || !event.over) {
+      settleDragPreview(false)
       setDragPreview(null)
       return
     }
 
     if (activeData.kind === "session") {
+      settleDragPreview(
+        overData.kind === "session" && activeData.groupId === overData.groupId
+      )
       const sourceSessionId = String(event.active.id)
       if (overData.kind === "session") {
         if (
@@ -365,10 +485,12 @@ function SidebarComponent({
     }
 
     if (event.active.id === event.over.id) {
+      settleDragPreview(activeData.kind === overData.kind)
       setDragPreview(null)
       return
     }
 
+    settleDragPreview(activeData.kind === overData.kind)
     if (activeData.kind === "section" && overData.kind === "section") {
       const activeSectionId = String(event.active.id)
       const overSectionId = String(event.over.id)
@@ -385,6 +507,7 @@ function SidebarComponent({
   }
 
   function handleDragCancel() {
+    settleDragPreview(false)
     setDragPreview(null)
   }
 
@@ -627,12 +750,17 @@ function SidebarComponent({
   const dragOverlay = (
     <DragOverlay
       zIndex={sidebarDragOverlayZIndex}
-      dropAnimation={{
-        duration: 0,
-        easing: "cubic-bezier(0.2, 0, 0, 1)",
-      }}
+      dropAnimation={dropAnimation}
     >
-      {dragPreview ? <DragPreview preview={dragPreview} /> : null}
+      {dragPreview ? (
+        <AnimatedDragPreview
+          lift={dragLift}
+          preview={dragPreview}
+          reduceMotion={reduceDragMotion}
+          screenX={dragScreenX}
+          tiltGain={dragTiltGain}
+        />
+      ) : null}
     </DragOverlay>
   )
 
@@ -652,6 +780,7 @@ function SidebarComponent({
           collisionDetection={sidebarCollisionDetection}
           onDragAbort={handleDragCancel}
           onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >

@@ -1,6 +1,6 @@
 {
   "name": "ousia-desktop",
-  "version": "0.1.35",
+  "version": "0.3.0",
   "description": "A simplified Electron desktop client for Pi and Codex coding agent sessions.",
   "license": "MIT",
   "homepage": "https://github.com/s1dashu/ousia#readme",
@@ -27,7 +27,7 @@
     "make:release:mac": "node scripts/make-mac-release.cjs",
     "make:forge": "electron-forge make",
     "publish": "electron-forge publish",
-    "build": "tsc -b && NODE_OPTIONS=--max-old-space-size=8192 electron-forge package",
+    "build": "tsc -b && NODE_OPTIONS=--max-old-space-size=8192 node scripts/package-app.cjs",
     "lint": "eslint .",
     "check": "npm run typecheck && npm run lint",
     "test": "vitest run",

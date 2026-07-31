@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="280" height="48" viewBox="0 0 280 48">
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="48" viewBox="0 0 280 48" role="img" aria-labelledby="title desc">
+  <title id="title">Download Ousia for macOS</title>
+  <desc id="desc">A black download button with an Apple logo.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#2a2a2a"/>

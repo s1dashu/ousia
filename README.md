@@ -39,6 +39,31 @@
 
 ---
 
+## Recent changes
+
+Latest published Ousia Electron releases:
+
+- [**v0.1.35**](https://github.com/s1dashu/ousia/releases/tag/v0.1.35) —
+  Safer live-chat recovery, broader persistence and replay coverage, focused
+  desktop modules, and structured window drag diagnostics.
+- [**v0.1.34**](https://github.com/s1dashu/ousia/releases/tag/v0.1.34) —
+  Actionable update failures, a repaired production update feed, and standard
+  Electron release tags.
+- [**electron-v0.1.33**](https://github.com/s1dashu/ousia/releases/tag/electron-v0.1.33) —
+  The final Electron release on the historical prefixed tag line.
+
+Active development now targets **v0.3.0**. The Pi/Tauri edition remains frozen
+at [**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6), with its
+download and updater compatibility preserved.
+
+[View all releases →](https://github.com/s1dashu/ousia/releases)
+
+## See Ousia in action
+
+<p align="center">
+  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia streaming a coding-agent response in dark mode">
+</p>
+
 ## What is Ousia
 
 **Ousia** is a minimalist desktop for the
@@ -72,6 +97,11 @@ invocation is visible inline, and everything persists across restarts.
 - **Per-session Agent choice** — New sessions use either Pi or Codex. The
   provider is immutable after creation, so history and runtime identity remain
   traceable.
+- **Conversation controls** — Interrupt or compact a conversation, branch from
+  an earlier message, move sessions between projects, and archive them without
+  losing history.
+- **Queue or steer** — Choose whether a new message waits as a follow-up or
+  intervenes in the task the selected Agent is currently running.
 - **Model flexibility** — Configure Pi-compatible providers (Anthropic,
   OpenAI, Gemini, etc.) or use the Codex model catalog. Model and reasoning
   controls follow the selected session's provider.
@@ -171,6 +201,19 @@ export APPLE_TEAM_ID="TEAMID"
 
 npm run make:dmg:notarized   # Signed DMG + notarization
 ```
+
+## Data and diagnostics
+
+- Pi remains the source of truth for its providers, credentials, models,
+  resources, and session history; Codex remains the owner of Codex sign-in and
+  app-server state.
+- Ousia writes desktop state atomically and keeps project/session restoration
+  and active chat replay observable.
+- Host, IPC, persistence, updater, provider, and renderer failures are recorded
+  in structured local logs. Production builds also use privacy-sanitized Sentry
+  diagnostics.
+- Prompts, responses, tool payloads, credentials, and private file contents are
+  excluded from diagnostics.
 
 ## 📖 Docs
 

@@ -143,13 +143,13 @@ describe("Sidebar running actions", () => {
   it("insets session surfaces while keeping actions close to the right edge", () => {
     const html = renderSidebar()
 
-    expect(html).toContain("mr-1 pl-2 pr-1")
+    expect(html).toContain("mr-1 pl-3 pr-1")
   })
 
   it("aligns section and project actions on the same right-hand axis", () => {
     const html = renderSidebar({ projects: [project] })
 
-    expect(html.match(/-ml-1 w-full pl-3 pr-1/g)).toHaveLength(3)
+    expect(html.match(/w-full pl-3 pr-1/g)).toHaveLength(3)
   })
 
   it("renders only the running indicator for a working session", () => {

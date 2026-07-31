@@ -2,7 +2,7 @@ import { createRequire } from "node:module"
 import { describe, expect, it, vi } from "vitest"
 
 const require = createRequire(__filename)
-const { loadSentryBuildToken } = require(
+const { loadSentryBuildToken, shouldLoadSentryBuildToken } = require(
   "../../scripts/sentry-build-credentials.cjs"
 ) as {
   loadSentryBuildToken: (options: {
@@ -14,7 +14,39 @@ const { loadSentryBuildToken } = require(
       stdout: string
     }
   }) => string
+  shouldLoadSentryBuildToken: (options: {
+    environment: Record<string, string | undefined>
+    requireSentry?: boolean
+  }) => boolean
 }
+
+describe("shouldLoadSentryBuildToken", () => {
+  it("does not inject a lone keychain token into ordinary local packages", () => {
+    expect(
+      shouldLoadSentryBuildToken({
+        environment: {
+          OUSIA_SENTRY_DSN: "https://public@example.ingest.sentry.io/123",
+        },
+      })
+    ).toBe(false)
+  })
+
+  it("loads a token for required releases or explicit upload metadata", () => {
+    expect(
+      shouldLoadSentryBuildToken({ environment: {}, requireSentry: true })
+    ).toBe(true)
+    expect(
+      shouldLoadSentryBuildToken({
+        environment: { SENTRY_ORG: "example" },
+      })
+    ).toBe(true)
+    expect(
+      shouldLoadSentryBuildToken({
+        environment: { OUSIA_SENTRY_PROJECT: "desktop" },
+      })
+    ).toBe(true)
+  })
+})
 
 describe("loadSentryBuildToken", () => {
   it("preserves an explicitly supplied build token", () => {
