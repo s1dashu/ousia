@@ -2,13 +2,15 @@ import { statSync, readFileSync } from "node:fs"
 
 import type { OusiaChatToolFilePreview } from "./chat-types.js"
 import { resolveProjectFilePath } from "./host-paths.js"
+import {
+  editReplacementsForFilePreview,
+  editToolInputDraft,
+  parseEditToolInput,
+  type EditReplacement,
+  type ParsedEditToolInput,
+} from "./tool-edit-input.js"
 
 const MAX_FILE_PREVIEW_BYTES = 1024 * 1024
-
-type EditReplacement = {
-  oldText: string
-  newText: string
-}
 
 export function createToolFilePreview({
   args,
@@ -126,14 +128,15 @@ function createEditPreview(
   projectPath: string,
   args: unknown
 ): OusiaChatToolFilePreview | undefined {
-  const record = objectRecord(args)
-  if (!record) {
+  const fields = parseEditToolInput(args)
+  if (!fields) {
     return undefined
   }
-  const path = stringField(record, "path", "file_path", "filePath")
-  const edits = normalizedEditReplacements(record)
-  if (!path || !edits.length) {
-    return undefined
+  const path = fields.path?.trim()
+  const edits = editReplacementsForFilePreview(fields)
+  const draftPreview = createEditDraftPreview(fields)
+  if (!path || !fields.pathComplete || !edits) {
+    return fields.isPartial ? draftPreview : undefined
   }
 
   try {
@@ -155,6 +158,9 @@ function createEditPreview(
       source: "input",
     }
   } catch (error) {
+    if (fields.isPartial) {
+      return draftPreview
+    }
     return {
       kind: "error",
       path,
@@ -164,6 +170,22 @@ function createEditPreview(
           : "Unable to create file diff preview.",
       source: "input",
     }
+  }
+}
+
+function createEditDraftPreview(
+  fields: ParsedEditToolInput
+): OusiaChatToolFilePreview | undefined {
+  const draft = editToolInputDraft(fields)
+  if (!draft) {
+    return undefined
+  }
+  return {
+    kind: "diff",
+    path: fields.path?.trim() || "edit",
+    oldContent: draft.oldContent,
+    newContent: draft.newContent,
+    source: "input",
   }
 }
 
@@ -334,35 +356,6 @@ function readJsonString(
     return undefined
   }
   return { closed: false, endIndex: source.length, value }
-}
-
-function normalizedEditReplacements(
-  record: Record<string, unknown>
-): EditReplacement[] {
-  const editsValue = record.edits
-  const parsedEdits =
-    typeof editsValue === "string" ? parseJson(editsValue) : editsValue
-  const edits = Array.isArray(parsedEdits)
-    ? parsedEdits.flatMap((edit) => {
-        const editRecord = objectRecord(edit)
-        if (!editRecord) {
-          return []
-        }
-        const oldText = stringField(editRecord, "oldText")
-        const newText = stringField(editRecord, "newText")
-        return oldText !== undefined && newText !== undefined
-          ? [{ oldText, newText }]
-          : []
-      })
-    : []
-
-  const oldText = stringField(record, "oldText")
-  const newText = stringField(record, "newText")
-  if (oldText !== undefined && newText !== undefined) {
-    edits.push({ oldText, newText })
-  }
-
-  return edits
 }
 
 function parseJson(value: string): unknown {

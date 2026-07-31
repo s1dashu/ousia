@@ -90,6 +90,10 @@ import { hydrateShellEnvironment } from "./shell-environment.js"
 import { createTelemetry } from "./telemetry.js"
 import { createUpdateManager } from "./update-manager.js"
 import { createWindowHost } from "./window-host.js"
+import {
+  requireWindowDragDiagnosticPayload,
+  WINDOW_DRAG_DIAGNOSTIC_CHANNEL,
+} from "./window-drag-diagnostics.js"
 import { initializeDesktopSentry } from "./sentry-runtime.js"
 import { requireDesktopSentryConfig } from "./sentry-config.js"
 import { createSystemProxyFetch } from "./system-network.js"
@@ -834,6 +838,43 @@ ipcMain.handle(
 
 ipcMain.on("ousia:log:renderer-error", (_event, payload: unknown) => {
   writeRuntimeLog("renderer.error", "error", payload)
+})
+
+ipcMain.on(WINDOW_DRAG_DIAGNOSTIC_CHANNEL, (event, payload: unknown) => {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    event.sender !== mainWindow.webContents
+  ) {
+    writeRuntimeLog("window.drag.ipc", "warn", {
+      reason: "unexpected-sender",
+    })
+    return
+  }
+
+  try {
+    const diagnostic = requireWindowDragDiagnosticPayload(payload)
+    if (diagnostic.kind === "renderer-layout") {
+      writeRuntimeLog("window.drag.renderer-layout", "info", diagnostic)
+      return
+    }
+    writeRuntimeLog(
+      "window.drag.pointerdown",
+      diagnostic.expectedRegion === "drag" ? "warn" : "info",
+      {
+        ...diagnostic,
+        signal:
+          diagnostic.expectedRegion === "drag"
+            ? "renderer-received-pointerdown-for-drag-region"
+            : "renderer-pointerdown-control",
+      }
+    )
+  } catch (error) {
+    writeRuntimeLog("window.drag.ipc", "error", {
+      reason:
+        error instanceof Error ? error.message : "unknown validation error",
+    })
+  }
 })
 
 app.whenReady().then(async () => {

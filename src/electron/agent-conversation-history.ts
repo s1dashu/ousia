@@ -5,10 +5,7 @@ import {
   type SessionMessageEntry,
 } from "@earendil-works/pi-coding-agent"
 
-import type {
-  OusiaChatAttachment,
-  OusiaChatHistoryItem,
-} from "./chat-types.js"
+import type { OusiaChatAttachment, OusiaChatHistoryItem } from "./chat-types.js"
 import {
   createHistoricalToolInputFilePreview,
   createToolResultFilePreview,
@@ -424,4 +421,3 @@ export function historyItemsFromActivePiSession(
   )
   return items
 }
-

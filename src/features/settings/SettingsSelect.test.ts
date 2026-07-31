@@ -8,6 +8,7 @@ import {
   SETTINGS_PANEL_SURFACE_CLASS,
   SETTINGS_SIDEBAR_SURFACE_CLASS,
 } from "@/features/settings/settings-local-styles"
+import { sidebarSelectedRowClass } from "@/features/sidebar/sidebar-layout"
 
 function readSettingsSource(fileName: string) {
   return readFileSync(
@@ -65,7 +66,7 @@ describe("settings Vega primitive styling", () => {
       "bg-[var(--ousia-sidebar)] text-sidebar-foreground"
     )
     expect(SETTINGS_NAVIGATION_ACTIVE_CLASS).toBe(
-      "bg-[var(--ousia-sidebar-accent)] font-medium text-sidebar-accent-foreground"
+      `${sidebarSelectedRowClass} font-normal`
     )
     expect(SETTINGS_NAVIGATION_IDLE_CLASS).toContain(
       "hover:bg-[var(--ousia-sidebar-accent)]"

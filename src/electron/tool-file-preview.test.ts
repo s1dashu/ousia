@@ -164,6 +164,76 @@ describe("tool file previews", () => {
     })
   })
 
+  it("streams edit draft content before oldText and path arrive", () => {
+    expect(
+      createToolFilePreview({
+        args: '{"edits":[{"newText":"line one\\nline two',
+        projectPath: projectRoot,
+        toolName: "edit",
+      })
+    ).toEqual({
+      kind: "diff",
+      path: "edit",
+      oldContent: "",
+      newContent: "line one\nline two",
+      source: "input",
+    })
+  })
+
+  it("streams a real edit diff as newText grows", () => {
+    writeProjectFile("note.txt", "alpha\nbeta\ngamma\n")
+
+    expect(
+      createToolFilePreview({
+        args: '{"path":"note.txt","edits":[{"oldText":"beta","newText":"BE',
+        projectPath: projectRoot,
+        toolName: "edit",
+      })
+    ).toEqual({
+      kind: "diff",
+      path: "note.txt",
+      oldContent: "alpha\nbeta\ngamma\n",
+      newContent: "alpha\nBE\ngamma\n",
+      source: "input",
+    })
+  })
+
+  it("switches a path-last edit draft to the real file diff", () => {
+    writeProjectFile("note.txt", "alpha\nbeta\ngamma\n")
+
+    expect(
+      createToolFilePreview({
+        args: '{"edits":[{"newText":"BETA","oldText":"beta"}],"path":"note.txt"',
+        projectPath: projectRoot,
+        toolName: "edit",
+      })
+    ).toEqual({
+      kind: "diff",
+      path: "note.txt",
+      oldContent: "alpha\nbeta\ngamma\n",
+      newContent: "alpha\nBETA\ngamma\n",
+      source: "input",
+    })
+  })
+
+  it("keeps partial edit matching failures as visible drafts", () => {
+    writeProjectFile("note.txt", "alpha\n")
+
+    expect(
+      createToolFilePreview({
+        args: '{"path":"note.txt","edits":[{"oldText":"missing","newText":"NEW',
+        projectPath: projectRoot,
+        toolName: "edit",
+      })
+    ).toEqual({
+      kind: "diff",
+      path: "note.txt",
+      oldContent: "missing",
+      newContent: "NEW",
+      source: "input",
+    })
+  })
+
   it("accepts filePath aliases for edit targets", () => {
     writeProjectFile("note.txt", "alpha\n")
 

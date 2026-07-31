@@ -2,6 +2,10 @@ import type {
   OusiaChatHistoryItem,
   OusiaChatToolFilePreview,
 } from "@/electron/chat-types"
+import {
+  editToolInputDraft,
+  parseEditToolInput,
+} from "@/electron/tool-edit-input"
 
 type ToolItem = Extract<OusiaChatHistoryItem, { role: "tool" }>
 
@@ -9,6 +13,7 @@ export function toolFilePreviewFromItem(item: ToolItem) {
   return (
     normalizedStoredFilePreview(item) ??
     fallbackWriteFilePreview(item) ??
+    fallbackEditFilePreview(item) ??
     pendingToolFilePreview(item)
   )
 }
@@ -62,6 +67,33 @@ function fallbackWriteFilePreview(
     path: path ?? "write",
     oldContent: "",
     newContent: content,
+    source: "input",
+  }
+}
+
+function fallbackEditFilePreview(
+  item: ToolItem
+): OusiaChatToolFilePreview | undefined {
+  if (normalizedToolName(item.name) !== "edit") {
+    return undefined
+  }
+  const fields =
+    parseEditToolInput(item.input) ?? parseEditToolInput(item.text)
+  if (!fields) {
+    return undefined
+  }
+  if (!fields.isPartial && !fields.path?.trim()) {
+    return undefined
+  }
+  const draft = editToolInputDraft(fields)
+  if (!draft) {
+    return undefined
+  }
+  return {
+    kind: "diff",
+    path: fields.path?.trim() || "edit",
+    oldContent: draft.oldContent,
+    newContent: draft.newContent,
     source: "input",
   }
 }

@@ -31,6 +31,8 @@ export default defineConfig({
         "src/electron/pi-tool-input.ts",
         "src/electron/tool-file-preview.ts",
         "src/electron/window-constants.ts",
+        "src/electron/window-drag-diagnostics.ts",
+        "src/electron/window-resize-diagnostic-session.ts",
         "src/features/chat/chat-attachments.ts",
         "src/features/chat/chat-events.ts",
         "src/features/chat/chat-format.ts",

@@ -47,9 +47,13 @@ describe("SettingsSidebar", () => {
     expect(html).not.toContain(t.settings.codexSettings)
     expect(html).toContain('aria-current="page"')
     expect(html).toContain('class="grid gap-1"')
-    expect(html).toContain("flex h-8 w-full")
-    expect(html).toContain("rounded-lg px-3 py-2")
-    expect(html).toContain("bg-[var(--ousia-sidebar-accent)]")
-    expect(html).not.toContain("ousia-squircle-corners")
+    expect(html).toContain("ousia-squircle-corners flex h-8.5 w-full")
+    expect(html).toContain(
+      "rounded-[var(--ousia-sidebar-selected-radius)] px-3 py-2"
+    )
+    expect(html).toContain("bg-white")
+    expect(html).toContain(
+      "shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
+    )
   })
 })

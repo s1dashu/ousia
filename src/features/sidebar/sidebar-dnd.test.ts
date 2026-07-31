@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest"
+import type { CollisionDetection, UniqueIdentifier } from "@dnd-kit/core"
 
 import {
   defaultSessionGroupId,
   escapeAttributeSelectorValue,
   getSortableData,
-  isSidebarSectionId,
-  normalizeSidebarSectionOrder,
   projectIdFromSessionGroup,
+  sidebarCollisionDetection,
+  type SidebarSortableData,
 } from "@/features/sidebar/sidebar-dnd"
 
 describe("getSortableData", () => {
@@ -44,21 +45,6 @@ describe("getSortableData", () => {
   })
 })
 
-describe("isSidebarSectionId / normalizeSidebarSectionOrder", () => {
-  it("recognizes known section ids", () => {
-    expect(isSidebarSectionId("sessions")).toBe(true)
-    expect(isSidebarSectionId("projects")).toBe(true)
-    expect(isSidebarSectionId("archived")).toBe(false)
-  })
-
-  it("dedupes, filters unknown ids, and always includes both sections", () => {
-    expect(
-      normalizeSidebarSectionOrder(["projects", "projects"] as never)
-    ).toEqual(["projects", "sessions"])
-    expect(normalizeSidebarSectionOrder([])).toEqual(["sessions", "projects"])
-  })
-})
-
 describe("escapeAttributeSelectorValue", () => {
   it("escapes quotes and backslashes for attribute selectors", () => {
     expect(escapeAttributeSelectorValue('a"b\\c')).toBe('a\\"b\\\\c')
@@ -70,5 +56,86 @@ describe("projectIdFromSessionGroup", () => {
     expect(projectIdFromSessionGroup(defaultSessionGroupId)).toBeUndefined()
     expect(projectIdFromSessionGroup(undefined)).toBeUndefined()
     expect(projectIdFromSessionGroup("project-1")).toBe("project-1")
+  })
+})
+
+type CollisionArgs = Parameters<CollisionDetection>[0]
+
+function buildCollisionArgs(options: {
+  active: SidebarSortableData
+  containers: Array<{
+    id: UniqueIdentifier
+    data: SidebarSortableData
+    top: number
+    height?: number
+  }>
+}): CollisionArgs {
+  const rects = options.containers.map((container) => ({
+    width: 200,
+    height: container.height ?? 32,
+    top: container.top,
+    bottom: container.top + (container.height ?? 32),
+    left: 0,
+    right: 200,
+  }))
+  const droppableRects = new Map(
+    options.containers.map((container, index) => [container.id, rects[index]])
+  )
+  return {
+    active: {
+      id: "active",
+      data: { current: options.active },
+      rect: { current: null },
+    },
+    collisionRect: rects[0],
+    droppableRects,
+    droppableContainers: options.containers.map((container, index) => ({
+      id: container.id,
+      data: { current: container.data },
+      disabled: false,
+      node: { current: null },
+      rect: { current: rects[index] },
+    })),
+    pointerCoordinates: null,
+    scrollableAncestors: [],
+  } as unknown as CollisionArgs
+}
+
+describe("sidebarCollisionDetection", () => {
+  it("ignores session rows nested inside a dragged expanded project", () => {
+    const collisions = sidebarCollisionDetection(
+      buildCollisionArgs({
+        active: { kind: "project", label: "Dragged" },
+        containers: [
+          // The dragged project's own session rows travel with the pointer and
+          // would otherwise always win closestCenter.
+          { id: "session-a", data: { kind: "session", label: "A" }, top: 0 },
+          { id: "session-b", data: { kind: "session", label: "B" }, top: 34 },
+          { id: "project-1", data: { kind: "project", label: "P1" }, top: 100 },
+          { id: "project-2", data: { kind: "project", label: "P2" }, top: 132 },
+        ],
+      })
+    )
+    expect(collisions.length).toBeGreaterThan(0)
+    expect(collisions[0]?.id).toBe("project-1")
+    expect(
+      collisions.every(
+        (collision) =>
+          collision.id === "project-1" || collision.id === "project-2"
+      )
+    ).toBe(true)
+  })
+
+  it("keeps sessions droppable onto projects and session rows", () => {
+    const collisions = sidebarCollisionDetection(
+      buildCollisionArgs({
+        active: { kind: "session", label: "Dragged" },
+        containers: [
+          { id: "session-a", data: { kind: "session", label: "A" }, top: 0 },
+          { id: "project-1", data: { kind: "project", label: "P1" }, top: 100 },
+        ],
+      })
+    )
+    expect(collisions.length).toBe(2)
   })
 })

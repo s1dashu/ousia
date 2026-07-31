@@ -22,6 +22,12 @@ import {
   type SessionRecord,
 } from "@/app/app-state"
 import {
+  historyPageStateFromResult,
+  mergePersistedChatItems,
+  moveRecordKey,
+  type ChatHistoryPageState,
+} from "@/app/app-session-state"
+import {
   chatKey,
   findWorkingChatSession,
   resolveChatEventTarget,
@@ -33,6 +39,14 @@ import {
   shouldScheduleAutomaticChatHistoryRetry,
 } from "@/app/chat-history-state"
 import { discardSupersededPendingChatEvents } from "@/app/chat-recovery-state"
+import {
+  moveSessionToGroupFront,
+  moveSessionToProjectGroup,
+  normalizeOusiaSidebarSectionOrder,
+  projectPathForAppStateSession,
+  reorderById,
+  reorderSessionsById,
+} from "@/electron/app-state-collections"
 import {
   normalizeOusiaAppSettings,
   resolveOusiaChatContentWidthValue,
@@ -87,217 +101,8 @@ type ChatContextUsageState = {
   contextWindow: number
   percent: number | null
 }
-type ChatHistoryPageState = {
-  cursor?: string
-  error?: string
-  hasMore: boolean
-  status: "loading-initial" | "ready" | "loading-older" | "empty" | "error"
-  totalItems?: number
-}
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
-}
-
-function projectPathForAppStateSession(
-  state: InitialAppState,
-  session: SessionRecord
-) {
-  if (!session.projectId) {
-    return state.settings.defaultSessionDir
-  }
-  return (
-    state.projects.find((project) => project.id === session.projectId)?.path ??
-    state.settings.defaultSessionDir
-  )
-}
-
-function moveRecordKey<T>(
-  record: Record<string, T>,
-  sourceKey: string,
-  targetKey: string
-) {
-  if (
-    sourceKey === targetKey ||
-    !Object.prototype.hasOwnProperty.call(record, sourceKey)
-  ) {
-    return record
-  }
-  const next = { ...record }
-  next[targetKey] = record[sourceKey]
-  delete next[sourceKey]
-  return next
-}
-
-function historyPageStateFromResult(
-  items: ChatItem[],
-  history: {
-    hasMore?: boolean
-    nextCursor?: string
-    totalItems?: number
-  }
-) {
-  if (!items.length) {
-    return {
-      hasMore: false,
-      status: "empty" as const,
-      totalItems: history.totalItems,
-    }
-  }
-  return {
-    cursor: history.hasMore ? (history.nextCursor ?? items[0]?.id) : undefined,
-    hasMore: Boolean(history.hasMore),
-    status: "ready" as const,
-    totalItems: history.totalItems,
-  }
-}
-
-function mergePersistedChatItems(
-  existingItems: ChatItem[],
-  persistedItems: ChatItem[]
-) {
-  if (!existingItems.length) {
-    return persistedItems
-  }
-  if (!persistedItems.length) {
-    return existingItems
-  }
-  const persistedIds = new Set(persistedItems.map((item) => item.id))
-  return [
-    ...persistedItems,
-    ...existingItems.filter((item) => !persistedIds.has(item.id)),
-  ]
-}
-
-function reorderById<T extends { id: string }>(
-  items: T[],
-  sourceId: string,
-  targetId: string
-) {
-  const sourceIndex = items.findIndex((item) => item.id === sourceId)
-  const targetIndex = items.findIndex((item) => item.id === targetId)
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
-    return items
-  }
-  const next = [...items]
-  const [moved] = next.splice(sourceIndex, 1)
-  next.splice(targetIndex, 0, moved)
-  return next
-}
-
-function reorderSessionsById(
-  sessions: SessionRecord[],
-  sourceSessionId: string,
-  targetSessionId: string
-) {
-  const sourceSession = sessions.find(
-    (session) => session.id === sourceSessionId
-  )
-  const targetSession = sessions.find(
-    (session) => session.id === targetSessionId
-  )
-  if (
-    !sourceSession ||
-    !targetSession ||
-    sourceSession.projectId !== targetSession.projectId
-  ) {
-    return sessions
-  }
-  return reorderById(sessions, sourceSessionId, targetSessionId)
-}
-
-function withSessionProjectId(
-  session: SessionRecord,
-  projectId: string | undefined
-) {
-  if (!projectId) {
-    const { projectId: _projectId, ...defaultSession } = session
-    void _projectId
-    return defaultSession
-  }
-  return { ...session, projectId }
-}
-
-function moveSessionToProjectGroup(
-  sessions: SessionRecord[],
-  sessionId: string,
-  targetProjectId: string | undefined,
-  targetSessionId?: string
-) {
-  const sourceSession = sessions.find((session) => session.id === sessionId)
-  if (!sourceSession) {
-    return sessions
-  }
-
-  const normalizedTargetProjectId = targetProjectId || undefined
-  const targetSession = targetSessionId
-    ? sessions.find((session) => session.id === targetSessionId)
-    : undefined
-  const canInsertAtTarget =
-    Boolean(targetSession) &&
-    targetSession?.id !== sessionId &&
-    (targetSession?.projectId || undefined) === normalizedTargetProjectId
-  if (
-    (sourceSession.projectId || undefined) === normalizedTargetProjectId &&
-    !canInsertAtTarget
-  ) {
-    return sessions
-  }
-
-  const movedSession = withSessionProjectId(
-    sourceSession,
-    normalizedTargetProjectId
-  )
-  const remainingSessions = sessions.filter(
-    (session) => session.id !== sessionId
-  )
-  const targetIndex = canInsertAtTarget
-    ? remainingSessions.findIndex((session) => session.id === targetSessionId)
-    : -1
-  const groupStartIndex = remainingSessions.findIndex(
-    (session) => (session.projectId || undefined) === normalizedTargetProjectId
-  )
-  const insertIndex =
-    targetIndex >= 0 ? targetIndex : groupStartIndex >= 0 ? groupStartIndex : 0
-  const next = [...remainingSessions]
-  next.splice(insertIndex, 0, movedSession)
-  return next
-}
-
-function moveSessionToGroupFront(
-  sessions: SessionRecord[],
-  sessionId: string,
-  time: string
-) {
-  const targetSession = sessions.find((session) => session.id === sessionId)
-  if (!targetSession) {
-    return sessions
-  }
-  const updatedSession = { ...targetSession, time }
-  const remainingSessions = sessions.filter(
-    (session) => session.id !== sessionId
-  )
-  const groupStartIndex = remainingSessions.findIndex(
-    (session) => session.projectId === targetSession.projectId
-  )
-  if (groupStartIndex < 0) {
-    return [updatedSession, ...remainingSessions]
-  }
-  const next = [...remainingSessions]
-  next.splice(groupStartIndex, 0, updatedSession)
-  return next
-}
-
-function normalizeSidebarSectionOrder(
-  sectionOrder: OusiaSidebarSectionId[]
-): OusiaSidebarSectionId[] {
-  return [
-    ...new Set(
-      [...sectionOrder, "sessions", "projects"].filter(
-        (sectionId): sectionId is OusiaSidebarSectionId =>
-          sectionId === "sessions" || sectionId === "projects"
-      )
-    ),
-  ]
 }
 
 function ResizeHandle({
@@ -353,7 +158,11 @@ export function App() {
   )
   const [sidebarSectionOrder, setSidebarSectionOrder] = useState<
     OusiaSidebarSectionId[]
-  >(normalizeSidebarSectionOrder(initialState.shellLayout.sidebarSectionOrder))
+  >(
+    normalizeOusiaSidebarSectionOrder(
+      initialState.shellLayout.sidebarSectionOrder
+    )
+  )
   const [activeShellResizeHandle, setActiveShellResizeHandle] =
     useState<ShellResizeHandle | null>(null)
   const isShellResizing = activeShellResizeHandle !== null
@@ -441,7 +250,9 @@ export function App() {
         setSidebarWidth(state.shellLayout.sidebarWidth)
         setIsSidebarCollapsed(state.shellLayout.isSidebarCollapsed)
         setSidebarSectionOrder(
-          normalizeSidebarSectionOrder(state.shellLayout.sidebarSectionOrder)
+          normalizeOusiaSidebarSectionOrder(
+            state.shellLayout.sidebarSectionOrder
+          )
         )
       }
       setProjects(state.projects)
@@ -642,7 +453,9 @@ export function App() {
     }
 
     pendingChatEventsRef.current = new Map()
-    setItemsBySession((current) => applyPendingChatEvents(current, pendingEvents))
+    setItemsBySession((current) =>
+      applyPendingChatEvents(current, pendingEvents)
+    )
   }, [])
   const queueChatItemEvent = useCallback(
     (targetKey: string, event: OusiaChatEvent) => {
@@ -1127,8 +940,7 @@ export function App() {
         ) {
           return
         }
-        const discardedPendingEvents =
-          discardPendingChatItemEvents(targetKey)
+        const discardedPendingEvents = discardPendingChatItemEvents(targetKey)
         startTransition(() => {
           setItemsBySession((current) => ({
             ...current,
@@ -2160,7 +1972,7 @@ export function App() {
   ) {
     setSidebarSectionOrder((current) =>
       reorderById(
-        normalizeSidebarSectionOrder(current).map((id) => ({ id })),
+        normalizeOusiaSidebarSectionOrder(current).map((id) => ({ id })),
         sourceSectionId,
         targetSectionId
       ).map((item) => item.id)

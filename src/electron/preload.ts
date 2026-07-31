@@ -66,11 +66,13 @@ import type {
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
 import { initializeDesktopSentryRenderer } from "./sentry-renderer.js"
 import { requireDesktopSentryConfig } from "./sentry-config.js"
+import { installWindowDragRendererDiagnostics } from "./window-drag-renderer-diagnostics.js"
 
 initializeDesktopSentryRenderer(
   requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__),
   "preload"
 )
+installWindowDragRendererDiagnostics(ipcRenderer)
 
 function errorPayload(error: unknown) {
   if (error instanceof Error) {

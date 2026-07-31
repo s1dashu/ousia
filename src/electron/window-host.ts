@@ -24,6 +24,12 @@ import { getNativeMessages } from "./native-i18n.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 import { updateCheckDialogOptions } from "./update-dialog.js"
 import {
+  isWindowFillingDisplay,
+  WINDOW_DRAG_INSPECT_CHANNEL,
+  type WindowDragInspectRequest,
+} from "./window-drag-diagnostics.js"
+import { createWindowResizeDiagnosticTracker } from "./window-resize-diagnostic-session.js"
+import {
   MAIN_WINDOW_MIN_HEIGHT,
   MAIN_WINDOW_MIN_WIDTH,
   resolveMacTrafficLightPosition,
@@ -112,22 +118,27 @@ function zoomPercentForWindow(window: BrowserWindow | undefined) {
   return Math.round((window?.webContents.getZoomFactor() ?? 1) * 100)
 }
 
-function isIgnorableRendererConsoleMessage(message: string) {
-  return (
-    message ===
-      "ResizeObserver loop completed with undelivered notifications." ||
-    message === "ResizeObserver loop limit exceeded"
-  )
+function resizeObserverDiagnosticCode(message: string) {
+  if (
+    message === "ResizeObserver loop completed with undelivered notifications."
+  ) {
+    return "undelivered-notifications"
+  }
+  if (message === "ResizeObserver loop limit exceeded") {
+    return "loop-limit-exceeded"
+  }
+  return undefined
 }
 
 function applyWindowButtonPosition(window: BrowserWindow | undefined) {
   if (platform !== "darwin" || !window || window.isDestroyed()) {
-    return
+    return false
   }
 
   window.setWindowButtonPosition(
     resolveMacTrafficLightPosition(window.webContents.getZoomFactor())
   )
+  return true
 }
 
 function emitWindowZoomState(window: BrowserWindow | undefined) {
@@ -281,6 +292,11 @@ export function createWindowHost({
   let installedApplicationMenuLanguage: OusiaLanguage | undefined
   let lastEmittedFullscreen: boolean | undefined
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
+  let resizeObserverDiagnosticTimer: ReturnType<typeof setTimeout> | undefined
+  const resizeObserverDiagnosticCounts = {
+    "loop-limit-exceeded": 0,
+    "undelivered-notifications": 0,
+  }
 
   function getMainWindow() {
     return mainWindow
@@ -296,33 +312,109 @@ export function createWindowHost({
     writeRuntimeLog("window.menu", "info", { language: nextLanguage })
   }
 
+  function windowFullscreenDiagnosticSnapshot() {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return null
+    }
+    const bounds = mainWindow.getBounds()
+    const displayBounds = screen.getDisplayMatching(bounds).bounds
+    const nativeFullscreen = mainWindow.isFullScreen()
+    const fillsDisplay =
+      platform === "darwin" && isWindowFillingDisplay(bounds, displayBounds)
+    return {
+      bounds,
+      displayBounds,
+      fillsDisplay,
+      inferredFullscreen: nativeFullscreen || fillsDisplay,
+      nativeFullscreen,
+      zoomPercent: zoomPercentForWindow(mainWindow),
+    }
+  }
+
   function emitWindowFullscreenState(
-    isFullscreen = mainWindow?.isFullScreen()
+    isFullscreen = mainWindow?.isFullScreen(),
+    trigger = "native"
   ) {
     const nextFullscreen = Boolean(isFullscreen)
     if (lastEmittedFullscreen === nextFullscreen) {
       return
     }
+    const previousFullscreen = lastEmittedFullscreen
     lastEmittedFullscreen = nextFullscreen
+    const snapshot = windowFullscreenDiagnosticSnapshot()
+    writeRuntimeLog("window.fullscreen", "info", {
+      bounds: snapshot?.bounds,
+      displayBounds: snapshot?.displayBounds,
+      fillsDisplay: snapshot?.fillsDisplay,
+      from: previousFullscreen ?? null,
+      nativeFullscreen: snapshot?.nativeFullscreen,
+      to: nextFullscreen,
+      trigger,
+    })
     mainWindow?.webContents.send("ousia:window:fullscreen", {
       isFullscreen: nextFullscreen,
     })
   }
 
-  function emitInferredWindowFullscreenState() {
+  function emitInferredWindowFullscreenState(trigger: "move" | "resize") {
     if (!mainWindow || platform !== "darwin") {
       return
     }
-    const bounds = mainWindow.getBounds()
-    const displayBounds = screen.getDisplayMatching(bounds).bounds
-    const tolerance = 1
-    const fillsDisplay =
-      Math.abs(bounds.x - displayBounds.x) <= tolerance &&
-      Math.abs(bounds.y - displayBounds.y) <= tolerance &&
-      Math.abs(bounds.width - displayBounds.width) <= tolerance &&
-      Math.abs(bounds.height - displayBounds.height) <= tolerance
+    const snapshot = windowFullscreenDiagnosticSnapshot()
+    if (!snapshot) {
+      return
+    }
+    emitWindowFullscreenState(snapshot.inferredFullscreen, trigger)
+  }
 
-    emitWindowFullscreenState(mainWindow.isFullScreen() || fillsDisplay)
+  function sendWindowDragInspection(request: WindowDragInspectRequest) {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return
+    }
+    mainWindow.webContents.send(WINDOW_DRAG_INSPECT_CHANNEL, request)
+  }
+
+  const resizeDiagnosticTracker = createWindowResizeDiagnosticTracker({
+    inspect: sendWindowDragInspection,
+    readSnapshot: windowFullscreenDiagnosticSnapshot,
+    writeFinish: (fields) =>
+      writeRuntimeLog("window.resize.finish", "info", fields),
+    writeStart: (fields) =>
+      writeRuntimeLog("window.resize.start", "info", fields),
+  })
+
+  function recordResizeObserverDiagnostic(
+    code: keyof typeof resizeObserverDiagnosticCounts
+  ) {
+    resizeObserverDiagnosticCounts[code] += 1
+    if (resizeObserverDiagnosticTimer) {
+      return
+    }
+    resizeObserverDiagnosticTimer = setTimeout(
+      flushResizeObserverDiagnostics,
+      1_000
+    )
+  }
+
+  function flushResizeObserverDiagnostics() {
+    if (resizeObserverDiagnosticTimer) {
+      clearTimeout(resizeObserverDiagnosticTimer)
+      resizeObserverDiagnosticTimer = undefined
+    }
+    const counts = { ...resizeObserverDiagnosticCounts }
+    resizeObserverDiagnosticCounts["loop-limit-exceeded"] = 0
+    resizeObserverDiagnosticCounts["undelivered-notifications"] = 0
+    if (
+      counts["loop-limit-exceeded"] === 0 &&
+      counts["undelivered-notifications"] === 0
+    ) {
+      return
+    }
+    writeRuntimeLog("renderer.resize-observer", "warn", {
+      counts,
+      windowBounds: mainWindow?.getBounds(),
+      zoomPercent: zoomPercentForWindow(mainWindow),
+    })
   }
 
   function getWindowFullscreenState() {
@@ -417,7 +509,9 @@ export function createWindowHost({
     mainWindow.webContents.on(
       "console-message",
       (_event, level, message, line, sourceId) => {
-        if (isIgnorableRendererConsoleMessage(message)) {
+        const resizeObserverCode = resizeObserverDiagnosticCode(message)
+        if (resizeObserverCode) {
+          recordResizeObserverDiagnostic(resizeObserverCode)
           return
         }
         const normalizedLevel =
@@ -504,29 +598,44 @@ export function createWindowHost({
 
     mainWindow.webContents.once("did-finish-load", () => {
       applyWindowButtonPosition(mainWindow)
-      emitWindowFullscreenState()
+      emitWindowFullscreenState(undefined, "did-finish-load")
+      sendWindowDragInspection({
+        sequence: 0,
+        trigger: "initial",
+      })
     })
     mainWindow.webContents.once("did-finish-load", () =>
       emitWindowZoomState(mainWindow)
     )
+    mainWindow.on("will-resize", (_event, newBounds, details) => {
+      resizeDiagnosticTracker.recordWillResize(newBounds, details.edge)
+    })
     mainWindow.on("resize", () => {
-      applyWindowButtonPosition(mainWindow)
-      emitInferredWindowFullscreenState()
+      // The traffic-light position depends on zoom, not window bounds. Reapplying
+      // it during every live resize mutates the native title bar while macOS is
+      // also rebuilding draggable regions, which can leave hit testing stale.
+      resizeDiagnosticTracker.recordResize(false)
+      emitInferredWindowFullscreenState("resize")
       scheduleWindowStateSave()
     })
     mainWindow.on("move", () => {
-      emitInferredWindowFullscreenState()
+      emitInferredWindowFullscreenState("move")
       scheduleWindowStateSave()
+    })
+    mainWindow.on("resized", () => {
+      resizeDiagnosticTracker.resized()
     })
     mainWindow.on("maximize", scheduleWindowStateSave)
     mainWindow.on("unmaximize", () => {
       applyWindowButtonPosition(mainWindow)
       scheduleWindowStateSave()
     })
-    mainWindow.on("enter-full-screen", () => emitWindowFullscreenState())
+    mainWindow.on("enter-full-screen", () =>
+      emitWindowFullscreenState(undefined, "enter-full-screen")
+    )
     mainWindow.on("leave-full-screen", () => {
       applyWindowButtonPosition(mainWindow)
-      emitWindowFullscreenState()
+      emitWindowFullscreenState(undefined, "leave-full-screen")
       scheduleWindowStateSave()
     })
     mainWindow.on("close", saveCurrentWindowState)
@@ -534,6 +643,10 @@ export function createWindowHost({
       if (saveWindowStateTimer) {
         clearTimeout(saveWindowStateTimer)
         saveWindowStateTimer = undefined
+      }
+      resizeDiagnosticTracker.dispose()
+      if (resizeObserverDiagnosticTimer) {
+        flushResizeObserverDiagnostics()
       }
       onClosed()
       mainWindow = undefined

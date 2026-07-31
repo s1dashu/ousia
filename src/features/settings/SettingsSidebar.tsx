@@ -71,7 +71,7 @@ function SettingsSidebarComponent({
                 type="button"
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "window-no-drag flex h-8 w-full items-center gap-2 overflow-hidden rounded-lg px-3 py-2 text-left text-sm outline-hidden transition-[width,height,padding] focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                  "window-no-drag ousia-squircle-corners flex h-8.5 w-full items-center gap-2 overflow-hidden rounded-[var(--ousia-sidebar-selected-radius)] px-3 py-2 text-left text-sm outline-hidden transition-[width,height,padding] focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                   isActive
                     ? SETTINGS_NAVIGATION_ACTIVE_CLASS
                     : SETTINGS_NAVIGATION_IDLE_CLASS

@@ -180,6 +180,41 @@ describe("toolFilePreviewFromItem", () => {
     })
   })
 
+  it("renders edit content while newText streams before path", () => {
+    expect(
+      toolFilePreviewFromItem(
+        toolItem({
+          input: '{"edits":[{"newText":"line one\\nline two',
+          name: "edit",
+        })
+      )
+    ).toEqual({
+      kind: "diff",
+      newContent: "line one\nline two",
+      oldContent: "",
+      path: "edit",
+      source: "input",
+    })
+  })
+
+  it("renders path-last multi-edit draft content in input order", () => {
+    expect(
+      toolFilePreviewFromItem(
+        toolItem({
+          input:
+            '{"edits":[{"newText":"ALPHA","oldText":"alpha"},{"oldText":"beta","newText":"BE',
+          name: "tool-edit",
+        })
+      )
+    ).toEqual({
+      kind: "diff",
+      newContent: "ALPHA\nBE",
+      oldContent: "alpha\nbeta",
+      path: "edit",
+      source: "input",
+    })
+  })
+
   it("uses the tool name as a pending path when no path has streamed yet", () => {
     expect(
       toolFilePreviewFromItem(

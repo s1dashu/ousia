@@ -1,15 +1,12 @@
 import "./pi-package-dir.js"
-import { mkdirSync, writeFileSync, type Stats } from "node:fs"
+import { mkdirSync, type Stats } from "node:fs"
 import { stat, unlink } from "node:fs/promises"
-import { dirname, join, resolve } from "node:path"
-import { homedir } from "node:os"
 import { ensurePiPackageDir } from "./pi-package-dir.js"
 import {
   createAgentSession,
   DefaultResourceLoader,
   SessionManager,
   SettingsManager,
-  CURRENT_SESSION_VERSION,
   type AgentSession,
   type AgentSessionEvent,
   type ModelRuntime,
@@ -54,10 +51,7 @@ import {
   PiToolInputTracker,
   type PiToolInputCompletionSource,
 } from "./pi-tool-input.js"
-import {
-  createPiModelRuntime,
-  resolvePiAgentDir,
-} from "./pi-environment.js"
+import { createPiModelRuntime, resolvePiAgentDir } from "./pi-environment.js"
 import { createToolFilePreview } from "./tool-file-preview.js"
 import { isVercelAiGatewayModelAvailable } from "./vercel-ai-gateway-models.js"
 import {
@@ -67,9 +61,20 @@ import {
   imageContentFromAttachments,
   shouldShowThinkingForLevel,
   stringifyUnknown,
-  textFromContent,
-  type PiSessionEntry,
 } from "./agent-conversation-history.js"
+import { expandHomePath } from "./host-paths.js"
+import {
+  createBranchedSessionFile,
+  createMovedSessionFile,
+  deletePersistedPiSessionFile,
+  findBranchLeafId,
+  findPiSessionByExactId,
+  findPiSessionFileForHistory,
+  getDefaultPiSessionDir,
+  openOrCreatePiSessionManager,
+  piSessionKey as sessionKey,
+} from "./pi-session-files.js"
+import { describePiFailure, describePiRetry } from "./pi-retry-status.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 type AgentSessionBundle = {
@@ -104,7 +109,6 @@ type AgentConversationModuleOptions = {
   enabledTools: string[]
   emitChatEvent: (event: OusiaChatEvent, context?: OusiaChatContext) => void
 }
-
 
 type AgentStreamState = {
   toolInputTracker: PiToolInputTracker
@@ -143,7 +147,6 @@ type StreamAssistantMessageEvent = {
   }
 }
 
-
 type HistoryCacheEntry = {
   fullItems?: OusiaChatHistoryItem[]
   lightweightItems?: OusiaChatHistoryItem[]
@@ -162,7 +165,6 @@ function now() {
 function randomId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
-
 
 function createStreamState(
   thinkingLevel: string | undefined = "off"
@@ -242,7 +244,6 @@ function finishActiveTools(
   state.activeToolIds.clear()
 }
 
-
 function errorTextFromUnknown(
   value: unknown,
   fallback = "智能体响应失败。"
@@ -275,66 +276,6 @@ function errorTextFromUnknown(
     return stringifyUnknown(value) ?? fallback
   }
   return String(value)
-}
-
-
-function expandHomePath(path: string) {
-  if (path === "~") {
-    return homedir()
-  }
-  if (path.startsWith("~/")) {
-    return join(homedir(), path.slice(2))
-  }
-  return path
-}
-
-function sessionKey(context: OusiaChatContext) {
-  return `${context.projectPath}::${context.sessionId}`
-}
-
-function getDefaultPiSessionDir(cwd: string) {
-  return SessionManager.create(cwd).getSessionDir()
-}
-
-async function findPiSessionByExactId(cwd: string, sessionId: string) {
-  const sessions = await SessionManager.list(cwd)
-  return sessions.find((session) => session.id === sessionId)
-}
-
-type DeletePersistedPiSessionFileDependencies = {
-  deleteFile?: (path: string) => Promise<void>
-  getSessionDir?: (cwd: string) => string
-  listSessions?: typeof SessionManager.list
-}
-
-export async function deletePersistedPiSessionFile(
-  cwd: string,
-  sessionId: string,
-  dependencies: DeletePersistedPiSessionFileDependencies = {}
-) {
-  const sessions = await (dependencies.listSessions ?? SessionManager.list)(cwd)
-  const persistedSession = sessions.find((session) => session.id === sessionId)
-  if (!persistedSession) {
-    return null
-  }
-  const sessionDir = resolve(
-    (dependencies.getSessionDir ?? getDefaultPiSessionDir)(cwd)
-  )
-  const sessionFile = resolve(persistedSession.path)
-  if (dirname(sessionFile) !== sessionDir) {
-    throw new Error(
-      `Refused to delete Pi session outside its canonical directory: ${sessionFile}`
-    )
-  }
-  await (dependencies.deleteFile ?? unlink)(sessionFile)
-  return sessionFile
-}
-
-async function openOrCreatePiSessionManager(cwd: string, sessionId: string) {
-  const existingSession = await findPiSessionByExactId(cwd, sessionId)
-  return existingSession
-    ? SessionManager.open(existingSession.path)
-    : SessionManager.create(cwd, undefined, { id: sessionId })
 }
 
 function normalizeModelSettings(model: OusiaModelSettings) {
@@ -432,144 +373,6 @@ async function configureSessionBundle(
   if (typeof autoRetryOnFailure === "boolean") {
     bundle.session.setAutoRetryEnabled(autoRetryOnFailure)
   }
-}
-
-function piEntryIdFromChatItemId(messageId: string) {
-  return messageId.replace(/-text-\d+$/, "").replace(/-thinking-\d+$/, "")
-}
-
-function assistantTextFromSessionEntry(entry: PiSessionEntry) {
-  if (entry.type !== "message") {
-    return ""
-  }
-  const message = entry.message as unknown as Record<string, unknown>
-  if (message.role !== "assistant") {
-    return ""
-  }
-  return textFromContent(message.content)
-}
-
-function findBranchLeafId(
-  sessionManager: SessionManager,
-  messageId: string,
-  messageText: string | undefined
-) {
-  const directId = piEntryIdFromChatItemId(messageId)
-  if (sessionManager.getEntry(directId)) {
-    return directId
-  }
-
-  const normalizedMessageText = messageText?.trim()
-  if (!normalizedMessageText) {
-    return undefined
-  }
-  const entries = sessionManager.getEntries()
-  for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const entry = entries[index]
-    if (assistantTextFromSessionEntry(entry).trim() === normalizedMessageText) {
-      return entry.id
-    }
-  }
-  return undefined
-}
-
-function createBranchedSessionFile({
-  cwd,
-  parentSessionFile,
-  sourceSessionManager,
-  targetConversationDir,
-  targetSessionId,
-  leafId,
-}: {
-  cwd: string
-  parentSessionFile: string
-  sourceSessionManager: SessionManager
-  targetConversationDir: string
-  targetSessionId: string
-  leafId: string
-}) {
-  const path = sourceSessionManager.getBranch(leafId)
-  if (!path.length) {
-    throw new Error(`Entry ${leafId} not found`)
-  }
-
-  mkdirSync(targetConversationDir, { recursive: true })
-  const timestamp = now()
-  const fileTimestamp = timestamp.replace(/[:.]/g, "-")
-  const targetFile = join(
-    targetConversationDir,
-    `${fileTimestamp}_${targetSessionId}.jsonl`
-  )
-  const header = {
-    type: "session",
-    version: CURRENT_SESSION_VERSION,
-    id: targetSessionId,
-    timestamp,
-    cwd,
-    parentSession: parentSessionFile,
-  }
-  let parentId: string | null = null
-  const entries = path
-    .filter((entry) => entry.type !== "label")
-    .map((entry) => {
-      const nextEntry = { ...entry, parentId }
-      parentId = entry.id
-      return nextEntry
-    })
-
-  writeFileSync(
-    targetFile,
-    [header, ...entries].map((entry) => JSON.stringify(entry)).join("\n") +
-      "\n",
-    { encoding: "utf8", flag: "wx" }
-  )
-  return targetFile
-}
-
-function createMovedSessionFile({
-  sourceSessionManager,
-  targetConversationDir,
-  targetCwd,
-  targetSessionId,
-}: {
-  sourceSessionManager: SessionManager
-  targetConversationDir: string
-  targetCwd: string
-  targetSessionId: string
-}) {
-  const sourceHeader = sourceSessionManager.getHeader()
-  if (!sourceHeader) {
-    throw new Error("Cannot move session: source session has no header.")
-  }
-
-  mkdirSync(targetConversationDir, { recursive: true })
-  const timestamp =
-    typeof sourceHeader.timestamp === "string" ? sourceHeader.timestamp : now()
-  const fileTimestamp = timestamp.replace(/[:.]/g, "-")
-  const targetFile = join(
-    targetConversationDir,
-    `${fileTimestamp}_${targetSessionId}.jsonl`
-  )
-  const targetHeader = {
-    ...sourceHeader,
-    version: CURRENT_SESSION_VERSION,
-    id: targetSessionId,
-    cwd: targetCwd,
-  }
-  writeFileSync(
-    targetFile,
-    [targetHeader, ...sourceSessionManager.getEntries()]
-      .map((entry) => JSON.stringify(entry))
-      .join("\n") + "\n",
-    { encoding: "utf8", flag: "wx" }
-  )
-  return targetFile
-}
-
-async function findPiSessionFileForHistory(context: OusiaChatContext) {
-  const cwd = expandHomePath(context.projectPath)
-  const session = await findPiSessionByExactId(cwd, context.sessionId)
-  return session ? { cwd, sessionFile: session.path } : undefined
 }
 
 export function createAgentConversationModule({
@@ -775,8 +578,12 @@ export function createAgentConversationModule({
         },
         context
       )
-    } catch {
-      // Context usage is informative only; chat errors are emitted elsewhere.
+    } catch (error) {
+      writeRuntimeLog("chat.context_usage", "warn", {
+        error: errorTextFromUnknown(error, "Failed to read Pi context usage."),
+        message: "Skipped an unavailable informational context usage update.",
+        sessionId: context.sessionId,
+      })
     }
   }
 
@@ -961,7 +768,9 @@ export function createAgentConversationModule({
   function translateAgentEvent(
     event: AgentSessionEvent,
     context: OusiaChatContext,
-    key: string
+    key: string,
+    provider?: string,
+    modelId?: string
   ) {
     const timestamp = now()
     const state = streamState.get(key) ?? createStreamState()
@@ -1083,10 +892,13 @@ export function createAgentConversationModule({
         finishActiveTools(state, context, emitChatEvent, timestamp)
       }
       if (message.role === "assistant" && message.stopReason === "error") {
-        state.pendingErrorText = errorTextFromUnknown(
-          message.errorMessage ?? message.error ?? message,
-          "智能体响应失败。"
-        )
+        state.pendingErrorText = describePiFailure({
+          errorMessage: errorTextFromUnknown(
+            message.errorMessage ?? message.error ?? message,
+            "智能体响应失败。"
+          ),
+          provider,
+        }).text
       } else if (message.role === "assistant") {
         state.pendingErrorText = ""
       }
@@ -1196,21 +1008,35 @@ export function createAgentConversationModule({
         delayMs?: number
         errorMessage?: string
       }
+      const retryStatus = describePiRetry({
+        attempt: retry.attempt,
+        delayMs: retry.delayMs,
+        errorMessage: retry.errorMessage ?? state.pendingErrorText,
+        maxAttempts: retry.maxAttempts,
+        provider,
+      })
       state.reconnectStatusVisible = true
       writeRuntimeLog("pi.retry", "warn", {
         attempt: retry.attempt,
         delayMs: retry.delayMs,
-        error: retry.errorMessage ?? state.pendingErrorText,
+        detail: retryStatus.detail,
+        errorCode: retryStatus.errorCode,
+        errorType: retryStatus.errorType,
+        failureSource: retryStatus.source,
+        httpStatus: retryStatus.httpStatus,
         maxAttempts: retry.maxAttempts,
+        modelId,
         phase: "start",
+        provider,
         sessionId: context.sessionId,
+        transportCode: retryStatus.transportCode,
       })
       emitChatEvent(
         {
           type: "status_message",
           id: reconnectStatusId,
           status: "streaming",
-          text: "重新连接中…",
+          text: retryStatus.text,
           timestamp,
         },
         context
@@ -1219,17 +1045,31 @@ export function createAgentConversationModule({
     }
     if (event.type === "auto_retry_end") {
       clearReconnectStatus()
+      const finalFailure = event.success
+        ? undefined
+        : describePiFailure({
+            errorMessage: errorTextFromUnknown(
+              event.finalError,
+              "智能体响应失败。"
+            ),
+            provider,
+          })
       writeRuntimeLog("pi.retry", event.success ? "info" : "error", {
         attempt: event.attempt,
-        error: event.success
-          ? undefined
-          : errorTextFromUnknown(event.finalError),
+        detail: finalFailure?.detail,
+        errorCode: finalFailure?.errorCode,
+        errorType: finalFailure?.errorType,
+        failureSource: finalFailure?.source,
+        httpStatus: finalFailure?.httpStatus,
+        modelId,
         phase: "end",
+        provider,
         sessionId: context.sessionId,
         success: event.success,
+        transportCode: finalFailure?.transportCode,
       })
-      if (!event.success) {
-        const text = errorTextFromUnknown(event.finalError, "智能体响应失败。")
+      if (finalFailure) {
+        const text = finalFailure.text
         if (text !== state.lastErrorText) {
           emitError(text)
         }
@@ -1518,7 +1358,15 @@ export function createAgentConversationModule({
       return
     }
     if (messageEvent.type === "error") {
-      emitError(errorTextFromUnknown(messageEvent.error, "智能体响应失败。"))
+      emitError(
+        describePiFailure({
+          errorMessage: errorTextFromUnknown(
+            messageEvent.error,
+            "智能体响应失败。"
+          ),
+          provider,
+        }).text
+      )
       emitChatEvent({ type: "run_status", status: "error", timestamp }, context)
     }
   }
@@ -1595,7 +1443,13 @@ export function createAgentConversationModule({
       setSessionFile(key, sessionFile)
     }
     const unsubscribe = session.subscribe((event) =>
-      translateAgentEvent(event, context, key)
+      translateAgentEvent(
+        event,
+        context,
+        key,
+        session.model?.provider,
+        session.model?.id
+      )
     )
     return {
       modelRuntime,

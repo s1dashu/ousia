@@ -1,4 +1,7 @@
-import type { OusiaSidebarSectionId } from "@/electron/chat-types"
+import {
+  closestCenter,
+  type CollisionDetection,
+} from "@dnd-kit/core"
 
 export const defaultSessionGroupId = "default"
 
@@ -34,26 +37,28 @@ export function getSortableData(value: unknown): SidebarSortableData | null {
   }
 }
 
-export function isSidebarSectionId(
-  value: string
-): value is OusiaSidebarSectionId {
-  return value === "sessions" || value === "projects"
-}
-
-export function normalizeSidebarSectionOrder(
-  sectionOrder: OusiaSidebarSectionId[]
-): OusiaSidebarSectionId[] {
-  return [
-    ...new Set(
-      [...sectionOrder, "sessions", "projects"].filter(isSidebarSectionId)
-    ),
-  ]
-}
-
 export function escapeAttributeSelectorValue(value: string) {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
 }
 
 export function projectIdFromSessionGroup(groupId: string | undefined) {
   return groupId && groupId !== defaultSessionGroupId ? groupId : undefined
+}
+
+/**
+ * Reorders only apply within the same kind (project -> project,
+ * section -> section). Sessions may additionally drop onto projects and the
+ * sessions section. Without this filter, an expanded project's own session
+ * rows move along with the dragged project and always win `closestCenter`,
+ * making expanded projects impossible to reorder.
+ */
+export const sidebarCollisionDetection: CollisionDetection = (args) => {
+  const activeKind = getSortableData(args.active?.data.current)?.kind
+  if (activeKind !== "project" && activeKind !== "section") {
+    return closestCenter(args)
+  }
+  const droppableContainers = args.droppableContainers.filter(
+    (container) => getSortableData(container.data.current)?.kind === activeKind
+  )
+  return closestCenter({ ...args, droppableContainers })
 }
