@@ -19,6 +19,9 @@ const ENVIRONMENT_NAMES = [
 ] as const
 
 const temporaryDirectories: string[] = []
+const packageVersion = (
+  JSON.parse(readFileSync("package.json", "utf8")) as { version: string }
+).version
 
 afterEach(() => {
   for (const name of ENVIRONMENT_NAMES) delete process.env[name]
@@ -90,8 +93,7 @@ describe("desktopSentryVite", () => {
       String(build("serve").define.__DESKTOP_SENTRY_CONFIG__)
     )
     expect(config).toMatchObject({
-      buildVerificationMarker:
-        "desktop-sentry-build:disabled:ousia-desktop@0.1.34",
+      buildVerificationMarker: `desktop-sentry-build:disabled:ousia-desktop@${packageVersion}`,
       dsn: "",
       enabled: false,
       environment: "development",

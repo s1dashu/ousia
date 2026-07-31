@@ -11,8 +11,14 @@
 
 ## Product direction
 
-- Ousia Electron is again the primary maintained product. Active Electron development continues from `codex/archive-ousia-electron-v0.1.32`; the branch name is historical and no longer means the code is read-only.
-- Pi Tauri is frozen at `v0.2.6` on `main` except for explicit compatibility, security, or release-transition work.
+- Ousia Electron is the primary maintained product, and active development now
+  continues on `main`. The historical
+  `codex/archive-ousia-electron-v0.1.32` branch remains only as ancestry for the
+  restored Electron line.
+- Pi Tauri is frozen at the `v0.2.6` tag and GitHub release. Its source remains
+  recoverable from that tag and the merged history; it is no longer the active
+  `main` tree except for explicit compatibility, security, or release-transition
+  work.
 - Future Electron tags use the standard `v...` form. Future Tauri tags, if any, must use `tauri-v...`, so only Tauri carries a product prefix. Existing `electron-v...` releases remain supported for upgrade compatibility.
 - Electron releases are GitHub Latest. Tauri downloads remain pinned to `v0.2.6`, and Electron releases must preserve the frozen Tauri `latest.json` updater manifest so installed Tauri builds can still resolve `/releases/latest/download/latest.json`.
 - Preserve Ousia's existing product identity, bundle identifier, application data, sessions, and upgrade paths unless a migration is explicitly designed and tested.
