@@ -37,27 +37,6 @@
 
 ---
 
-## Recent changes
-
-Latest published Ousia Electron releases:
-
-- [**v0.3.0**](https://github.com/s1dashu/ousia/releases/tag/v0.3.0) —
-  Restored README product content and demo media, recovered the stable sidebar
-  layout and drag motion, and hardened the production packaging path.
-- [**v0.1.35**](https://github.com/s1dashu/ousia/releases/tag/v0.1.35) —
-  Safer live-chat recovery, broader persistence and replay coverage, focused
-  desktop modules, and structured window drag diagnostics.
-- [**v0.1.34**](https://github.com/s1dashu/ousia/releases/tag/v0.1.34) —
-  Actionable update failures, a repaired production update feed, and standard
-  Electron release tags.
-
-The maintained Electron release line now starts at **v0.3.0**. The Pi/Tauri
-edition remains frozen at
-[**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6), with its
-download and updater compatibility preserved.
-
-[View all releases →](https://github.com/s1dashu/ousia/releases)
-
 ## See Ousia in action
 
 <p align="center">
