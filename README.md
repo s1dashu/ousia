@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.1.35/Ousia-0.1.35-arm64.dmg">
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.3.0/Ousia-0.3.0-arm64.dmg">
     <img src="./assets/download-electron-button.svg" alt="Download the Electron version for macOS" width="280" height="48">
   </a>
 </p>
@@ -43,17 +43,19 @@
 
 Latest published Ousia Electron releases:
 
+- [**v0.3.0**](https://github.com/s1dashu/ousia/releases/tag/v0.3.0) —
+  Restored README product content and demo media, recovered the stable sidebar
+  layout and drag motion, and hardened the production packaging path.
 - [**v0.1.35**](https://github.com/s1dashu/ousia/releases/tag/v0.1.35) —
   Safer live-chat recovery, broader persistence and replay coverage, focused
   desktop modules, and structured window drag diagnostics.
 - [**v0.1.34**](https://github.com/s1dashu/ousia/releases/tag/v0.1.34) —
   Actionable update failures, a repaired production update feed, and standard
   Electron release tags.
-- [**electron-v0.1.33**](https://github.com/s1dashu/ousia/releases/tag/electron-v0.1.33) —
-  The final Electron release on the historical prefixed tag line.
 
-Active development now targets **v0.3.0**. The Pi/Tauri edition remains frozen
-at [**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6), with its
+The maintained Electron release line now starts at **v0.3.0**. The Pi/Tauri
+edition remains frozen at
+[**v0.2.6**](https://github.com/s1dashu/ousia/releases/tag/v0.2.6), with its
 download and updater compatibility preserved.
 
 [View all releases →](https://github.com/s1dashu/ousia/releases)
@@ -117,7 +119,7 @@ invocation is visible inline, and everything persists across restarts.
 
 ### Download (macOS)
 
-[Download the latest `.dmg`](https://github.com/s1dashu/ousia/releases/download/v0.1.35/Ousia-0.1.35-arm64.dmg),
+[Download the latest `.dmg`](https://github.com/s1dashu/ousia/releases/download/v0.3.0/Ousia-0.3.0-arm64.dmg),
 open it, drag **Ousia** into **Applications**, and launch. Previous versions and
 release notes remain available on the [Releases page](https://github.com/s1dashu/ousia/releases/latest).
 

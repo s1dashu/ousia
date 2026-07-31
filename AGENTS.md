@@ -19,7 +19,7 @@
   recoverable from that tag and the merged history; it is no longer the active
   `main` tree except for explicit compatibility, security, or release-transition
   work.
-- The next Electron release line starts at `v0.3.0`; `v0.2.x` remains the
+- The maintained Electron release line starts at `v0.3.0`; `v0.2.x` remains the
   frozen Tauri line. Electron tags use the standard `v...` form. Future Tauri
   tags, if any, must use `tauri-v...`, so only Tauri carries a product prefix.
   Existing `v0.1.x` and `electron-v0.1.x` Electron releases remain supported
