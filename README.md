@@ -31,10 +31,6 @@
   </a>
 </p>
 
-<p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.2.6/Pi_aarch64.dmg">Download Tauri v0.2.6 for macOS</a>
-</p>
-
 ---
 
 ## See Ousia in action
