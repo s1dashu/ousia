@@ -26,7 +26,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/s1dashu/ousia/releases/download/v0.3.0/Ousia-0.3.0-arm64.dmg">
+  <a href="https://github.com/s1dashu/ousia/releases/download/v0.3.1/Ousia-0.3.1-arm64.dmg">
     <img src="./assets/download-electron-button.svg" alt="Download the Electron version for macOS" width="280" height="48">
   </a>
 </p>
@@ -96,7 +96,7 @@ invocation is visible inline, and everything persists across restarts.
 
 ### Download (macOS)
 
-[Download the latest `.dmg`](https://github.com/s1dashu/ousia/releases/download/v0.3.0/Ousia-0.3.0-arm64.dmg),
+[Download the latest `.dmg`](https://github.com/s1dashu/ousia/releases/download/v0.3.1/Ousia-0.3.1-arm64.dmg),
 open it, drag **Ousia** into **Applications**, and launch. Previous versions and
 release notes remain available on the [Releases page](https://github.com/s1dashu/ousia/releases/latest).
 
