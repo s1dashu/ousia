@@ -5,7 +5,20 @@ import {
   loadDesktopSentryEnvironment,
 } from "./src/electron/sentry-vite-build"
 
+const piCodingAgentPackageName = "@earendil-works/pi-coding-agent"
+const piCodingAgentRuntimeEntries = new Map([
+  [
+    piCodingAgentPackageName,
+    "../../node_modules/@earendil-works/pi-coding-agent/dist/index.js",
+  ],
+  [
+    `${piCodingAgentPackageName}/rpc-entry`,
+    "../../node_modules/@earendil-works/pi-coding-agent/dist/rpc-entry.js",
+  ],
+])
+
 const external = [
+  /^@earendil-works\/pi-coding-agent(?:\/.*)?$/,
   "bufferutil",
   "electron",
   "esbuild",
@@ -29,17 +42,24 @@ export default defineConfig(({ command, mode }) => {
   return {
     define: sentry.define,
     plugins: sentry.plugins,
-    resolve: {
-      // pi-coding-agent ships a nested copy of the exact same pi-ai version.
-      // Force one module graph so provider implementations are not emitted twice.
-      dedupe: ["@earendil-works/pi-ai"],
-    },
     build: {
       sourcemap: sentry.sourcemap,
       rollupOptions: {
         external,
         output: {
           chunkFileNames: "[name].js",
+          paths: (id) => {
+            const runtimeEntry = piCodingAgentRuntimeEntries.get(id)
+            if (runtimeEntry) {
+              return runtimeEntry
+            }
+            if (id.startsWith(`${piCodingAgentPackageName}/`)) {
+              throw new Error(
+                `No packaged runtime entry is configured for external Pi module: ${id}`
+              )
+            }
+            return id
+          },
         },
       },
     },

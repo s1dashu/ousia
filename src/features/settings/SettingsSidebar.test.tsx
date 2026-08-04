@@ -16,6 +16,7 @@ describe("SettingsSidebar", () => {
       t.settings.appearance,
       t.settings.conversationSettings,
       t.settings.piSettings,
+      t.settings.systemPrompt,
       t.settings.archivedSessions,
     ])
     expect(
@@ -25,6 +26,7 @@ describe("SettingsSidebar", () => {
       t.settings.appearance,
       t.settings.conversationSettings,
       t.settings.codexSettings,
+      t.settings.systemPrompt,
       t.settings.archivedSessions,
     ])
   })
@@ -52,8 +54,7 @@ describe("SettingsSidebar", () => {
       "rounded-[var(--ousia-sidebar-selected-radius)] px-3 py-2"
     )
     expect(html).toContain("bg-white")
-    expect(html).toContain(
-      "shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
-    )
+    expect(html).toContain("shadow-[var(--ousia-sidebar-selected-shadow)]")
+    expect(html).toContain("dark:bg-secondary")
   })
 })

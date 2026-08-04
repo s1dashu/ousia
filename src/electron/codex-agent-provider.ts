@@ -1,5 +1,5 @@
-import { writeFile } from "node:fs/promises"
-import { basename, resolve } from "node:path"
+import { readFile, writeFile } from "node:fs/promises"
+import { basename, join, resolve } from "node:path"
 
 import {
   createCodexAppServerClient,
@@ -112,6 +112,30 @@ function stringValue(value: unknown) {
 
 function numberValue(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+function baseInstructions(systemPrompt: string | undefined) {
+  return systemPrompt?.trim() ? systemPrompt : null
+}
+
+export function codexBuiltinSystemPromptFromCache(
+  value: unknown,
+  modelId: string
+) {
+  if (!isObject(value) || !Array.isArray(value.models)) {
+    throw new Error("Codex models cache has an invalid shape.")
+  }
+  const model = value.models.find(
+    (entry) => isObject(entry) && stringValue(entry.slug) === modelId
+  )
+  if (!isObject(model)) {
+    throw new Error(`Codex models cache does not contain model: ${modelId}`)
+  }
+  const prompt = stringValue(model.base_instructions)
+  if (!prompt?.trim()) {
+    throw new Error(`Codex model ${modelId} has no built-in system prompt.`)
+  }
+  return prompt
 }
 
 function errorText(error: unknown, fallback = "Codex 操作失败。") {
@@ -805,6 +829,7 @@ export function createCodexAgentProvider({
           cwd,
           approvalPolicy: "never",
           sandbox,
+          baseInstructions: baseInstructions(payload.systemPrompt),
           ...modelFields(payload.model.modelId),
         }
       )
@@ -818,6 +843,7 @@ export function createCodexAgentProvider({
           sandbox,
           ephemeral: false,
           threadSource: "ousia_desktop",
+          baseInstructions: baseInstructions(payload.systemPrompt),
           ...modelFields(payload.model.modelId),
         }
       )
@@ -1222,6 +1248,30 @@ export function createCodexAgentProvider({
   const unsubscribeServerRequest = client.onServerRequest(serverRequestHandler)
 
   const conversations: AgentConversationProvider = {
+    async getBuiltinSystemPrompt(options) {
+      const [initialize, model] = await Promise.all([
+        client.start(),
+        resolveCatalogModel(options.modelId),
+      ])
+      const cachePath = join(initialize.codexHome, "models_cache.json")
+      let cache: unknown
+      try {
+        cache = JSON.parse(await readFile(cachePath, "utf8")) as unknown
+      } catch (error) {
+        throw new Error(`Failed to read Codex models cache: ${cachePath}`, {
+          cause: error,
+        })
+      }
+      return codexBuiltinSystemPromptFromCache(cache, model.modelId)
+    },
+    reloadConfiguration() {
+      log("info", "Reloaded Codex configuration")
+      return {
+        busySessionCount: 0,
+        reloadedSessionCount: 0,
+        status: "reloaded" as const,
+      }
+    },
     async deleteChatSession(context: OusiaChatContext) {
       const session = await canonicalSession(context)
       const hasActiveTurn = [...activeBySessionKey.values()].some(

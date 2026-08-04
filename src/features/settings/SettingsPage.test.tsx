@@ -17,6 +17,8 @@ vi.mock("@/components/theme-provider", async (importOriginal) => {
   }
 })
 
+vi.mock("@/components/ui/toast", () => ({ useToast: () => vi.fn() }))
+
 function renderProviderSettings(
   agentProvider: "pi" | "codex",
   codexEnvironmentLoading = false
@@ -32,6 +34,8 @@ function renderProviderSettings(
       onRefreshModelRegistry={async () => undefined}
       onRestoreArchivedSessions={async () => undefined}
       onSettingsChange={vi.fn()}
+      onBuiltinSystemPromptLoad={async () => "Built-in prompt"}
+      onSystemPromptSave={async () => undefined}
       projects={[]}
       sessions={[]}
       settings={{
@@ -55,6 +59,8 @@ function renderGeneralSettings() {
       onRefreshModelRegistry={async () => undefined}
       onRestoreArchivedSessions={async () => undefined}
       onSettingsChange={vi.fn()}
+      onBuiltinSystemPromptLoad={async () => "Built-in prompt"}
+      onSystemPromptSave={async () => undefined}
       projects={[]}
       sessions={[]}
       settings={{ ...defaultSettings, language: "zh" }}
@@ -74,6 +80,8 @@ function renderConversationSettings() {
       onRefreshModelRegistry={async () => undefined}
       onRestoreArchivedSessions={async () => undefined}
       onSettingsChange={vi.fn()}
+      onBuiltinSystemPromptLoad={async () => "Built-in prompt"}
+      onSystemPromptSave={async () => undefined}
       projects={[]}
       sessions={[]}
       settings={{ ...defaultSettings, language: "zh" }}
@@ -81,7 +89,43 @@ function renderConversationSettings() {
   )
 }
 
+function renderSystemPromptSettings() {
+  return renderToStaticMarkup(
+    <SettingsPage
+      activeSection="systemPrompt"
+      codexEnvironment={undefined}
+      codexEnvironmentLoading={false}
+      modelRegistry={undefined}
+      onDeleteArchivedSessions={async () => undefined}
+      onRefreshCodexEnvironment={async () => undefined}
+      onRefreshModelRegistry={async () => undefined}
+      onRestoreArchivedSessions={async () => undefined}
+      onSettingsChange={vi.fn()}
+      onBuiltinSystemPromptLoad={async () => "Built-in prompt"}
+      onSystemPromptSave={async () => undefined}
+      projects={[]}
+      sessions={[]}
+      settings={{
+        ...defaultSettings,
+        language: "zh",
+        systemPrompt: "始终简洁回答。",
+      }}
+    />
+  )
+}
+
 describe("SettingsPage provider isolation", () => {
+  it("renders the persisted system prompt in a read-only editor", () => {
+    const t = getMessages("zh")
+    const html = renderSystemPromptSettings()
+
+    expect(html).toContain(t.settings.systemPrompt)
+    expect(html).toContain("始终简洁回答。")
+    expect(html).toContain('readOnly=""')
+    expect(html).toContain(t.settings.restoreDefaultSystemPrompt)
+    expect(html).toContain(t.app.edit)
+  })
+
   it("renders archived chats in the final management section", () => {
     const t = getMessages("en")
     const html = renderToStaticMarkup(
@@ -95,6 +139,8 @@ describe("SettingsPage provider isolation", () => {
         onRefreshModelRegistry={async () => undefined}
         onRestoreArchivedSessions={async () => undefined}
         onSettingsChange={vi.fn()}
+        onBuiltinSystemPromptLoad={async () => "Built-in prompt"}
+        onSystemPromptSave={async () => undefined}
         projects={[{ id: "project-1", name: "Ousia", path: "/tmp/ousia" }]}
         sessions={[
           {
@@ -144,16 +190,10 @@ describe("SettingsPage provider isolation", () => {
     expect(html).toContain(t.settings.defaultProjectCreationDir)
   })
 
-  it("uses the shared left corners and the wider responsive row threshold", () => {
+  it("uses square panel corners and the wider responsive row threshold", () => {
     const html = renderGeneralSettings()
 
-    expect(MAIN_PANEL_LEFT_CORNERS_CLASS).toContain(
-      "rounded-tl-[var(--ousia-chat-panel-radius)]"
-    )
-    expect(MAIN_PANEL_LEFT_CORNERS_CLASS).toContain(
-      "rounded-bl-[var(--ousia-chat-panel-radius)]"
-    )
-    expect(MAIN_PANEL_LEFT_CORNERS_CLASS).not.toContain("rounded-tr-")
+    expect(MAIN_PANEL_LEFT_CORNERS_CLASS).toBe("rounded-none")
     expect(html).toContain("max-w-[52rem]")
     expect(html).toContain("@min-[720px]:grid-cols-")
     expect(html).not.toContain("@min-[620px]")

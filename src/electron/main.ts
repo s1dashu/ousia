@@ -55,6 +55,8 @@ import type {
   OusiaAppStateShellLayoutPayload,
   OusiaAppStateTouchSessionPayload,
   OusiaAppStateTransactionResult,
+  OusiaAgentConfigurationReloadResult,
+  OusiaBuiltinSystemPromptResult,
   OusiaChatBranchPayload,
   OusiaChatCompactPayload,
   OusiaChatContext,
@@ -65,12 +67,17 @@ import type {
   OusiaChatInterruptPayload,
   OusiaChatMovePayload,
   OusiaChatSendPayload,
+  OusiaChatSearchPayload,
   OusiaChatToolPayloadPayload,
   OusiaDirectoryPickerOptions,
   OusiaOpenDirectoryPayload,
   OusiaOpenDirectoryResult,
   OusiaPiProviderCredentialPayload,
   OusiaPiProviderCredentialRemovalPayload,
+  OusiaPiPackageActivationResult,
+  OusiaPiPackageMutationPayload,
+  OusiaPiPackageMutationResult,
+  OusiaPiPackageReloadPayload,
   OusiaPiRetrySettingsPayload,
   OusiaSelectDirectoryResult,
   OusiaShowFileInFinderPayload,
@@ -98,6 +105,11 @@ import { initializeDesktopSentry } from "./sentry-runtime.js"
 import { requireDesktopSentryConfig } from "./sentry-config.js"
 import { createSystemProxyFetch } from "./system-network.js"
 import { permanentlyDeleteArchivedSessions } from "./permanent-session-deletion.js"
+import {
+  optionalChatSearchSessionId,
+  requireChatSearchQuery,
+  searchChatHistories,
+} from "./chat-search.js"
 
 configureOusiaAppPaths()
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
@@ -172,6 +184,13 @@ function createDeferredAgentProvider(
   const getProvider = () => (providerPromise ??= load())
 
   return {
+    async getBuiltinSystemPrompt(options) {
+      const provider = await getProvider()
+      if (!provider.getBuiltinSystemPrompt) {
+        throw new Error("Agent provider does not expose its built-in prompt.")
+      }
+      return provider.getBuiltinSystemPrompt(options)
+    },
     async deleteChatSession(context) {
       await (await getProvider()).deleteChatSession(context)
     },
@@ -210,6 +229,21 @@ function createDeferredAgentProvider(
     async releaseChatSession(context) {
       if (providerPromise) {
         await (await providerPromise).releaseChatSession?.(context)
+      }
+    },
+    async reloadConfiguration(options) {
+      if (providerPromise) {
+        const outcome = await (await providerPromise).reloadConfiguration?.(
+          options
+        )
+        if (outcome) {
+          return outcome
+        }
+      }
+      return {
+        busySessionCount: 0,
+        reloadedSessionCount: 0,
+        status: "reloaded" as const,
       }
     },
     async sendChatMessage(payload) {
@@ -377,6 +411,64 @@ function ensureMainWindow({ focus = false } = {}) {
 ipcMain.handle("ousia:chat:send", (_event, payload: OusiaChatSendPayload) =>
   agentConversations.sendChatMessage(payload)
 )
+ipcMain.handle(
+  "ousia:agent:reload-configuration",
+  async (): Promise<OusiaAgentConfigurationReloadResult> => {
+    try {
+      const outcome = await agentConversations.reloadConfiguration?.()
+      if (outcome?.status === "agent-running") {
+        return {
+          ok: false,
+          error: "Cannot reload configuration while an agent is running",
+        }
+      }
+      writeRuntimeLog("agent.configuration", "info", {
+        message: "Reloaded agent configuration",
+      })
+      return { ok: true }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      writeRuntimeLog("agent.configuration", "error", {
+        error: message,
+        message: "Failed to reload agent configuration",
+      })
+      return { ok: false, error: message }
+    }
+  }
+)
+ipcMain.handle(
+  "ousia:agent:builtin-system-prompt",
+  async (): Promise<OusiaBuiltinSystemPromptResult> => {
+    try {
+      const state = await loadAppState()
+      const settings = state.settings
+      const provider =
+        settings.defaultAgentProvider === "codex"
+          ? routedCodexAgentProvider
+          : piAgentConversations
+      if (!provider.getBuiltinSystemPrompt) {
+        throw new Error("Agent provider does not expose its built-in prompt.")
+      }
+      const prompt = await provider.getBuiltinSystemPrompt({
+        agentMode: settings.agentMode,
+        customAgentTools: settings.customAgentTools,
+        modelId:
+          settings.defaultAgentProvider === "codex"
+            ? settings.codexModelId
+            : settings.modelId,
+        projectPath: settings.defaultSessionDir,
+      })
+      return { ok: true, prompt }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      writeRuntimeLog("agent.systemPrompt", "error", {
+        error: message,
+        message: "Failed to load built-in system prompt",
+      })
+      return { ok: false, error: message }
+    }
+  }
+)
 
 ipcMain.handle(
   "ousia:chat:generate-title",
@@ -411,6 +503,31 @@ ipcMain.handle(
   "ousia:chat:history",
   (_event, payload: OusiaChatHistoryPayload) =>
     agentConversations.getChatHistory(payload)
+)
+
+ipcMain.handle(
+  "ousia:chat:search",
+  async (_event, payload: OusiaChatSearchPayload) => {
+    const startedAt = performance.now()
+    const query = requireChatSearchQuery(payload)
+    const sessionId = optionalChatSearchSessionId(payload)
+    const state = await loadAppState()
+    const result = await searchChatHistories({
+      query,
+      sessionId,
+      state,
+      getHistory: async (context) =>
+        (await agentConversations.getChatHistory(context)).items,
+    })
+    writeRuntimeLog("chat.search", "info", {
+      elapsedMs: Math.round((performance.now() - startedAt) * 10) / 10,
+      matchedResults: result.items.length,
+      scope: sessionId ? "current" : "all",
+      searchedSessions: state.sessions.filter((session) => !session.archivedAt)
+        .length,
+    })
+    return result
+  }
 )
 
 ipcMain.handle("ousia:chat:events:active", () => chatEventReplay.snapshot())
@@ -493,6 +610,87 @@ ipcMain.handle("ousia:pi:environment", async () => {
   const { checkPiEnvironment } = await loadPiEnvironmentModule()
   return checkPiEnvironment()
 })
+
+ipcMain.handle("ousia:pi:packages:list", async () => {
+  await shellEnvironmentReady
+  const { piPackageService } = await import("./pi-package-service.js")
+  return piPackageService.listPackages()
+})
+
+ipcMain.handle("ousia:skills:installed:list", async () => {
+  await shellEnvironmentReady
+  const { installedSkillService } = await import(
+    "./installed-skill-service.js"
+  )
+  return installedSkillService.listSkills()
+})
+
+ipcMain.handle(
+  "ousia:pi:packages:install",
+  async (
+    _event,
+    payload: OusiaPiPackageMutationPayload
+  ): Promise<OusiaPiPackageMutationResult> => {
+    await shellEnvironmentReady
+    const { piPackageService } = await import("./pi-package-service.js")
+    const status = await piPackageService.installPackage(payload)
+    return {
+      ...status,
+      activation: await reloadPiPackageConfiguration(false),
+    }
+  }
+)
+
+ipcMain.handle(
+  "ousia:pi:packages:remove",
+  async (
+    _event,
+    payload: OusiaPiPackageMutationPayload
+  ): Promise<OusiaPiPackageMutationResult> => {
+    await shellEnvironmentReady
+    const { piPackageService } = await import("./pi-package-service.js")
+    const status = await piPackageService.removePackage(payload)
+    return {
+      ...status,
+      activation: await reloadPiPackageConfiguration(false),
+    }
+  }
+)
+
+async function reloadPiPackageConfiguration(
+  force: boolean
+): Promise<OusiaPiPackageActivationResult> {
+  try {
+    const outcome = await piAgentConversations.reloadConfiguration?.({ force })
+    const status =
+      outcome?.status === "agent-running" ? "agent-running" : "reloaded"
+    writeRuntimeLog("pi.packages", status === "reloaded" ? "info" : "warn", {
+      event: "configuration-reload-result",
+      forced: force,
+      status,
+    })
+    return { status }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    writeRuntimeLog("pi.packages", "error", {
+      error: message,
+      event: "configuration-reload-failed",
+      forced: force,
+    })
+    return { status: "failed", error: message }
+  }
+}
+
+ipcMain.handle(
+  "ousia:pi:packages:reload",
+  async (_event, payload: OusiaPiPackageReloadPayload) => {
+    if (!payload || typeof payload !== "object" || payload.force !== true) {
+      throw new Error("Forced Pi package reload requires explicit confirmation")
+    }
+    await shellEnvironmentReady
+    return reloadPiPackageConfiguration(true)
+  }
+)
 
 ipcMain.handle("ousia:codex:environment", async () => {
   await shellEnvironmentReady

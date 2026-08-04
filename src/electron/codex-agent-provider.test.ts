@@ -25,6 +25,7 @@ vi.mock("./runtime-logger.js", () => ({
 }))
 
 import {
+  codexBuiltinSystemPromptFromCache,
   codexThreadToHistory,
   createCodexAgentProvider,
 } from "./codex-agent-provider.js"
@@ -145,6 +146,20 @@ function codexModelEntry(model: string, isDefault: boolean) {
 describe("Codex agent provider", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it("reads the selected model's built-in prompt from the Codex cache", () => {
+    expect(
+      codexBuiltinSystemPromptFromCache(
+        {
+          models: [
+            { slug: "gpt-other", base_instructions: "Other prompt" },
+            { slug: "gpt-test", base_instructions: "Built-in prompt" },
+          ],
+        },
+        "gpt-test"
+      )
+    ).toBe("Built-in prompt")
   })
 
   it("permanently deletes a persisted thread through the app-server protocol", async () => {
@@ -337,6 +352,7 @@ describe("Codex agent provider", () => {
       projectPath: "/tmp/project",
       prompt: "hello",
       sessionId: state.sessions[0].id,
+      systemPrompt: "Always be concise.",
       thinkingLevel: "ultra",
     })
 
@@ -344,6 +360,12 @@ describe("Codex agent provider", () => {
     expect(mocks.bindThread).toHaveBeenCalledWith({
       agentThreadId: "thread-1",
       sessionId: state.sessions[0].id,
+    })
+    expect(client.requests).toContainEqual({
+      method: "thread/start",
+      params: expect.objectContaining({
+        baseInstructions: "Always be concise.",
+      }),
     })
     expect(client.requests).toContainEqual({
       method: "turn/start",

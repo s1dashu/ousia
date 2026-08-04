@@ -37,6 +37,7 @@ import type {
   OusiaChatToolPayloadPayload,
   OusiaChatToolPayloadResult,
   OusiaAgentMode,
+  OusiaBuiltinSystemPromptOptions,
   OusiaModelSettings,
   OusiaPiThinkingLevel,
 } from "./chat-types.js"
@@ -81,7 +82,48 @@ type AgentSessionBundle = {
   modelRuntime: ModelRuntime
   runtimeApiKeyProvider?: string
   session: AgentSession
+  systemPrompt: string
   unsubscribe: () => void
+}
+
+type ReloadablePiSession = Pick<
+  AgentSession,
+  | "abort"
+  | "clearQueue"
+  | "isBashRunning"
+  | "isStreaming"
+  | "pendingMessageCount"
+>
+
+function isPiSessionBusy(session: ReloadablePiSession) {
+  return (
+    session.isStreaming ||
+    session.pendingMessageCount > 0 ||
+    session.isBashRunning
+  )
+}
+
+export async function preparePiSessionsForConfigurationReload(
+  sessions: ReloadablePiSession[],
+  force: boolean
+) {
+  const busySessions = sessions.filter(isPiSessionBusy)
+  if (busySessions.length && !force) {
+    return {
+      busySessionCount: busySessions.length,
+      status: "agent-running" as const,
+    }
+  }
+  await Promise.all(
+    busySessions.map(async (session) => {
+      session.clearQueue()
+      await session.abort()
+    })
+  )
+  return {
+    busySessionCount: busySessions.length,
+    status: "reloaded" as const,
+  }
 }
 
 export function disposePiSessionBundle(
@@ -92,6 +134,19 @@ export function disposePiSessionBundle(
   } finally {
     bundle.session.dispose()
   }
+}
+
+export function stripPiSystemPromptRuntimeDirectory(
+  prompt: string,
+  cwd: string
+) {
+  const suffix = `\nCurrent working directory: ${cwd.replace(/\\/g, "/")}`
+  if (!prompt.endsWith(suffix)) {
+    throw new Error(
+      "Pi built-in system prompt is missing its runtime directory suffix."
+    )
+  }
+  return prompt.slice(0, -suffix.length)
 }
 
 function requirePiThinkingLevel(level: string): OusiaPiThinkingLevel {
@@ -304,6 +359,47 @@ function toolsForAgentMode(
   return ["read", "write", "edit", "bash", "grep", "find", "ls"]
 }
 
+export function includePiExtensionTools(
+  builtinTools: string[],
+  agentMode: OusiaAgentMode | undefined,
+  extensionsResult: ReturnType<DefaultResourceLoader["getExtensions"]>
+) {
+  if (extensionsResult.errors.length) {
+    const errorDetails = extensionsResult.errors
+      .map(({ error, path }) => `${path}: ${error}`)
+      .join("; ")
+    throw new AggregateError(
+      extensionsResult.errors.map(
+        ({ error, path }) => new Error(`${path}: ${error}`)
+      ),
+      `Failed to load ${extensionsResult.errors.length} Pi extension(s): ${errorDetails}`
+    )
+  }
+  if (agentMode && agentMode !== "standard") {
+    return builtinTools
+  }
+  const extensionTools = extensionsResult.extensions.flatMap((extension) =>
+    [...extension.tools.keys()]
+  )
+  return [...new Set([...builtinTools, ...extensionTools])]
+}
+
+export function activePiToolsForAgentMode(
+  session: Pick<AgentSession, "getAllTools">,
+  agentMode?: OusiaAgentMode,
+  customTools?: OusiaAgentToolName[]
+) {
+  const builtinTools = toolsForAgentMode(agentMode, customTools)
+  if (agentMode && agentMode !== "standard") {
+    return builtinTools
+  }
+  const extensionTools = session
+    .getAllTools()
+    .filter((tool) => tool.sourceInfo.source !== "builtin")
+    .map((tool) => tool.name)
+  return [...new Set([...builtinTools, ...extensionTools])]
+}
+
 async function applyRuntimeApiKey(
   bundle: AgentSessionBundle,
   model: OusiaModelSettings
@@ -365,7 +461,11 @@ async function configureSessionBundle(
   }
   bundle.session.setThinkingLevel(thinkingLevel)
   bundle.session.setActiveToolsByName(
-    toolsForAgentMode(agentMode, customAgentTools)
+    activePiToolsForAgentMode(
+      bundle.session,
+      agentMode,
+      customAgentTools
+    )
   )
   if (typeof autoCompactContext === "boolean") {
     bundle.session.setAutoCompactionEnabled(autoCompactContext)
@@ -410,7 +510,10 @@ export function createAgentConversationModule({
     }
   }
 
-  async function clearSessionRuntimeState(key: string) {
+  async function clearSessionRuntimeState(
+    key: string,
+    rethrowDisposeError = false
+  ) {
     const sessionPromise = sessionPromises.get(key)
     sessionPromises.delete(key)
     historyCache.delete(key)
@@ -425,16 +528,15 @@ export function createAgentConversationModule({
           error: errorTextFromUnknown(error, "Failed to dispose Pi session."),
           key,
         })
+        if (rethrowDisposeError) {
+          throw error
+        }
       }
     }
   }
 
   function isSessionBusy(bundle: AgentSessionBundle) {
-    return (
-      bundle.session.isStreaming ||
-      bundle.session.pendingMessageCount > 0 ||
-      bundle.session.isBashRunning
-    )
+    return isPiSessionBusy(bundle.session)
   }
 
   async function enforceSessionCacheLimit() {
@@ -1378,7 +1480,8 @@ export function createAgentConversationModule({
     thinkingLevel: OusiaPiThinkingLevel,
     agentMode?: OusiaAgentMode,
     customAgentTools?: OusiaAgentToolName[],
-    autoCompactContext?: boolean
+    autoCompactContext?: boolean,
+    systemPrompt = ""
   ) {
     ensurePiPackageDir()
     const cwd = expandHomePath(context.projectPath)
@@ -1393,8 +1496,22 @@ export function createAgentConversationModule({
       cwd,
       agentDir,
       settingsManager,
+      ...(systemPrompt.trim()
+        ? {
+            appendSystemPromptOverride: () => [],
+            systemPromptOverride: () => systemPrompt,
+          }
+        : {}),
     })
     await resourceLoader.reload()
+    const extensionsResult = resourceLoader.getExtensions()
+    const tools = includePiExtensionTools(
+      toolsForAgentMode(agentMode, customAgentTools).filter((tool) =>
+        enabledTools.includes(tool)
+      ),
+      agentMode,
+      extensionsResult
+    )
     if (model.apiKey) {
       await modelRuntime.setRuntimeApiKey(model.provider, model.apiKey, {
         allowNetwork: false,
@@ -1416,9 +1533,23 @@ export function createAgentConversationModule({
       settingsManager,
       model: selectedModel,
       thinkingLevel,
-      tools: toolsForAgentMode(agentMode, customAgentTools).filter((tool) =>
-        enabledTools.includes(tool)
-      ),
+      tools,
+    })
+    const activeToolNames = session.getActiveToolNames()
+    const missingToolNames = tools.filter(
+      (toolName) => !activeToolNames.includes(toolName)
+    )
+    if (missingToolNames.length) {
+      session.dispose()
+      throw new Error(
+        `Pi session did not activate configured tools: ${missingToolNames.join(", ")}`
+      )
+    }
+    writeRuntimeLog("pi.extensions", "info", {
+      activeToolNames,
+      extensionCount: extensionsResult.extensions.length,
+      message: "Loaded Pi extensions for agent session",
+      sessionId: context.sessionId,
     })
 
     if (typeof autoCompactContext === "boolean") {
@@ -1455,6 +1586,7 @@ export function createAgentConversationModule({
       modelRuntime,
       runtimeApiKeyProvider: model.apiKey ? model.provider : undefined,
       session,
+      systemPrompt,
       unsubscribe,
     }
   }
@@ -1465,14 +1597,25 @@ export function createAgentConversationModule({
     thinkingLevel: OusiaPiThinkingLevel,
     agentMode?: OusiaAgentMode,
     customAgentTools?: OusiaAgentToolName[],
-    autoCompactContext?: boolean
+    autoCompactContext?: boolean,
+    systemPrompt = ""
   ): Promise<AgentSessionBundle> {
     const key = sessionKey(context)
     const existingPromise = sessionPromises.get(key)
     if (existingPromise) {
-      sessionPromises.delete(key)
-      sessionPromises.set(key, existingPromise)
-      return existingPromise
+      const existing = await existingPromise
+      if (existing.systemPrompt !== systemPrompt) {
+        if (isSessionBusy(existing)) {
+          throw new Error(
+            `Cannot restart active Pi session: ${context.sessionId}`
+          )
+        }
+        await clearSessionRuntimeState(key)
+      } else {
+        sessionPromises.delete(key)
+        sessionPromises.set(key, existingPromise)
+        return existingPromise
+      }
     }
 
     const promise = createSession(
@@ -1482,7 +1625,8 @@ export function createAgentConversationModule({
       thinkingLevel,
       agentMode,
       customAgentTools,
-      autoCompactContext
+      autoCompactContext,
+      systemPrompt
     ).catch((error) => {
       if (sessionPromises.get(key) === promise) {
         sessionPromises.delete(key)
@@ -1496,6 +1640,83 @@ export function createAgentConversationModule({
 
   async function releaseChatSession(context: OusiaChatContext) {
     await clearSessionRuntimeState(sessionKey(context))
+  }
+
+  async function reloadConfiguration(options: { force?: boolean } = {}) {
+    const entries = [...sessionPromises.entries()]
+    const resolved = await Promise.all(
+      entries.map(async ([key, promise]) => [key, await promise] as const)
+    )
+    const reloadPreparation = await preparePiSessionsForConfigurationReload(
+      resolved.map(([, bundle]) => bundle.session),
+      Boolean(options.force)
+    )
+    if (reloadPreparation.status === "agent-running") {
+      writeRuntimeLog("pi.configuration", "warn", {
+        busySessionCount: reloadPreparation.busySessionCount,
+        message: "Deferred Pi configuration reload because agents are running",
+      })
+      return {
+        busySessionCount: reloadPreparation.busySessionCount,
+        reloadedSessionCount: 0,
+        status: "agent-running" as const,
+      }
+    }
+    await Promise.all(
+      resolved.map(([key]) => clearSessionRuntimeState(key, true))
+    )
+    writeRuntimeLog("pi.configuration", "info", {
+      forced: Boolean(options.force),
+      message: "Reloaded Pi configuration",
+      releasedSessionCount: resolved.length,
+      stoppedSessionCount: reloadPreparation.busySessionCount,
+    })
+    return {
+      busySessionCount: 0,
+      reloadedSessionCount: resolved.length,
+      status: "reloaded" as const,
+    }
+  }
+
+  async function getBuiltinSystemPrompt(
+    options: OusiaBuiltinSystemPromptOptions
+  ) {
+    ensurePiPackageDir()
+    const cwd = expandHomePath(options.projectPath)
+    const agentDir = resolvePiAgentDir()
+    mkdirSync(cwd, { recursive: true })
+    mkdirSync(agentDir, { recursive: true })
+    const settingsManager = SettingsManager.create(cwd, agentDir)
+    const resourceLoader = new DefaultResourceLoader({
+      agentDir,
+      cwd,
+      noContextFiles: true,
+      noExtensions: true,
+      noPromptTemplates: true,
+      noSkills: true,
+      noThemes: true,
+      settingsManager,
+    })
+    await resourceLoader.reload()
+    const { session } = await createAgentSession({
+      agentDir,
+      cwd,
+      resourceLoader,
+      sessionManager: SessionManager.inMemory(cwd),
+      settingsManager,
+      tools: toolsForAgentMode(
+        options.agentMode,
+        options.customAgentTools
+      ).filter((tool) => enabledTools.includes(tool)),
+    })
+    try {
+      if (!session.systemPrompt.trim()) {
+        throw new Error("Pi returned an empty built-in system prompt.")
+      }
+      return stripPiSystemPromptRuntimeDirectory(session.systemPrompt, cwd)
+    } finally {
+      session.dispose()
+    }
   }
 
   async function deleteChatSession(context: OusiaChatContext) {
@@ -1685,7 +1906,8 @@ export function createAgentConversationModule({
         thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
-        payload.autoCompactContext
+        payload.autoCompactContext,
+        payload.systemPrompt
       )
       await configureSessionBundle(
         bundle,
@@ -1888,7 +2110,8 @@ export function createAgentConversationModule({
         thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
-        payload.autoCompactContext
+        payload.autoCompactContext,
+        payload.systemPrompt
       )
       await configureSessionBundle(
         bundle,
@@ -1931,7 +2154,8 @@ export function createAgentConversationModule({
         thinkingLevel,
         payload.agentMode,
         payload.customAgentTools,
-        payload.autoCompactContext
+        payload.autoCompactContext,
+        payload.systemPrompt
       )
       await configureSessionBundle(
         bundle,
@@ -1959,11 +2183,13 @@ export function createAgentConversationModule({
     deleteChatSession,
     exportChat,
     getContextUsage,
+    getBuiltinSystemPrompt,
     getChatHistory,
     getChatToolPayload,
     interruptChat,
     moveChatSession,
     releaseChatSession,
+    reloadConfiguration,
     sendChatMessage,
     dispose,
   }

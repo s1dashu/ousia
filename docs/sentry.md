@@ -16,9 +16,12 @@ never pass messages, paths, account identifiers, provider responses, or user
 content as diagnostic metadata. Update checks/downloads and telemetry delivery
 use this boundary so operational failures do not disappear into local logs.
 
-A build with no product DSN is explicitly disabled and
-records `sentry.init` with `dsn_not_configured` in the local runtime log.
-Development builds also require `<PRODUCT>_SENTRY_ENABLE_IN_DEVELOPMENT=1`.
+A normal development, test, package, or production build is explicitly disabled
+and records `sentry.init` with `dsn_not_configured` in the local runtime log,
+even when ignored local environment files contain Sentry values. Sentry can only
+be enabled when the formal release orchestrator sets the internal
+`<PRODUCT>_SENTRY_RELEASE_BUILD=1` marker. Do not set that marker in `.env` files
+or ordinary developer commands.
 The Vite composition explicitly loads the normal mode-specific Vite environment
 files, including ignored `.env.local`, from the repository root before applying
 process-environment overrides. Never derive that root from `process.cwd()`:
@@ -40,8 +43,8 @@ enable them only after an explicit privacy/retention decision with
 
 ## Build and source maps
 
-An enabled production build fails unless all three build-only source-map values
-are present:
+The formal release build fails unless the DSN and all three build-only
+source-map values are present:
 
 - `SENTRY_AUTH_TOKEN`
 - `SENTRY_ORG`
@@ -62,12 +65,12 @@ by `@sentry/vite-plugin` and must never be shipped. Source maps are generated as
 hidden maps, uploaded to the exact `<release-name>@<package-version>` release,
 and excluded from the packaged application by Forge.
 
-The build rejects malformed DSNs, partial upload credentials, and non-boolean
-feature flags instead of silently producing an unobservable release. Every DMG
-and full macOS release additionally inspects the packaged main bundle for the
-exact enabled release marker and refuses to create a distributable when Sentry
-was compiled out. Development-only `npm run package` may remain explicitly
-disabled for credential-free local packaging.
+The release build rejects malformed DSNs, partial upload credentials, and
+non-boolean feature flags instead of silently producing an unobservable
+release. The full macOS release additionally inspects the packaged main bundle
+for the exact enabled release marker and refuses to create a distributable when
+Sentry was compiled out. `npm run build`, `npm run package`, and the local DMG
+commands force Sentry off and never load its Keychain token.
 
 Electron Forge builds main, preload, and renderer targets concurrently. Each
 Sentry Vite plugin must scan only the source maps owned by that target: main

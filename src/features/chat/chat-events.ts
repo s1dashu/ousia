@@ -306,14 +306,14 @@ export function applyChatEvent(
     return items
   } else if (event.type === "run_status") {
     let next: ChatItem[] | undefined = event.text ? [...items] : undefined
-    if (event.status === "finished") {
+    if (event.status === "finished" || event.status === "error") {
       for (let index = 0; index < items.length; index += 1) {
         const item = items[index]
         if (item.role === "tool" && item.status === "running") {
           next ??= [...items]
           next[index] = {
             ...item,
-            status: "finished",
+            status: event.status === "error" ? "failed" : "finished",
           }
         }
       }

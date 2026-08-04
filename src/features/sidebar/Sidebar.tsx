@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -33,11 +34,16 @@ import {
   useVelocity,
   type MotionValue,
 } from "framer-motion"
+import ousiaLogo from "../../../docs/media/ousia-logo.png"
 import {
+  ChevronRight,
+  ExtensionsGrid,
   FolderOpen,
-  MoreHorizontal,
+  Plus,
+  Search,
+  SidebarActions,
   Settings,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages } from "@/app/i18n"
@@ -88,15 +94,20 @@ import {
   sidebarListGapClass,
   sidebarMenuIconSize,
   sidebarMenuIconXClass,
+  sidebarNavigationPaddingXClass,
   sidebarProjectSessionCompactCount,
   sidebarProjectSessionGridClass,
   sidebarProjectSessionPreviewCount,
+  sidebarProjectSessionRowXClass,
+  sidebarRowHeightClass,
   sidebarRowStateClass,
-  sidebarRowXClass,
   sidebarScrollPaddingXClass,
   sidebarScrollRevealPadding,
+  sidebarSectionHeaderXClass,
+  sidebarSectionIconSize,
   sidebarSessionRowXClass,
   sidebarSingleActionGridClass,
+  sidebarSelectedRowClass,
 } from "@/features/sidebar/sidebar-layout"
 
 type SidebarMoveSessionTarget = {
@@ -105,10 +116,17 @@ type SidebarMoveSessionTarget = {
   targetSessionId?: string
 }
 
+export type SidebarUtilityDestination =
+  | "new-task"
+  | "search"
+  | "extensions"
+
 const sidebarDragTiltAt = 800
 const sidebarDragTiltMax = 2.5
+const sidebarDockedSectionHeaderHeight = 34
 
 type SidebarProps = {
+  activeSidebarUtilityDestination: SidebarUtilityDestination | null
   onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onCreateSession: () => void
@@ -118,6 +136,7 @@ type SidebarProps = {
   onMoveSession: (target: SidebarMoveSessionTarget) => void | Promise<void>
   onOpenProject: () => void
   onOpenSettings: () => void
+  onSelectSidebarUtilityDestination: (destination: SidebarUtilityDestination) => void
   onShowDefaultSessionInFolder: () => void
   onShowProjectInFolder: (projectId: string) => void
   onUpdateAction: () => void
@@ -198,6 +217,7 @@ function AnimatedDragPreview({
 }
 
 function SidebarComponent({
+  activeSidebarUtilityDestination,
   onArchiveProject,
   onCreateProjectSession,
   onCreateSession,
@@ -207,6 +227,7 @@ function SidebarComponent({
   onMoveSession,
   onOpenProject,
   onOpenSettings,
+  onSelectSidebarUtilityDestination,
   onShowDefaultSessionInFolder,
   onShowProjectInFolder,
   onUpdateAction,
@@ -239,6 +260,7 @@ function SidebarComponent({
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<
     OusiaSidebarSectionId[]
   >([])
+  const [isSessionsDocked, setIsSessionsDocked] = useState(false)
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(
     null
   )
@@ -261,6 +283,32 @@ function SidebarComponent({
       : defaultSessions
   const visibleSidebarSectionOrder =
     normalizeOusiaSidebarSectionOrder(sidebarSectionOrder)
+  const canDockSessionsToBottom =
+    visibleSidebarSectionOrder.at(-1) === "sessions"
+  const utilityDestinations = [
+    {
+      id: "new-task",
+      icon: Plus,
+      label: t.sidebar.utilityNewTask,
+    },
+    {
+      id: "search",
+      icon: Search,
+      label: t.sidebar.utilitySearch,
+    },
+    {
+      id: "extensions",
+      icon: ExtensionsGrid,
+      label: t.sidebar.utilityExtensions,
+    },
+  ] satisfies Array<{
+    id: SidebarUtilityDestination
+    icon: typeof Plus
+    label: string
+  }>
+  const visibleUtilityDestinations = utilityDestinations.filter(
+    (destination) => destination.id !== "new-task"
+  )
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -289,6 +337,47 @@ function SidebarComponent({
     editingInputRef.current?.focus()
     editingInputRef.current?.select()
   }, [editingSessionId])
+
+  const updateSessionsDocked = useCallback(() => {
+    const container = scrollContainerRef.current
+    const sessionsSection = container?.querySelector<HTMLElement>(
+      '[data-sidebar-section-id="sessions"]'
+    )
+
+    if (!canDockSessionsToBottom || !container || !sessionsSection) {
+      setIsSessionsDocked(false)
+      return
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const sessionsRect = sessionsSection.getBoundingClientRect()
+    const shouldDock =
+      sessionsRect.top >
+      containerRect.bottom - sidebarDockedSectionHeaderHeight
+
+    setIsSessionsDocked((current) =>
+      current === shouldDock ? current : shouldDock
+    )
+  }, [canDockSessionsToBottom])
+
+  useEffect(() => {
+    const animationFrameId = window.requestAnimationFrame(
+      updateSessionsDocked
+    )
+    window.addEventListener("resize", updateSessionsDocked)
+
+    return () => {
+      window.cancelAnimationFrame(animationFrameId)
+      window.removeEventListener("resize", updateSessionsDocked)
+    }
+  }, [
+    canDockSessionsToBottom,
+    collapsedSectionIds,
+    expandedProjectIds,
+    projects,
+    sessions,
+    updateSessionsDocked,
+  ])
 
   useEffect(() => {
     if (!scrollTargetSessionId) {
@@ -388,6 +477,23 @@ function SidebarComponent({
         ? current.filter((id) => id !== sectionId)
         : [...current, sectionId]
     )
+  }
+
+  function revealSessionsSection() {
+    const container = scrollContainerRef.current
+    const sessionsSection = container?.querySelector<HTMLElement>(
+      '[data-sidebar-section-id="sessions"]'
+    )
+    if (!container || !sessionsSection) {
+      throw new Error("Cannot reveal the conversations sidebar section")
+    }
+
+    const containerRect = container.getBoundingClientRect()
+    const sessionsRect = sessionsSection.getBoundingClientRect()
+    container.scrollTo({
+      top: container.scrollTop + sessionsRect.top - containerRect.top,
+      behavior: "smooth",
+    })
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -538,6 +644,43 @@ function SidebarComponent({
     )
   }
 
+  function renderDefaultSessionActions() {
+    return isDefaultSessionSelected ? (
+      <DropdownMenu modal={false}>
+        <SidebarActionTooltip label={t.sidebar.defaultSessionActions}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
+              aria-label={t.sidebar.defaultSessionActions}
+              onClick={(event) => event.stopPropagation()}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <SidebarActions
+                className={`${sidebarMenuIconXClass} text-muted-foreground`}
+                size={sidebarMenuIconSize}
+                strokeWidth={sidebarIconStrokeWidth}
+              />
+            </Button>
+          </DropdownMenuTrigger>
+        </SidebarActionTooltip>
+        <DropdownMenuContent align="end" className="w-auto min-w-44">
+          <DropdownMenuItem
+            onClick={(event) => {
+              event.stopPropagation()
+              onShowDefaultSessionInFolder()
+            }}
+          >
+            <FolderOpen className="text-muted-foreground" />
+            {t.sidebar.openDefaultSessionFolder}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : undefined
+  }
+
   function renderSessionsSection() {
     return (
       <SortableSidebarSection
@@ -549,42 +692,7 @@ function SidebarComponent({
         toggleLabel={t.sidebar.toggleSection(t.sidebar.sessions)}
         onAction={onCreateSession}
         onToggleCollapsed={toggleSidebarSection}
-        beforeAction={
-          isDefaultSessionSelected ? (
-            <DropdownMenu modal={false}>
-              <SidebarActionTooltip label={t.sidebar.defaultSessionActions}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
-                    aria-label={t.sidebar.defaultSessionActions}
-                    onClick={(event) => event.stopPropagation()}
-                    onPointerDown={(event) => event.stopPropagation()}
-                  >
-                    <MoreHorizontal
-                      className={`${sidebarMenuIconXClass} text-muted-foreground`}
-                      size={sidebarMenuIconSize}
-                      strokeWidth={sidebarIconStrokeWidth}
-                    />
-                  </Button>
-                </DropdownMenuTrigger>
-              </SidebarActionTooltip>
-              <DropdownMenuContent align="end" className="w-auto min-w-44">
-                <DropdownMenuItem
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onShowDefaultSessionInFolder()
-                  }}
-                >
-                  <FolderOpen className="text-muted-foreground" />
-                  {t.sidebar.openDefaultSessionFolder}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : undefined
-        }
+        beforeAction={renderDefaultSessionActions()}
       >
         <SortableContext
           items={visibleDefaultSessions.map((session) => session.id)}
@@ -599,7 +707,7 @@ function SidebarComponent({
               )
             ) : (
               <div
-                className={`h-9 text-sm leading-9 text-muted-foreground/45 ${sidebarEmptySectionRowXClass}`}
+                className={`${sidebarRowHeightClass} text-sm leading-[30px] text-muted-foreground/45 ${sidebarEmptySectionRowXClass}`}
               >
                 {t.sidebar.noSessions}
               </div>
@@ -608,7 +716,7 @@ function SidebarComponent({
               <button
                 type="button"
                 className={[
-                  "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
+                  `font-radix-regular grid ${sidebarRowHeightClass} items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground`,
                   sidebarSingleActionGridClass,
                   sidebarSessionRowXClass,
                 ].join(" ")}
@@ -692,17 +800,20 @@ function SidebarComponent({
                               })
                             )
                           ) : (
-                            <div className="h-9 px-3 text-sm leading-9 text-muted-foreground/45">
-                              {t.sidebar.noSessions}
+                            <div
+                              className={`grid ${sidebarRowHeightClass} ${sidebarProjectSessionGridClass} ${sidebarProjectSessionRowXClass} items-center text-sm text-muted-foreground/45`}
+                            >
+                              <span aria-hidden="true" />
+                              <span>{t.sidebar.noSessions}</span>
                             </div>
                           )}
                           {canCompactProjectSessions ? (
                             <button
                               type="button"
                               className={[
-                                "font-radix-regular grid h-8 items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground",
+                                `font-radix-regular grid ${sidebarRowHeightClass} items-center text-left text-xs text-muted-foreground/65 outline-none hover:text-muted-foreground focus-visible:text-muted-foreground`,
                                 sidebarProjectSessionGridClass,
-                                sidebarRowXClass,
+                                sidebarProjectSessionRowXClass,
                               ].join(" ")}
                               onMouseDown={handleTextButtonMouseDown}
                               onClick={() => {
@@ -730,7 +841,7 @@ function SidebarComponent({
             })}
             {!projects.length ? (
               <div
-                className={`h-9 text-sm leading-9 text-muted-foreground/45 ${sidebarEmptySectionRowXClass}`}
+                className={`${sidebarRowHeightClass} text-sm leading-[30px] text-muted-foreground/45 ${sidebarEmptySectionRowXClass}`}
               >
                 {t.sidebar.noProjects}
               </div>
@@ -771,27 +882,137 @@ function SidebarComponent({
     >
       <div className="window-drag h-[var(--ousia-titlebar-height)] shrink-0" />
 
-      <div
-        ref={scrollContainerRef}
-        className={`ousia-hover-scrollbar ousia-sidebar-scrollbar-gutter min-h-0 flex-1 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
+      <header
+        aria-label="Ousia"
+        className="flex h-8 shrink-0 items-center gap-2 pt-0.5 pr-3 pb-1.5 pl-4"
       >
-        <DndContext
-          sensors={sensors}
-          collisionDetection={sidebarCollisionDetection}
-          onDragAbort={handleDragCancel}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
+        <span
+          aria-hidden="true"
+          className="flex size-[18px] shrink-0 -translate-x-[3px] items-center justify-center"
         >
-          <SortableContext
-            items={visibleSidebarSectionOrder}
-            strategy={verticalListSortingStrategy}
+          <img
+            src={ousiaLogo}
+            alt=""
+            className="size-[18px] rounded-[5px]"
+          />
+        </span>
+        <span className="-ml-[3px] truncate pt-px text-[18px] leading-[18px] font-semibold tracking-[-0.01em]">
+          Ousia
+        </span>
+      </header>
+
+      <nav
+        aria-label={t.sidebar.utilityNavigation}
+        className={`${sidebarNavigationPaddingXClass} shrink-0 pb-3`}
+      >
+        <div className="flex flex-col gap-0.5">
+          {visibleUtilityDestinations.map((destination) => {
+            const Icon = destination.icon
+            const isActive = activeSidebarUtilityDestination === destination.id
+            return (
+              <Button
+                key={destination.id}
+                type="button"
+                variant="ghost"
+                className={[
+                  `font-radix-regular mr-1 ${sidebarRowHeightClass} justify-start gap-2 rounded-[var(--ousia-sidebar-selected-radius)] border-0 bg-clip-border px-3 text-sm focus-visible:border-0`,
+                  "ousia-squircle-corners",
+                  isActive ? sidebarSelectedRowClass : sidebarRowStateClass,
+                ].join(" ")}
+                aria-current={isActive ? "page" : undefined}
+                onClick={() => onSelectSidebarUtilityDestination(destination.id)}
+              >
+                <Icon
+                  className="-ml-1"
+                  size={18}
+                  strokeWidth={sidebarIconStrokeWidth}
+                />
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {destination.label}
+                </span>
+              </Button>
+            )
+          })}
+        </div>
+      </nav>
+
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollContainerRef}
+          className={`ousia-hover-scrollbar ousia-sidebar-scrollbar-gutter h-full min-h-0 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
+          onScroll={updateSessionsDocked}
+        >
+          <DndContext
+            sensors={sensors}
+            collisionDetection={sidebarCollisionDetection}
+            onDragAbort={handleDragCancel}
+            onDragStart={handleDragStart}
+            onDragMove={handleDragMove}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
           >
-            {visibleSidebarSectionOrder.map(renderSidebarSection)}
-          </SortableContext>
-          {createPortal(dragOverlay, document.body)}
-        </DndContext>
+            <SortableContext
+              items={visibleSidebarSectionOrder}
+              strategy={verticalListSortingStrategy}
+            >
+              {visibleSidebarSectionOrder.map(renderSidebarSection)}
+            </SortableContext>
+            {createPortal(dragOverlay, document.body)}
+          </DndContext>
+        </div>
+
+        {isSessionsDocked ? (
+          <div
+            className={`absolute inset-x-0 bottom-0 z-10 bg-sidebar ${sidebarScrollPaddingXClass}`}
+          >
+            <div
+              className={[
+                "grid cursor-pointer items-center gap-1 bg-sidebar pt-2 pb-0.5",
+                isDefaultSessionSelected
+                  ? "grid-cols-[minmax(0,1fr)_24px_24px]"
+                  : sidebarSingleActionGridClass,
+                sidebarSectionHeaderXClass,
+              ].join(" ")}
+              aria-expanded="false"
+              onClick={revealSessionsSection}
+            >
+              <div className="flex min-w-0 items-center gap-1">
+                <div className="font-radix-regular min-w-0 truncate text-sm text-muted-foreground">
+                  {t.sidebar.sessions}
+                </div>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="shrink-0 text-muted-foreground"
+                  size={sidebarSectionIconSize}
+                  strokeWidth={sidebarIconStrokeWidth}
+                />
+                <span className="sr-only">
+                  {t.sidebar.toggleSection(t.sidebar.sessions)}
+                </span>
+              </div>
+              {renderDefaultSessionActions()}
+              <SidebarActionTooltip label={t.sidebar.newSession}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
+                  aria-label={t.sidebar.newSession}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onCreateSession()
+                  }}
+                >
+                  <Plus
+                    className="text-muted-foreground"
+                    size={sidebarSectionIconSize}
+                    strokeWidth={sidebarIconStrokeWidth}
+                  />
+                </Button>
+              </SidebarActionTooltip>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -800,7 +1021,7 @@ function SidebarComponent({
         <Button
           type="button"
           variant="ghost"
-          className={`font-radix-regular h-9 min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
+          className={`font-radix-regular ${sidebarRowHeightClass} min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
           <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />

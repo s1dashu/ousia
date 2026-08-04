@@ -1,7 +1,7 @@
 import { memo, type CSSProperties } from "react"
 
 import { getMessages } from "@/app/i18n"
-import { ArrowLeft } from "@/components/icons/huge-icons"
+import { ArrowLeft } from "@/components/icons/nucleo-icons"
 import type { OusiaAgentProvider, OusiaLanguage } from "@/electron/chat-types"
 import {
   getSettingsNavigationItems,

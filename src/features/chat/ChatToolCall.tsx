@@ -7,6 +7,7 @@ import {
   useState,
   type CSSProperties,
 } from "react"
+import JsonView from "@uiw/react-json-view"
 import {
   ChevronDown,
   Clock,
@@ -19,7 +20,7 @@ import {
   Pencil,
   Sparkles,
   Terminal,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 
 import type { getMessages } from "@/app/i18n"
 import type { ChatItem } from "@/features/chat/chat-events"
@@ -583,14 +584,15 @@ function ToolPayloadSection({
   value: string
   tone?: "default" | "warning"
 }) {
-  const preRef = useRef<HTMLPreElement>(null)
+  const payloadRef = useRef<HTMLDivElement>(null)
   const [isFollowingLatest, setIsFollowingLatest] = useState(true)
+  const jsonValue = useMemo(() => parseToolJson(value), [value])
 
   useLayoutEffect(() => {
     if (!isFollowingLatest) {
       return
     }
-    const node = preRef.current
+    const node = payloadRef.current
     if (!node) {
       return
     }
@@ -607,8 +609,8 @@ function ToolPayloadSection({
       >
         {title}
       </h4>
-      <pre
-        ref={preRef}
+      <div
+        ref={payloadRef}
         onScroll={(event) => {
           const node = event.currentTarget
           setIsFollowingLatest(
@@ -616,13 +618,28 @@ function ToolPayloadSection({
           )
         }}
         className={cn(
-          "ousia-hover-scrollbar ousia-squircle-corners max-h-48 overflow-auto rounded-[4px] bg-background/75 px-2.5 py-1.5 font-mono text-[11px] leading-4 whitespace-pre-wrap text-muted-foreground",
+          "ousia-tool-payload ousia-hover-scrollbar ousia-squircle-corners max-h-48 overflow-auto rounded-[4px] px-2.5 py-1.5 font-mono text-[11px] leading-4 text-muted-foreground",
           tone === "warning" &&
-            "bg-[var(--ousia-tool-warning-bg)] text-[var(--ousia-tool-warning-strong)]"
+            "ousia-tool-payload-warning bg-[var(--ousia-tool-warning-bg)] text-[var(--ousia-tool-warning-strong)]"
         )}
       >
-        {formatToolPayloadForDisplay(value)}
-      </pre>
+        {jsonValue ? (
+          <JsonView
+            className="ousia-tool-json-view"
+            value={jsonValue}
+            displayDataTypes={false}
+            displayObjectSize
+            enableClipboard
+            highlightUpdates={false}
+            indentWidth={14}
+            shortenTextAfterLength={80}
+          />
+        ) : (
+          <pre className="whitespace-pre-wrap">
+            {formatToolPayloadForDisplay(value)}
+          </pre>
+        )}
+      </div>
     </section>
   )
 }
@@ -837,6 +854,19 @@ function formatToolPayloadForDisplay(value: string) {
     return prettifyToolJson(JSON.parse(trimmed))
   } catch {
     return unescapeVisibleText(value)
+  }
+}
+
+function parseToolJson(value: string): object | null {
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return {}
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown
+    return parsed !== null && typeof parsed === "object" ? parsed : null
+  } catch {
+    return null
   }
 }
 

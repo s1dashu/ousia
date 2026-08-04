@@ -13,15 +13,18 @@ import {
   Eye,
   EyeOff,
   FolderOpen,
+  LoaderCircle,
   Plus,
   Trash2,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 
 import { getMessages, languageOptions } from "@/app/i18n"
 import { getConfiguredModelPresets, providerLabel } from "@/app/model-presets"
 import type { AppSettings } from "@/app/app-state"
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { useTheme, type Theme } from "@/components/theme-provider"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/components/ui/toast"
 import {
   Tooltip,
   TooltipContent,
@@ -75,14 +78,18 @@ const appearanceColorScales: Array<{
   description: string
 }> = [
   {
+    label: "Gray",
+    value: "gray",
+    description: "Default · near-white sidebar using the global neutral gray",
+  },
+  {
     label: "Mist",
     value: "mist",
-    description: "Default · near-white sidebar with a soft sky-blue slate tint",
+    description: "Near-white sidebar with a soft sky-blue slate tint",
   },
   { label: "Tea", value: "tea", description: "" },
   { label: "Paper", value: "paper", description: "#FAFAF8 paper surfaces" },
   { label: "Sand", value: "sand", description: "" },
-  { label: "Gray", value: "gray", description: "" },
   { label: "Slate", value: "slate", description: "" },
   { label: "Mauve", value: "mauve", description: "" },
   { label: "Sage", value: "sage", description: "" },
@@ -99,6 +106,8 @@ type SettingsPageProps = {
   >
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSettingsChange: (settings: AppSettings) => void
+  onBuiltinSystemPromptLoad: () => Promise<string>
+  onSystemPromptSave: (systemPrompt: string) => Promise<void>
   onRestoreArchivedSessions: (sessionIds: string[]) => Promise<void>
   projects: ProjectRecord[]
   sessions: SessionRecord[]
@@ -204,6 +213,8 @@ function SettingsPageComponent({
   onRefreshCodexEnvironment,
   onRefreshModelRegistry,
   onSettingsChange,
+  onBuiltinSystemPromptLoad,
+  onSystemPromptSave,
   onRestoreArchivedSessions,
   projects,
   sessions,
@@ -225,7 +236,13 @@ function SettingsPageComponent({
   >(null)
   const [codexError, setCodexError] = useState("")
   const [providerError, setProviderError] = useState("")
+  const [isEditingSystemPrompt, setIsEditingSystemPrompt] = useState(false)
+  const [isLoadingSystemPrompt, setIsLoadingSystemPrompt] = useState(false)
+  const [isRestoringSystemPrompt, setIsRestoringSystemPrompt] = useState(false)
+  const [isSavingSystemPrompt, setIsSavingSystemPrompt] = useState(false)
+  const [systemPromptLoadError, setSystemPromptLoadError] = useState("")
   const { setTheme } = useTheme()
+  const toast = useToast()
   const t = getMessages(draft.language)
   const themeOptions: Array<{
     label: string
@@ -316,6 +333,51 @@ function SettingsPageComponent({
     }
   }, [activeSection])
 
+  useEffect(() => {
+    if (activeSection !== "systemPrompt" || settings.systemPrompt.trim()) {
+      return
+    }
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) {
+        return
+      }
+      setIsLoadingSystemPrompt(true)
+      setSystemPromptLoadError("")
+      void onBuiltinSystemPromptLoad()
+        .then((prompt) => {
+          if (!cancelled) {
+            setDraft((current) => ({ ...current, systemPrompt: prompt }))
+          }
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setSystemPromptLoadError(
+              error instanceof Error && error.message
+                ? error.message
+                : t.settings.systemPromptLoadFailed
+            )
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsLoadingSystemPrompt(false)
+          }
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeSection,
+    onBuiltinSystemPromptLoad,
+    settings.defaultAgentProvider,
+    settings.codexModelId,
+    settings.modelId,
+    settings.systemPrompt,
+    t.settings.systemPromptLoadFailed,
+  ])
+
   function updateDraft(patch: Partial<AppSettings>) {
     setDraft((current) => ({
       ...current,
@@ -333,6 +395,51 @@ function SettingsPageComponent({
       ...nextSettings,
     }))
     onSettingsChange(nextSettings)
+  }
+
+  async function saveSystemPrompt() {
+    setIsSavingSystemPrompt(true)
+    try {
+      await Promise.all([
+        onSystemPromptSave(draft.systemPrompt),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 450)),
+      ])
+      setIsEditingSystemPrompt(false)
+      toast(t.settings.systemPromptSaved)
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t.settings.systemPromptSaveFailed
+      toast(message, { variant: "error" })
+    } finally {
+      setIsSavingSystemPrompt(false)
+    }
+  }
+
+  async function restoreDefaultSystemPrompt() {
+    setIsRestoringSystemPrompt(true)
+    try {
+      await Promise.all([
+        onSystemPromptSave(""),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 450)),
+      ])
+      const builtinPrompt = await onBuiltinSystemPromptLoad()
+      setDraft((current) => ({
+        ...current,
+        systemPrompt: builtinPrompt,
+      }))
+      setIsEditingSystemPrompt(false)
+      toast(t.settings.systemPromptRestored)
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t.settings.systemPromptSaveFailed
+      toast(message, { variant: "error" })
+    } finally {
+      setIsRestoringSystemPrompt(false)
+    }
   }
 
   function applyThemeSetting(nextTheme: Theme) {
@@ -792,11 +899,13 @@ function SettingsPageComponent({
         ? t.settings.appearance
         : activeSection === "conversation"
           ? t.settings.conversationSettings
-          : activeSection === "archivedSessions"
-            ? t.settings.archivedSessions
-            : draft.defaultAgentProvider === "pi"
-              ? t.settings.piSettings
-              : t.settings.codexSettings
+          : activeSection === "systemPrompt"
+            ? t.settings.systemPrompt
+            : activeSection === "archivedSessions"
+              ? t.settings.archivedSessions
+              : draft.defaultAgentProvider === "pi"
+                ? t.settings.piSettings
+                : t.settings.codexSettings
 
   return (
     <section
@@ -1294,6 +1403,88 @@ function SettingsPageComponent({
                 }
               />
             </SettingsGroup>
+          ) : null}
+
+          {activeSection === "systemPrompt" ? (
+            <section className="grid gap-3 px-1">
+              <div className="grid gap-1">
+                <h2 className="text-sm font-medium text-foreground">
+                  {t.settings.systemPrompt}
+                </h2>
+                <p className="text-sm leading-5 text-muted-foreground">
+                  {t.settings.systemPromptDescription}
+                </p>
+              </div>
+              <div className="grid gap-3">
+                <Textarea
+                  aria-label={t.settings.systemPrompt}
+                  className="field-sizing-fixed h-[32rem] min-h-64 max-h-[60vh] resize-y overflow-y-auto font-mono text-sm leading-6"
+                  disabled={isLoadingSystemPrompt}
+                  placeholder={t.settings.systemPromptPlaceholder}
+                  readOnly={
+                    !isEditingSystemPrompt ||
+                    isSavingSystemPrompt ||
+                    isRestoringSystemPrompt
+                  }
+                  value={draft.systemPrompt}
+                  onChange={(event) =>
+                    updateDraft({ systemPrompt: event.target.value })
+                  }
+                />
+                {systemPromptLoadError ? (
+                  <p className="text-sm text-destructive" role="alert">
+                    {systemPromptLoadError}
+                  </p>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      isLoadingSystemPrompt ||
+                      isSavingSystemPrompt ||
+                      isRestoringSystemPrompt
+                    }
+                    onClick={() => void restoreDefaultSystemPrompt()}
+                  >
+                    {isRestoringSystemPrompt ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : null}
+                    {isRestoringSystemPrompt
+                      ? t.settings.restarting
+                      : t.settings.restoreDefaultSystemPrompt}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={
+                      isLoadingSystemPrompt ||
+                      isSavingSystemPrompt ||
+                      isRestoringSystemPrompt ||
+                      Boolean(systemPromptLoadError) ||
+                      (isEditingSystemPrompt && !draft.systemPrompt.trim())
+                    }
+                    onClick={() => {
+                      if (!isEditingSystemPrompt) {
+                        setIsEditingSystemPrompt(true)
+                        return
+                      }
+                      void saveSystemPrompt()
+                    }}
+                  >
+                    {isSavingSystemPrompt ? (
+                      <LoaderCircle className="animate-spin" />
+                    ) : null}
+                    {isSavingSystemPrompt
+                      ? t.settings.restarting
+                      : isEditingSystemPrompt
+                        ? t.settings.saveSystemPrompt
+                        : t.app.edit}
+                  </Button>
+                </div>
+              </div>
+            </section>
           ) : null}
 
           {activeSection === "provider" &&

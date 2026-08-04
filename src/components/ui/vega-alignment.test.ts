@@ -21,9 +21,11 @@ describe("Vega component alignment", () => {
     for (const relativePath of [
       "src/components/ui/dropdown-menu.tsx",
       "src/components/ui/select.tsx",
+      "src/features/settings/SettingsSelect.tsx",
     ]) {
       expect(readSource(relativePath)).toContain("ui-popup-scrollbar")
     }
+    expect(readSource("src/index.css")).toContain(".ui-popup-scrollbar")
   })
 
   it("does not override Vega menu geometry in chat compositions", () => {
@@ -44,10 +46,10 @@ describe("Vega component alignment", () => {
     expect(chatHeader).not.toContain("text-neutral-500")
   })
 
-  it("retains the business separators while using the standard recipe", () => {
+  it("retains the business separator while using the standard recipe", () => {
     const chatArea = readSource("src/features/chat/ChatArea.tsx")
     const separators = chatArea.match(/<DropdownMenuSeparator \/>/g) ?? []
 
-    expect(separators).toHaveLength(2)
+    expect(separators).toHaveLength(1)
   })
 })

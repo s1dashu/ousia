@@ -39,15 +39,26 @@
 - Persistence and session deletion must remain atomic, observable, and covered by tests.
 - Runtime and Sentry diagnostics must not log prompt, response, tool payload, credential, or private file content.
 
-## Required validation
+## Validation policy
 
-Run these before handing off a functional change:
+Keep the normal development loop proportional to the change:
 
-```sh
-npm test
-npm run typecheck
-npm run lint
-npm run build
-```
+- During routine development, default to linting only the changed source files.
+  Do not automatically run targeted tests or `npm run typecheck` after each
+  small edit.
+- Run additional targeted checks during the daily loop only when the user asks
+  for them or when a change is high-risk and delaying validation would make a
+  likely failure materially harder to diagnose.
+- Do not run `npm run build` for routine styling, copy, or isolated component
+  changes. Production packaging is a checkpoint, not a per-edit requirement.
+- Run `npm run verify:full` before committing, at periodic integration
+  checkpoints, before a release, after dependency/build-system changes or broad
+  refactors, or when the user explicitly requests full validation.
+- Full build/package commands must run serially. They share `.vite/build` and
+  can fail or corrupt validation results when run concurrently.
 
 For release or packaging changes, also run the relevant signed/notarized macOS release workflow and verify the produced application and installer with Apple tooling before publishing.
+
+Sentry is release-only. Development, tests, `npm run build`, local packaging,
+and local DMG commands must keep it disabled. Only the explicit formal release
+workflow may enable Sentry and load source-map upload credentials.

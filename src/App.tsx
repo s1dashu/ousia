@@ -38,7 +38,10 @@ import {
   shouldRetryChatHistoryAfterSelection,
   shouldScheduleAutomaticChatHistoryRetry,
 } from "@/app/chat-history-state"
-import { discardSupersededPendingChatEvents } from "@/app/chat-recovery-state"
+import {
+  discardSupersededPendingChatEvents,
+  reconcileCompletedChatItems,
+} from "@/app/chat-recovery-state"
 import {
   moveSessionToGroupFront,
   moveSessionToProjectGroup,
@@ -69,12 +72,18 @@ import {
 } from "@/features/chat/pending-chat-events"
 import { ChatArea } from "@/features/chat/ChatArea"
 import { applyChatEvent, type ChatItem } from "@/features/chat/chat-events"
+import { ExtensionsPage } from "@/features/extensions/ExtensionsPage"
 import type { SettingsSectionId } from "@/features/settings/settings-navigation"
 import { SettingsPage } from "@/features/settings/SettingsPage"
 import { SettingsSidebar } from "@/features/settings/SettingsSidebar"
 import { TitleBarSidebarToggle } from "@/features/shell/TitleBarTrafficLightSlot"
-import { Sidebar } from "@/features/sidebar/Sidebar"
+import {
+  Sidebar,
+  type SidebarUtilityDestination,
+} from "@/features/sidebar/Sidebar"
+import { MAIN_PANEL_LEFT_CORNERS_CLASS } from "@/features/shell/main-panel-styles"
 import { useStableEvent } from "@/lib/use-stable-event"
+import { ChatSearchCommand } from "@/features/search/ChatSearchCommand"
 
 const MIN_SIDEBAR_WIDTH = 200
 const SIDEBAR_COLLAPSE_THRESHOLD = 120
@@ -176,6 +185,12 @@ export function App() {
   const [settings, setSettings] = useState<AppSettings>(initialState.settings)
   const t = getMessages(settings.language)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [activeSidebarUtilityDestination, setActiveSidebarUtilityDestination] =
+    useState<SidebarUtilityDestination | null>(null)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchScope, setSearchScope] = useState<"all" | "current">("all")
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0)
+  const [chatScrollTargetItemId, setChatScrollTargetItemId] = useState("")
   const [activeSettingsSection, setActiveSettingsSection] =
     useState<SettingsSectionId>("general")
   const [modelRegistry, setModelRegistry] = useState<OusiaModelRegistryResult>()
@@ -423,6 +438,41 @@ export function App() {
     },
     [isAppStateLoaded, settings.autoRetryOnFailure]
   )
+
+  const handleSystemPromptSave = useCallback(
+    async (systemPrompt: string) => {
+      if (!window.ousia || !isAppStateLoaded) {
+        throw new Error(getMessages(settings.language).chat.noElectron)
+      }
+      const normalizedSettings = normalizeOusiaAppSettings({
+        ...settings,
+        systemPrompt,
+      })
+      const saveResult = await window.ousia.saveAppSettings({
+        settings: normalizedSettings,
+      })
+      if (!saveResult.ok) {
+        throw new Error(saveResult.error)
+      }
+      setSettings(saveResult.state.settings)
+      const reloadResult = await window.ousia.reloadAgentConfiguration()
+      if (!reloadResult.ok) {
+        throw new Error(reloadResult.error)
+      }
+    },
+    [isAppStateLoaded, settings]
+  )
+
+  const handleBuiltinSystemPromptLoad = useCallback(async () => {
+    if (!window.ousia) {
+      throw new Error(getMessages(settings.language).chat.noElectron)
+    }
+    const result = await window.ousia.getBuiltinSystemPrompt()
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    return result.prompt
+  }, [settings.language])
 
   const refreshModelRegistry = useCallback(async () => {
     if (!window.ousia) {
@@ -940,11 +990,39 @@ export function App() {
         ) {
           return
         }
+        const liveToolStatusById = new Map(
+          (itemsBySessionRef.current[targetKey] ?? []).flatMap((item) =>
+            item.role === "tool"
+              ? [[item.id, item.status] as const]
+              : []
+          )
+        )
+        const preventedToolStatusDowngrades = history.items.filter(
+          (item) =>
+            item.role === "tool" &&
+            item.status === "running" &&
+            liveToolStatusById.get(item.id) !== undefined &&
+            liveToolStatusById.get(item.id) !== "running"
+        )
+        if (preventedToolStatusDowngrades.length) {
+          console.warn(
+            "[chat.recovery] Prevented stale history from reviving terminal tools",
+            {
+              projectPath: context.projectPath,
+              sessionId: context.sessionId,
+              toolCount: preventedToolStatusDowngrades.length,
+              toolIds: preventedToolStatusDowngrades.map((item) => item.id),
+            }
+          )
+        }
         const discardedPendingEvents = discardPendingChatItemEvents(targetKey)
         startTransition(() => {
           setItemsBySession((current) => ({
             ...current,
-            [targetKey]: history.items,
+            [targetKey]: reconcileCompletedChatItems(
+              current[targetKey] ?? [],
+              history.items
+            ),
           }))
           setHistoryPageStateBySession((current) => ({
             ...current,
@@ -1312,6 +1390,9 @@ export function App() {
         projectPath: selectedProjectPath,
         sessionId: selectedSession.id,
       })
+      if (selectedSessionIdRef.current !== selectedSession.id) {
+        return
+      }
       startTransition(() => {
         setItemsBySession((current) => {
           const existingItems = current[selectedChatKey] ?? []
@@ -1357,6 +1438,8 @@ export function App() {
   ])
 
   async function handleOpenProject() {
+    setIsSearchOpen(false)
+    setActiveSidebarUtilityDestination(null)
     if (!window.ousia) {
       const rawPath = window.prompt(t.shell.projectPathPrompt)
       if (!rawPath) {
@@ -1428,6 +1511,8 @@ export function App() {
   }
 
   async function handleCreateSession() {
+    setIsSearchOpen(false)
+    setActiveSidebarUtilityDestination(null)
     if (window.ousia) {
       const result = await window.ousia.createSession({
         agentProvider: settings.defaultAgentProvider,
@@ -1487,6 +1572,7 @@ export function App() {
     projectId: string,
     explicitProjectPath?: string
   ) {
+    setActiveSidebarUtilityDestination(null)
     if (window.ousia) {
       const result = await window.ousia.createSession({
         agentProvider: settings.defaultAgentProvider,
@@ -1805,11 +1891,120 @@ export function App() {
   function handleSelectSession(sessionId: string) {
     setSelectedSessionId(sessionId)
     setIsSettingsOpen(false)
+    setIsSearchOpen(false)
+    setActiveSidebarUtilityDestination(null)
   }
 
   function handleOpenSettings() {
     setActiveSettingsSection("general")
     setIsSettingsOpen(true)
+    setIsSearchOpen(false)
+    setActiveSidebarUtilityDestination(null)
+  }
+
+  function handleToggleSettings() {
+    if (isSettingsOpen) {
+      setIsSettingsOpen(false)
+      return
+    }
+    handleOpenSettings()
+  }
+
+  function handleSearchOpenChange(open: boolean) {
+    setIsSearchOpen(open)
+    setIsSettingsOpen(false)
+    setActiveSidebarUtilityDestination(open ? "search" : null)
+  }
+
+  function handleOpenSearch(scope: "all" | "current") {
+    if (scope === "current" && !selectedSession) {
+      return
+    }
+    setSearchScope(scope)
+    setIsSearchOpen(true)
+    setIsSettingsOpen(false)
+    setActiveSidebarUtilityDestination("search")
+  }
+
+  function handleFocusComposer() {
+    if (!selectedSession) return
+    setIsSearchOpen(false)
+    setIsSettingsOpen(false)
+    setActiveSidebarUtilityDestination(null)
+    setComposerFocusRequest((current) => current + 1)
+  }
+
+  function handleArchiveCurrentSession() {
+    if (!selectedSession) return
+    setIsSearchOpen(false)
+    setActiveSidebarUtilityDestination(null)
+    void handleArchiveSession(selectedSession.id)
+  }
+
+  function handleNavigateRecentSession(direction: "newer" | "older") {
+    const activeSessions = sessionsRef.current.filter(
+      (session) => !session.archivedAt
+    )
+    if (activeSessions.length < 2) return
+    const selectedIndex = activeSessions.findIndex(
+      (session) => session.id === selectedSessionId
+    )
+    if (selectedIndex < 0) return
+    const offset = direction === "older" ? 1 : -1
+    const target = activeSessions[selectedIndex + offset]
+    if (!target) return
+    handleSelectSession(target.id)
+    setSidebarScrollTargetSessionId(target.id)
+  }
+
+  async function handleSelectSearchMessage(itemId: string) {
+    if (!window.ousia || !selectedSession || !selectedChatKey) return
+    try {
+      const history = await window.ousia.getChatHistory({
+        includeToolPayloads: false,
+        projectPath: selectedProjectPath,
+        sessionId: selectedSession.id,
+      })
+      if (!history.items.some((item) => item.id === itemId)) {
+        throw new Error(
+          `Search target ${itemId} no longer exists in session ${selectedSession.id}.`
+        )
+      }
+      setItemsBySession((current) => ({
+        ...current,
+        [selectedChatKey]: mergePersistedChatItems(
+          current[selectedChatKey] ?? [],
+          history.items
+        ),
+      }))
+      setHistoryPageStateBySession((current) => ({
+        ...current,
+        [selectedChatKey]: historyPageStateFromResult(history.items, history),
+      }))
+      setChatScrollTargetItemId(itemId)
+    } catch (error) {
+      console.error("[chat.search] Failed to open message result", {
+        error,
+        itemId,
+        sessionId: selectedSession.id,
+      })
+    }
+  }
+
+  function handleSelectSidebarUtilityDestination(
+    destination: SidebarUtilityDestination
+  ) {
+    if (destination === "new-task") {
+      void handleCreateSession()
+      return
+    }
+    if (destination === "search") {
+      handleOpenSearch("all")
+      return
+    }
+    setIsSearchOpen(false)
+    setIsSettingsOpen(false)
+    setActiveSidebarUtilityDestination(destination)
   }
 
   async function handleRenameSession(sessionId: string, title: string) {
@@ -2380,6 +2575,9 @@ export function App() {
   const expandSidebar = useCallback(() => {
     setIsSidebarCollapsed(false)
   }, [])
+  const toggleSidebar = useCallback(() => {
+    setIsSidebarCollapsed((current) => !current)
+  }, [])
 
   const stableCreateProjectSession = useStableEvent(createProjectSession)
   const stableCreateSession = useStableEvent(handleCreateSession)
@@ -2395,6 +2593,20 @@ export function App() {
   const stableMoveSession = useStableEvent(handleMoveSession)
   const stableOpenProject = useStableEvent(handleOpenProject)
   const stableOpenSettings = useStableEvent(handleOpenSettings)
+  const stableToggleSettings = useStableEvent(handleToggleSettings)
+  const stableSearchOpenChange = useStableEvent(handleSearchOpenChange)
+  const stableOpenSearch = useStableEvent(handleOpenSearch)
+  const stableFocusComposer = useStableEvent(handleFocusComposer)
+  const stableArchiveCurrentSession = useStableEvent(
+    handleArchiveCurrentSession
+  )
+  const stableNavigateRecentSession = useStableEvent(
+    handleNavigateRecentSession
+  )
+  const stableSelectSearchMessage = useStableEvent(handleSelectSearchMessage)
+  const stableSelectSidebarUtilityDestination = useStableEvent(
+    handleSelectSidebarUtilityDestination
+  )
   const stableShowProjectInFolder = useStableEvent(handleShowProjectInFolder)
   const stableShowDefaultSessionInFolder = useStableEvent(
     handleShowDefaultSessionInFolder
@@ -2417,6 +2629,61 @@ export function App() {
 
   useEffect(() => {
     function handleGlobalKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const key = event.key.toLowerCase()
+        if (key === "k") {
+          event.preventDefault()
+          if (isSearchOpen) {
+            stableSearchOpenChange(false)
+          } else {
+            stableOpenSearch("all")
+          }
+          return
+        }
+        if (key === "n") {
+          event.preventDefault()
+          void stableCreateSession()
+          return
+        }
+        if (event.key === ",") {
+          event.preventDefault()
+          stableToggleSettings()
+          return
+        }
+        if (key === "l") {
+          event.preventDefault()
+          stableFocusComposer()
+          return
+        }
+        if (event.key === "[") {
+          event.preventDefault()
+          stableNavigateRecentSession("older")
+          return
+        }
+        if (event.key === "]") {
+          event.preventDefault()
+          stableNavigateRecentSession("newer")
+          return
+        }
+      }
+      if (event.metaKey && event.shiftKey && !event.ctrlKey && !event.altKey) {
+        const key = event.key.toLowerCase()
+        if (key === "o") {
+          event.preventDefault()
+          void stableOpenProject()
+          return
+        }
+        if (key === "f") {
+          event.preventDefault()
+          stableOpenSearch("current")
+          return
+        }
+        if (key === "a" && selectedSession) {
+          event.preventDefault()
+          stableArchiveCurrentSession()
+          return
+        }
+      }
       if (
         event.key.toLowerCase() !== "b" ||
         !event.metaKey ||
@@ -2427,22 +2694,31 @@ export function App() {
         return
       }
       event.preventDefault()
-      if (isSidebarCollapsed) {
-        expandSidebar()
-        return
-      }
-      setIsSidebarCollapsed(true)
+      toggleSidebar()
     }
 
     window.addEventListener("keydown", handleGlobalKeyDown)
     return () => window.removeEventListener("keydown", handleGlobalKeyDown)
-  }, [expandSidebar, isSidebarCollapsed])
+  }, [
+    stableCreateSession,
+    stableFocusComposer,
+    stableNavigateRecentSession,
+    stableOpenProject,
+    stableOpenSearch,
+    stableArchiveSession,
+    stableArchiveCurrentSession,
+    stableSearchOpenChange,
+    stableToggleSettings,
+    isSearchOpen,
+    selectedSession,
+    toggleSidebar,
+  ])
 
   return (
     <main
       ref={shellRef}
       data-shell-resizing={isShellResizing ? "true" : undefined}
-      className="relative flex h-screen min-h-screen w-screen min-w-0 overflow-hidden rounded-[var(--ousia-window-radius)] bg-background text-foreground"
+      className="relative flex h-screen min-h-screen w-screen min-w-0 flex-col overflow-hidden rounded-none bg-background text-foreground"
     >
       <div
         aria-hidden={zoomIndicatorPercent === null}
@@ -2456,119 +2732,165 @@ export function App() {
       >
         {zoomIndicatorPercent ?? 100}%
       </div>
-      {isSidebarCollapsed ? null : (
-        <div
-          ref={sidebarShellRef}
-          className="relative z-0 flex shrink-0 overflow-hidden"
-          style={
-            {
-              "--ousia-sidebar-live-width": `${effectiveSidebarWidth}px`,
-            } as CSSProperties
+      {isSearchOpen ? (
+        <ChatSearchCommand
+          key={searchScope}
+          currentSessionId={selectedSession?.id}
+          currentSessionTitle={selectedSession?.title}
+          language={settings.language}
+          onArchiveCurrentSession={stableArchiveCurrentSession}
+          onCreateSession={stableCreateSession}
+          onFocusComposer={stableFocusComposer}
+          onOpenChange={stableSearchOpenChange}
+          onOpenProject={stableOpenProject}
+          onOpenSettings={stableOpenSettings}
+          onSearchCurrentSession={() => stableOpenSearch("current")}
+          onSelectMessage={stableSelectSearchMessage}
+          onSelectSession={stableSelectSession}
+          onToggleSidebar={toggleSidebar}
+          open
+          sidebarToggleLabel={
+            isSidebarCollapsed ? t.chat.expandSidebar : t.sidebar.collapse
           }
-        >
-          <div className={isSettingsOpen ? "hidden" : "flex min-h-0"}>
-            <Sidebar
-              onArchiveProject={stableArchiveProject}
-              onCreateProjectSession={stableCreateProjectSession}
-              onCreateSession={stableCreateSession}
-              onDeleteProject={stableDeleteProject}
-              onArchiveSession={stableArchiveSession}
-              onMoveSession={stableMoveSession}
-              onOpenProject={stableOpenProject}
-              onOpenSettings={stableOpenSettings}
-              onShowDefaultSessionInFolder={stableShowDefaultSessionInFolder}
-              onShowProjectInFolder={stableShowProjectInFolder}
-              onUpdateAction={handleUpdateAction}
-              onRenameSession={stableRenameSession}
-              onReorderProjects={stableReorderProjects}
-              onReorderSidebarSections={stableReorderSidebarSections}
-              onReorderSessions={stableReorderSessions}
-              onSelectSession={stableSelectSession}
-              onScrollTargetHandled={handleSidebarScrollTargetHandled}
-              expandedProjectIds={expandedProjectIds}
-              onExpandedProjectIdsChange={setExpandedProjectIds}
-              projects={projects}
-              selectedSessionId={selectedSession?.id ?? ""}
-              sidebarSectionOrder={sidebarSectionOrder}
-              scrollTargetSessionId={sidebarScrollTargetSessionId}
-              sessionRunStatusById={sidebarRunStatusBySessionId}
-              unreadCompletedSessionIds={unreadCompletedSessionIdSet}
-              sessions={sessions.filter((session) => !session.archivedAt)}
-              language={settings.language}
-              updateStatus={updateStatus}
-              style={SIDEBAR_STYLE}
+          scope={searchScope}
+        />
+      ) : null}
+      <div className="flex min-h-0 min-w-0 flex-1">
+        {isSidebarCollapsed ? null : (
+          <div
+            ref={sidebarShellRef}
+            className="relative z-0 flex shrink-0 overflow-hidden"
+            style={
+              {
+                "--ousia-sidebar-live-width": `${effectiveSidebarWidth}px`,
+              } as CSSProperties
+            }
+          >
+            <div className={isSettingsOpen ? "hidden" : "flex min-h-0"}>
+              <Sidebar
+                activeSidebarUtilityDestination={activeSidebarUtilityDestination}
+                onArchiveProject={stableArchiveProject}
+                onCreateProjectSession={stableCreateProjectSession}
+                onCreateSession={stableCreateSession}
+                onDeleteProject={stableDeleteProject}
+                onArchiveSession={stableArchiveSession}
+                onMoveSession={stableMoveSession}
+                onOpenProject={stableOpenProject}
+                onOpenSettings={stableOpenSettings}
+                onSelectSidebarUtilityDestination={stableSelectSidebarUtilityDestination}
+                onShowDefaultSessionInFolder={stableShowDefaultSessionInFolder}
+                onShowProjectInFolder={stableShowProjectInFolder}
+                onUpdateAction={handleUpdateAction}
+                onRenameSession={stableRenameSession}
+                onReorderProjects={stableReorderProjects}
+                onReorderSidebarSections={stableReorderSidebarSections}
+                onReorderSessions={stableReorderSessions}
+                onSelectSession={stableSelectSession}
+                onScrollTargetHandled={handleSidebarScrollTargetHandled}
+                expandedProjectIds={expandedProjectIds}
+                onExpandedProjectIdsChange={setExpandedProjectIds}
+                projects={projects}
+                selectedSessionId={
+                  activeSidebarUtilityDestination ? "" : (selectedSession?.id ?? "")
+                }
+                sidebarSectionOrder={sidebarSectionOrder}
+                scrollTargetSessionId={sidebarScrollTargetSessionId}
+                sessionRunStatusById={sidebarRunStatusBySessionId}
+                unreadCompletedSessionIds={unreadCompletedSessionIdSet}
+                sessions={sessions.filter((session) => !session.archivedAt)}
+                language={settings.language}
+                updateStatus={updateStatus}
+                style={SIDEBAR_STYLE}
+              />
+            </div>
+            {isSettingsOpen ? (
+              <SettingsSidebar
+                activeSection={activeSettingsSection}
+                agentProvider={settings.defaultAgentProvider}
+                language={settings.language}
+                onBack={handleCloseSettings}
+                onSectionChange={setActiveSettingsSection}
+                style={SIDEBAR_STYLE}
+              />
+            ) : null}
+            <ResizeHandle
+              isActive={activeShellResizeHandle === "sidebar"}
+              label={t.shell.resizeSidebar}
+              onPointerDown={beginSidebarResize}
             />
           </div>
-          {isSettingsOpen ? (
-            <SettingsSidebar
-              activeSection={activeSettingsSection}
-              agentProvider={settings.defaultAgentProvider}
-              language={settings.language}
-              onBack={handleCloseSettings}
-              onSectionChange={setActiveSettingsSection}
-              style={SIDEBAR_STYLE}
-            />
-          ) : null}
-          <ResizeHandle
-            isActive={activeShellResizeHandle === "sidebar"}
-            label={t.shell.resizeSidebar}
-            onPointerDown={beginSidebarResize}
-          />
-        </div>
-      )}
-      <div className="relative z-20 min-w-0 flex-1 bg-sidebar">
-        <div className="flex h-full min-w-0 overflow-visible">
-          {isSettingsOpen ? (
-            <SettingsPage
-              activeSection={activeSettingsSection}
-              codexEnvironment={codexEnvironment}
-              codexEnvironmentLoading={codexEnvironmentLoading}
-              modelRegistry={modelRegistry}
-              projects={projects}
-              sessions={sessions}
-              settings={settings}
-              onRefreshModelRegistry={refreshModelRegistry}
-              onRefreshCodexEnvironment={refreshCodexEnvironment}
-              onSettingsChange={handleSettingsChange}
-              onRestoreArchivedSessions={stableRestoreArchivedSessions}
-              onDeleteArchivedSessions={stableDeleteArchivedSessions}
-            />
-          ) : (
-            <ChatArea
-              codexEnvironment={codexEnvironment}
-              currentProject={selectedSession ? currentProject : undefined}
-              currentSession={selectedSession}
-              items={selectedItems}
-              isAgentWorking={
-                selectedChatKey
-                  ? runStatusBySession[selectedChatKey] === "working"
-                  : false
-              }
-              isSidebarCollapsed={isSidebarCollapsed}
-              isWindowFullscreen={isWindowFullscreen}
-              onLocalEvent={stableAppendLocalEvent}
-              onGenerateSessionTitle={stableGenerateSessionTitle}
-              onBranchFromMessage={stableBranchFromMessage}
-              onLoadOlderHistory={handleLoadOlderHistory}
-              onRefreshModelRegistry={refreshModelRegistry}
-              onSessionCompletionVisibility={markSessionCompletionVisibility}
-              onSessionViewed={markSessionViewed}
-              hasMoreHistory={Boolean(selectedHistoryPageState?.hasMore)}
-              isLoadingHistory={
-                selectedHistoryPageState?.status === "loading-initial"
-              }
-              isLoadingOlderHistory={
-                selectedHistoryPageState?.status === "loading-older"
-              }
-              contextUsage={selectedContextUsage}
-              onSettingsChange={handleSettingsChange}
-              modelRegistry={modelRegistry}
-              queuedChatState={selectedQueuedChatState}
-              settings={settings}
-              language={settings.language}
-              style={MAIN_PANEL_STYLE}
-            />
-          )}
+        )}
+        <div className="relative z-20 min-w-0 flex-1 bg-[var(--ousia-sidebar)]">
+          <div className="flex h-full min-w-0 overflow-visible">
+            {isSettingsOpen ? (
+              <SettingsPage
+                activeSection={activeSettingsSection}
+                codexEnvironment={codexEnvironment}
+                codexEnvironmentLoading={codexEnvironmentLoading}
+                modelRegistry={modelRegistry}
+                projects={projects}
+                sessions={sessions}
+                settings={settings}
+                onRefreshModelRegistry={refreshModelRegistry}
+                onRefreshCodexEnvironment={refreshCodexEnvironment}
+                onSettingsChange={handleSettingsChange}
+                onSystemPromptSave={handleSystemPromptSave}
+                onBuiltinSystemPromptLoad={handleBuiltinSystemPromptLoad}
+                onRestoreArchivedSessions={stableRestoreArchivedSessions}
+                onDeleteArchivedSessions={stableDeleteArchivedSessions}
+              />
+            ) : activeSidebarUtilityDestination === "extensions" ? (
+              <ExtensionsPage language={settings.language} />
+            ) : activeSidebarUtilityDestination ? (
+              <section
+                aria-label={t.sidebar.utilityNavigation}
+                className={`ousia-main-panel relative z-20 flex min-w-0 flex-1 flex-col overflow-hidden bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-[var(--ousia-chat-panel-surface)] ${MAIN_PANEL_LEFT_CORNERS_CLASS}`}
+              >
+                <div
+                  aria-hidden="true"
+                  className="window-drag h-[var(--ousia-titlebar-height)] shrink-0"
+                />
+              </section>
+            ) : (
+              <ChatArea
+                composerFocusRequest={composerFocusRequest}
+                codexEnvironment={codexEnvironment}
+                currentProject={selectedSession ? currentProject : undefined}
+                currentSession={selectedSession}
+                items={selectedItems}
+                isAgentWorking={
+                  selectedChatKey
+                    ? runStatusBySession[selectedChatKey] === "working"
+                    : false
+                }
+                isSidebarCollapsed={isSidebarCollapsed}
+                isWindowFullscreen={isWindowFullscreen}
+                onLocalEvent={stableAppendLocalEvent}
+                onGenerateSessionTitle={stableGenerateSessionTitle}
+                onBranchFromMessage={stableBranchFromMessage}
+                onLoadOlderHistory={handleLoadOlderHistory}
+                onScrollTargetHandled={() => setChatScrollTargetItemId("")}
+                onRefreshModelRegistry={refreshModelRegistry}
+                onSessionCompletionVisibility={markSessionCompletionVisibility}
+                onSessionViewed={markSessionViewed}
+                hasMoreHistory={Boolean(selectedHistoryPageState?.hasMore)}
+                isLoadingHistory={
+                  selectedHistoryPageState?.status === "loading-initial"
+                }
+                isLoadingOlderHistory={
+                  selectedHistoryPageState?.status === "loading-older"
+                }
+                contextUsage={selectedContextUsage}
+                onSettingsChange={handleSettingsChange}
+                modelRegistry={modelRegistry}
+                queuedChatState={selectedQueuedChatState}
+                settings={settings}
+                scrollTargetItemId={chatScrollTargetItemId}
+                language={settings.language}
+                style={MAIN_PANEL_STYLE}
+              />
+            )}
+          </div>
         </div>
       </div>
       <TitleBarSidebarToggle

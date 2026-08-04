@@ -91,6 +91,7 @@ describe("agent provider router", () => {
       ).toHaveBeenCalledWith({
         ...payload,
         projectPath: "~/Documents/Ousia",
+        systemPrompt: state.settings.systemPrompt,
       })
       expect(
         providersFor(agentProvider === "pi" ? "codex" : "pi", { codex, pi })

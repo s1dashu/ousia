@@ -7,10 +7,10 @@ import {
   ChevronDown,
   Folder,
   FolderOpen,
-  MoreHorizontal,
   Plus,
+  SidebarActions,
   Trash2,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import type { I18nMessages } from "@/app/i18n"
 import { Button } from "@/components/ui/button"
@@ -44,11 +44,15 @@ import {
   sidebarProjectLeadGridClass,
   sidebarProjectRowStateClass,
   sidebarProjectRowXClass,
+  sidebarProjectSessionDragPreviewXClass,
   sidebarProjectSessionGridClass,
+  sidebarProjectSessionRowXClass,
+  sidebarRowHeightClass,
   sidebarRowStateClass,
   sidebarSectionHeaderXClass,
   sidebarSectionIconSize,
   sidebarSelectedRowClass,
+  sidebarSessionFrameClass,
   sidebarSessionDragPreviewXClass,
   sidebarSessionRowXClass,
   sidebarSingleActionGridClass,
@@ -143,7 +147,7 @@ export function DragPreview({ preview }: { preview: SidebarDragPreview }) {
     return (
       <div
         className={[
-          "ousia-squircle-corners grid h-8.5 w-full items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]",
+          `ousia-squircle-corners grid ${sidebarRowHeightClass} w-full items-center gap-1 rounded-[var(--ousia-sidebar-selected-radius)]`,
           "px-2 text-sm",
           sidebarSelectedRowClass,
           "grid-cols-[minmax(0,1fr)_24px_24px]",
@@ -178,13 +182,15 @@ export function DragPreview({ preview }: { preview: SidebarDragPreview }) {
     return (
       <div
         className={[
-          "ousia-squircle-corners grid h-8.5 w-full items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm",
+          `ousia-squircle-corners grid ${sidebarRowHeightClass} w-full items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm`,
           "font-radix-regular",
           sidebarSelectedRowClass,
           preview.projectChild
             ? sidebarProjectSessionGridClass
             : sidebarSingleActionGridClass,
-          sidebarSessionDragPreviewXClass,
+          preview.projectChild
+            ? sidebarProjectSessionDragPreviewXClass
+            : sidebarSessionDragPreviewXClass,
         ].join(" ")}
       >
         {preview.projectChild ? <div aria-hidden="true" /> : null}
@@ -197,7 +203,7 @@ export function DragPreview({ preview }: { preview: SidebarDragPreview }) {
   return (
     <div
       className={[
-        "grid h-9 w-full items-center rounded-[var(--ousia-sidebar-selected-radius)]",
+        `grid ${sidebarRowHeightClass} w-full items-center rounded-[var(--ousia-sidebar-selected-radius)]`,
         "px-3 text-sm",
         sidebarSelectedRowClass,
       ].join(" ")}
@@ -254,13 +260,16 @@ export function SortableSessionRow({
       ref={setNodeRef}
       style={style}
       className={[
-        "group/session ousia-squircle-corners font-radix-regular relative grid h-8.5 cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing",
+        `group/session ousia-squircle-corners font-radix-regular relative grid ${sidebarRowHeightClass} cursor-grab items-center rounded-[var(--ousia-sidebar-selected-radius)] text-sm active:cursor-grabbing`,
+        sidebarSessionFrameClass,
         isSelectedSession ? sidebarSelectedRowClass : sidebarRowStateClass,
         projectChild ? "gap-x-0 gap-y-1" : "gap-1",
         projectChild
           ? sidebarProjectSessionGridClass
           : sidebarSingleActionGridClass,
-        sidebarSessionRowXClass,
+        projectChild
+          ? sidebarProjectSessionRowXClass
+          : sidebarSessionRowXClass,
         isDragging ? sidebarDragPlaceholderClass : "",
       ].join(" ")}
       onClick={() => {
@@ -400,7 +409,7 @@ export function SortableProjectSection({
     <section ref={setNodeRef} style={style} className="min-w-0">
       <div
         className={[
-          "project-row grid h-9 w-full min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing",
+          `project-row grid ${sidebarRowHeightClass} w-full min-w-0 cursor-grab items-center gap-x-0 gap-y-1 rounded-md active:cursor-grabbing`,
           sidebarProjectRowStateClass,
           sidebarProjectLeadGridClass,
           sidebarProjectRowXClass,
@@ -444,7 +453,7 @@ export function SortableProjectSection({
                 onClick={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
               >
-                <MoreHorizontal
+                <SidebarActions
                   className={`${sidebarMenuIconXClass} text-sidebar-accent-foreground`}
                   size={sidebarMenuIconSize}
                   strokeWidth={sidebarIconStrokeWidth}
@@ -535,6 +544,7 @@ export function SortableSidebarSection({
     <section
       ref={setNodeRef}
       style={style}
+      data-sidebar-section-id={id}
       className={[
         "mt-3 min-w-0 first:mt-0",
         isDragging
@@ -544,7 +554,7 @@ export function SortableSidebarSection({
     >
       <div
         className={[
-          "group/section-header grid cursor-pointer items-center gap-1 pt-2 pb-1.5",
+          "group/section-header grid cursor-pointer items-center gap-1 pt-2 pb-0.5",
           beforeAction
             ? "grid-cols-[minmax(0,1fr)_24px_24px]"
             : sidebarSingleActionGridClass,

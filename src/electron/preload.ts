@@ -37,15 +37,25 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaAgentConfigurationReloadResult,
+  OusiaBuiltinSystemPromptResult,
+  OusiaChatSearchPayload,
+  OusiaChatSearchResult,
   OusiaSequencedChatEvent,
   OusiaCodexAuthResult,
   OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
+  OusiaInstalledSkillsResult,
   OusiaModelRegistryResult,
   OusiaOpenDirectoryPayload,
   OusiaOpenDirectoryResult,
   OusiaOpenProjectResult,
   OusiaPiEnvironmentStatus,
+  OusiaPiPackageActivationResult,
+  OusiaPiPackageMutationPayload,
+  OusiaPiPackageMutationResult,
+  OusiaPiPackageReloadPayload,
+  OusiaPiPackageStatus,
   OusiaPiProviderCredentialPayload,
   OusiaPiProviderCredentialRemovalPayload,
   OusiaPiProviderCredentialResult,
@@ -203,6 +213,12 @@ const api = {
   sendChatMessage(payload: OusiaChatSendPayload): Promise<OusiaChatSendResult> {
     return ipcRenderer.invoke("ousia:chat:send", payload)
   },
+  reloadAgentConfiguration(): Promise<OusiaAgentConfigurationReloadResult> {
+    return ipcRenderer.invoke("ousia:agent:reload-configuration")
+  },
+  getBuiltinSystemPrompt(): Promise<OusiaBuiltinSystemPromptResult> {
+    return ipcRenderer.invoke("ousia:agent:builtin-system-prompt")
+  },
   generateChatTitle(
     payload: OusiaChatGenerateTitlePayload
   ): Promise<OusiaChatGenerateTitleResult> {
@@ -212,6 +228,9 @@ const api = {
     payload: OusiaChatHistoryPayload
   ): Promise<OusiaChatHistoryResult> {
     return ipcRenderer.invoke("ousia:chat:history", payload)
+  },
+  searchChats(payload: OusiaChatSearchPayload): Promise<OusiaChatSearchResult> {
+    return ipcRenderer.invoke("ousia:chat:search", payload)
   },
   getActiveChatEvents(): Promise<OusiaChatEventReplaySnapshot> {
     return ipcRenderer.invoke("ousia:chat:events:active")
@@ -255,6 +274,27 @@ const api = {
   },
   checkPiEnvironment(): Promise<OusiaPiEnvironmentStatus> {
     return ipcRenderer.invoke("ousia:pi:environment")
+  },
+  listPiPackages(): Promise<OusiaPiPackageStatus> {
+    return ipcRenderer.invoke("ousia:pi:packages:list")
+  },
+  listInstalledSkills(): Promise<OusiaInstalledSkillsResult> {
+    return ipcRenderer.invoke("ousia:skills:installed:list")
+  },
+  installPiPackage(
+    payload: OusiaPiPackageMutationPayload
+  ): Promise<OusiaPiPackageMutationResult> {
+    return ipcRenderer.invoke("ousia:pi:packages:install", payload)
+  },
+  removePiPackage(
+    payload: OusiaPiPackageMutationPayload
+  ): Promise<OusiaPiPackageMutationResult> {
+    return ipcRenderer.invoke("ousia:pi:packages:remove", payload)
+  },
+  reloadPiPackages(
+    payload: OusiaPiPackageReloadPayload
+  ): Promise<OusiaPiPackageActivationResult> {
+    return ipcRenderer.invoke("ousia:pi:packages:reload", payload)
   },
   checkCodexEnvironment(): Promise<OusiaCodexEnvironmentStatus> {
     return ipcRenderer.invoke("ousia:codex:environment")

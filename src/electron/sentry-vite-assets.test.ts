@@ -22,6 +22,7 @@ describe("desktopSentryVite source-map ownership", () => {
       environment: {
         OUSIA_SENTRY_DSN: "https://public@example.ingest.sentry.io/123",
         OUSIA_SENTRY_PROJECT: "ousia-desktop",
+        OUSIA_SENTRY_RELEASE_BUILD: "1",
         SENTRY_AUTH_TOKEN: "token",
         SENTRY_ORG: "sida-software",
       },

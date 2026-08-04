@@ -1,4 +1,4 @@
-import { PanelLeft } from "@/components/icons/huge-icons"
+import { PanelLeft } from "@/components/icons/nucleo-icons"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -43,7 +43,7 @@ export function TitleBarSidebarToggle({
         type="button"
         variant="ghost"
         size="icon-sm"
-        className="window-no-drag pointer-events-auto hover:bg-transparent focus-visible:bg-transparent"
+        className="window-no-drag pointer-events-auto"
         aria-label={label}
         onClick={onClick}
       >

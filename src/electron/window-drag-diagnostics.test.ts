@@ -177,7 +177,7 @@ describe("window drag diagnostics", () => {
     }
     tracker.recordResize(false)
     now = 175
-    tracker.resized()
+    tracker.resized(true)
 
     expect(starts).toEqual([
       expect.objectContaining({
@@ -194,7 +194,7 @@ describe("window drag diagnostics", () => {
         sequence: 1,
         trigger: "resized",
         willResizeEventCount: 1,
-        windowButtonPositionApplyCount: 0,
+        windowButtonPositionApplyCount: 1,
       }),
     ])
     expect(inspections).toEqual([{ sequence: 1, trigger: "resized" }])

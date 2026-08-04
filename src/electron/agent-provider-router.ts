@@ -22,6 +22,7 @@ import type {
   OusiaChatSendResult,
   OusiaChatToolPayloadPayload,
   OusiaChatToolPayloadResult,
+  OusiaBuiltinSystemPromptOptions,
   OusiaSessionRecord,
 } from "./chat-types.js"
 import { requireOusiaChatMessageId } from "./chat-types.js"
@@ -34,9 +35,15 @@ import { expandHomePath } from "./host-paths.js"
 import { writeRuntimeLog } from "./runtime-logger.js"
 
 export type AgentConversationProvider = {
+  getBuiltinSystemPrompt?(
+    options: OusiaBuiltinSystemPromptOptions
+  ): Promise<string>
   deleteChatSession(context: OusiaChatContext): Promise<void>
   dispose?(): Promise<void> | void
   releaseChatSession?(context: OusiaChatContext): Promise<void> | void
+  reloadConfiguration?(
+    options?: AgentConfigurationReloadOptions
+  ): Promise<AgentConfigurationReloadOutcome> | AgentConfigurationReloadOutcome
   branchChat(payload: OusiaChatBranchPayload): Promise<OusiaChatBranchResult>
   clearChatQueue(context: OusiaChatContext): Promise<OusiaChatClearQueueResult>
   compactChat(payload: OusiaChatCompactPayload): Promise<OusiaChatCompactResult>
@@ -58,6 +65,16 @@ export type AgentConversationProvider = {
   ): Promise<OusiaChatInterruptResult>
   moveChatSession(payload: OusiaChatMovePayload): Promise<OusiaChatMoveResult>
   sendChatMessage(payload: OusiaChatSendPayload): Promise<OusiaChatSendResult>
+}
+
+export type AgentConfigurationReloadOptions = {
+  force?: boolean
+}
+
+export type AgentConfigurationReloadOutcome = {
+  busySessionCount: number
+  reloadedSessionCount: number
+  status: "agent-running" | "reloaded"
 }
 
 type AgentProviderRouterOptions = {
@@ -252,11 +269,36 @@ export function createAgentProviderRouter({
   }
 
   async function routeForContext(context: OusiaChatContext) {
-    const route = await resolveCanonicalAgentContext(context)
-    return { provider: providerForRoute(route), route }
+    const state = await loadAppState()
+    const route = canonicalAgentContextFromState(state, context)
+    return { provider: providerForRoute(route), route, state }
   }
 
   return {
+    async reloadConfiguration(options) {
+      const outcomes = await Promise.all(
+        Object.values(providers).map((provider) =>
+          provider.reloadConfiguration?.(options)
+        )
+      )
+      const completed = outcomes.filter(
+        (outcome): outcome is AgentConfigurationReloadOutcome =>
+          outcome !== undefined
+      )
+      return {
+        busySessionCount: completed.reduce(
+          (total, outcome) => total + outcome.busySessionCount,
+          0
+        ),
+        reloadedSessionCount: completed.reduce(
+          (total, outcome) => total + outcome.reloadedSessionCount,
+          0
+        ),
+        status: completed.some((outcome) => outcome.status === "agent-running")
+          ? "agent-running"
+          : "reloaded",
+      }
+    },
     async deleteChatSession(requestedContext) {
       const { agentProvider, context } =
         await resolveCanonicalAgentDeletionContext(requestedContext)
@@ -283,13 +325,19 @@ export function createAgentProviderRouter({
       return provider.clearChatQueue(route.context)
     },
     async compactChat(payload) {
-      const { provider, route } = await routeForContext(payload)
-      return provider.compactChat(canonicalPayload(payload, route.context))
+      const { provider, route, state } = await routeForContext(payload)
+      return provider.compactChat({
+        ...canonicalPayload(payload, route.context),
+        systemPrompt: state.settings.systemPrompt,
+      })
     },
     async exportChat(payload, outputPath) {
-      const { provider, route } = await routeForContext(payload)
+      const { provider, route, state } = await routeForContext(payload)
       return provider.exportChat(
-        canonicalPayload(payload, route.context),
+        {
+          ...canonicalPayload(payload, route.context),
+          systemPrompt: state.settings.systemPrompt,
+        },
         outputPath
       )
     },
@@ -378,7 +426,7 @@ export function createAgentProviderRouter({
         throw error
       }
       await waitForHistoryReads(payload.sessionId)
-      const { provider, route } = await routeForContext(payload)
+      const { provider, route, state } = await routeForContext(payload)
       const messageIdFingerprint = chatMessageIdFingerprint(messageId)
       try {
         messageReplayGuard.claim(route.context.sessionId, messageId)
@@ -397,7 +445,10 @@ export function createAgentProviderRouter({
         phase: "routed",
         sessionId: route.context.sessionId,
       })
-      return provider.sendChatMessage(canonicalPayload(payload, route.context))
+      return provider.sendChatMessage({
+        ...canonicalPayload(payload, route.context),
+        systemPrompt: state.settings.systemPrompt,
+      })
     },
   }
 }

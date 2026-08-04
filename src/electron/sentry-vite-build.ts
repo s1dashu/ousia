@@ -75,56 +75,59 @@ export function desktopSentryVite({
   if (sourcemapAssets.length === 0) {
     throw new Error("Desktop Sentry source-map assets must not be empty")
   }
-  const dsn = publicDsn(environment, `${envPrefix}_SENTRY_DSN`)
+  const releaseBuildRequested = booleanEnvironment(
+    environment,
+    `${envPrefix}_SENTRY_RELEASE_BUILD`
+  )
+  if (releaseBuildRequested && command !== "build") {
+    throw new Error(
+      `${envPrefix}_SENTRY_RELEASE_BUILD is only valid for production builds`
+    )
+  }
+  const dsn = releaseBuildRequested
+    ? publicDsn(environment, `${envPrefix}_SENTRY_DSN`)
+    : ""
+  if (releaseBuildRequested && !dsn) {
+    throw new Error(
+      `${envPrefix}_SENTRY_RELEASE_BUILD requires ${envPrefix}_SENTRY_DSN`
+    )
+  }
   const config: DesktopSentryBuildConfig = {
     buildVerificationMarker: "",
     dsn,
     enabled: false,
-    enabledInDevelopment: booleanEnvironment(
-      environment,
-      `${envPrefix}_SENTRY_ENABLE_IN_DEVELOPMENT`
-    ),
+    enabledInDevelopment: false,
     environment:
       environment[`${envPrefix}_SENTRY_ENVIRONMENT`]?.trim() ||
       (command === "build" ? "production" : "development"),
-    nativeCrashReportsEnabled: booleanEnvironment(
-      environment,
-      `${envPrefix}_SENTRY_ENABLE_NATIVE_CRASH_REPORTS`
-    ),
+    nativeCrashReportsEnabled:
+      releaseBuildRequested &&
+      booleanEnvironment(
+        environment,
+        `${envPrefix}_SENTRY_ENABLE_NATIVE_CRASH_REPORTS`
+      ),
     productId,
     release: `${releaseName}@${packageVersion()}`,
   }
-  config.enabled =
-    Boolean(dsn) && (command === "build" || config.enabledInDevelopment)
+  config.enabled = releaseBuildRequested
   config.buildVerificationMarker = `desktop-sentry-build:${config.enabled ? "enabled" : "disabled"}:${config.release}`
-  if (config.enabledInDevelopment && !dsn) {
-    throw new Error(
-      `${envPrefix}_SENTRY_ENABLE_IN_DEVELOPMENT requires ${envPrefix}_SENTRY_DSN`
-    )
-  }
-  if (config.nativeCrashReportsEnabled && !dsn) {
-    throw new Error(
-      `${envPrefix}_SENTRY_ENABLE_NATIVE_CRASH_REPORTS requires ${envPrefix}_SENTRY_DSN`
-    )
-  }
 
   const uploadValues = {
-    authToken: environment.SENTRY_AUTH_TOKEN?.trim() || "",
-    org: environment.SENTRY_ORG?.trim() || "",
-    project: environment[`${envPrefix}_SENTRY_PROJECT`]?.trim() || "",
+    authToken: releaseBuildRequested
+      ? environment.SENTRY_AUTH_TOKEN?.trim() || ""
+      : "",
+    org: releaseBuildRequested ? environment.SENTRY_ORG?.trim() || "" : "",
+    project: releaseBuildRequested
+      ? environment[`${envPrefix}_SENTRY_PROJECT`]?.trim() || ""
+      : "",
   }
   const presentUploadValues = Object.values(uploadValues).filter(Boolean).length
-  if (presentUploadValues !== 0 && presentUploadValues !== 3) {
+  if (releaseBuildRequested && presentUploadValues !== 3) {
     throw new Error(
-      `Source-map upload requires SENTRY_AUTH_TOKEN, SENTRY_ORG, and ${envPrefix}_SENTRY_PROJECT together`
+      `A Sentry release build requires SENTRY_AUTH_TOKEN, SENTRY_ORG, and ${envPrefix}_SENTRY_PROJECT`
     )
   }
-  const uploadEnabled = command === "build" && presentUploadValues === 3
-  if (command === "build" && dsn && !uploadEnabled) {
-    throw new Error(
-      `A Sentry-enabled production build requires source-map upload credentials`
-    )
-  }
+  const uploadEnabled = releaseBuildRequested && presentUploadValues === 3
 
   const plugins: PluginOption[] = []
   if (uploadEnabled) {

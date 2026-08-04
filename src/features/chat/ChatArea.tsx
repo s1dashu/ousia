@@ -13,14 +13,14 @@ import {
   type KeyboardEvent,
 } from "react"
 import {
-  ChevronDown,
+  ChevronDown as NucleoChevronDown,
   LoaderCircle,
-  Plus,
+  Plus as NucleoPlus,
   SendArrowDown,
   SendArrowUp,
-  SlidersHorizontal,
+  SlidersHorizontal as NucleoSliders,
   X,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 
 import type { AppSettings, ProjectRecord, SessionRecord } from "@/app/app-state"
 import { isDefaultSessionTitle } from "@/app/i18n"
@@ -79,7 +79,6 @@ import {
   type OusiaCodexEnvironmentStatus,
   type OusiaChatEvent,
   type OusiaModelRegistryResult,
-  type OusiaSendDuringRunMode,
   type OusiaReasoningEffort,
 } from "@/electron/chat-types"
 import { getMessages } from "@/app/i18n"
@@ -138,6 +137,7 @@ const allAgentTools: OusiaAgentToolName[] = [
 ]
 
 type ChatAreaProps = {
+  composerFocusRequest: number
   codexEnvironment: OusiaCodexEnvironmentStatus | undefined
   currentProject: ProjectRecord | undefined
   currentSession: SessionRecord | undefined
@@ -161,6 +161,7 @@ type ChatAreaProps = {
   onGenerateSessionTitle: (sessionId: string, firstPrompt: string) => void
   onBranchFromMessage: (messageId: string) => void
   onLoadOlderHistory: () => Promise<void> | void
+  onScrollTargetHandled: () => void
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSessionCompletionVisibility: (
     sessionId: string,
@@ -173,6 +174,7 @@ type ChatAreaProps = {
     followUp: string[]
   }
   settings: AppSettings
+  scrollTargetItemId: string
   style: CSSProperties
 }
 
@@ -184,6 +186,7 @@ function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
 }
 
 function ChatAreaComponent({
+  composerFocusRequest,
   codexEnvironment,
   currentProject,
   currentSession,
@@ -201,12 +204,14 @@ function ChatAreaComponent({
   onGenerateSessionTitle,
   onBranchFromMessage,
   onLoadOlderHistory,
+  onScrollTargetHandled,
   onRefreshModelRegistry,
   onSessionCompletionVisibility,
   onSessionViewed,
   onSettingsChange,
   queuedChatState,
   settings,
+  scrollTargetItemId,
   style,
 }: ChatAreaProps) {
   const t = getMessages(language)
@@ -233,6 +238,7 @@ function ChatAreaComponent({
   const [providerKeyDialogError, setProviderKeyDialogError] = useState("")
   const [isSavingProviderKey, setIsSavingProviderKey] = useState(false)
   const [copyStatus, setCopyStatus] = useState<ChatCopyStatus>("idle")
+  const [highlightedMessageId, setHighlightedMessageId] = useState("")
   const [contextUsageState, setContextUsageState] = useState<{
     key: string
     usage?: {
@@ -247,6 +253,7 @@ function ChatAreaComponent({
   const isComposingRef = useRef(false)
   const sendDuringRunModeRef = useRef(settings.sendDuringRunMode)
   const wasAgentWorkingRef = useRef(isAgentWorking)
+  const highlightTimerRef = useRef(0)
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
   const isCodexSession = currentSession?.agentProvider === "codex"
@@ -343,8 +350,7 @@ function ChatAreaComponent({
     shouldShowTurnWaitIndicator(items, isAgentWorking)
   )
   const hasDraftContent = Boolean(draft.trim() || attachments.length)
-  const sendDuringRunMode = settings.sendDuringRunMode
-  sendDuringRunModeRef.current = sendDuringRunMode
+  sendDuringRunModeRef.current = settings.sendDuringRunMode
   const currentContextUsageKey =
     currentProject && currentSession
       ? `${currentProject.path}::${currentSession.id}`
@@ -431,6 +437,51 @@ function ChatAreaComponent({
     }
   }, [currentSession?.id])
 
+  useEffect(() => {
+    if (!composerFocusRequest) return
+    const frameId = window.requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frameId)
+  }, [composerFocusRequest])
+
+  useEffect(() => {
+    if (!scrollTargetItemId) return
+    const frameId = window.requestAnimationFrame(() => {
+      const target = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-chat-message-id="${CSS.escape(scrollTargetItemId)}"]`
+      )
+      if (!target) {
+        console.error("[chat.search] Rendered message target was not found", {
+          itemId: scrollTargetItemId,
+          sessionId: currentSession?.id,
+        })
+        onScrollTargetHandled()
+        return
+      }
+      target.scrollIntoView({ behavior: "smooth", block: "center" })
+      setHighlightedMessageId(scrollTargetItemId)
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current)
+      }
+      highlightTimerRef.current = window.setTimeout(() => {
+        setHighlightedMessageId("")
+        highlightTimerRef.current = 0
+      }, 1800)
+      onScrollTargetHandled()
+    })
+    return () => window.cancelAnimationFrame(frameId)
+  }, [currentSession?.id, onScrollTargetHandled, scrollRef, scrollTargetItemId])
+
+  useEffect(
+    () => () => {
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current)
+      }
+    },
+    []
+  )
+
   useLayoutEffect(() => {
     const node = inputRef.current
     if (!node) {
@@ -515,11 +566,6 @@ function ChatAreaComponent({
         ...patch,
       })
     )
-  }
-
-  function updateSendDuringRunMode(mode: OusiaSendDuringRunMode) {
-    sendDuringRunModeRef.current = mode
-    updateComposerSettings({ sendDuringRunMode: mode })
   }
 
   function toggleCustomAgentTool(tool: OusiaAgentToolName) {
@@ -1333,7 +1379,7 @@ function ChatAreaComponent({
   return (
     <section
       className={cn(
-        "ousia-main-panel @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden rounded-r-[var(--ousia-chat-panel-radius)] border-[0.5px] border-l-0 border-border/60 bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-[var(--ousia-chat-panel-surface)]",
+        "ousia-main-panel @container/chat relative z-20 flex min-w-0 shrink-0 flex-col overflow-hidden bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-[var(--ousia-chat-panel-surface)]",
         MAIN_PANEL_LEFT_CORNERS_CLASS
       )}
       style={style}
@@ -1384,6 +1430,7 @@ function ChatAreaComponent({
             </div>
           ) : null}
           <ChatMessageList
+            highlightedItemId={highlightedMessageId}
             items={visibleChatItems}
             isAgentWorking={isAgentWorking}
             onBranchFromMessage={onBranchFromMessage}
@@ -1422,7 +1469,7 @@ function ChatAreaComponent({
           <div className="relative">
             {visibleQueuedMessages.length ? (
               <QueuedMessageList
-                className="mx-5"
+                className="pointer-events-auto mx-5"
                 editingId={editingQueueId}
                 draggingId={draggingQueueId}
                 messages={visibleQueuedMessages}
@@ -1437,7 +1484,7 @@ function ChatAreaComponent({
             ) : null}
             <div
               className={cn(
-                "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-composer-surface)] px-4 pt-3 pb-3 shadow-[var(--ousia-chat-composer-shadow)] transition-[border-color,box-shadow] focus-within:border-[color:var(--ousia-chat-composer-border-focus)] focus-within:shadow-[var(--ousia-chat-composer-shadow-focus)] focus-within:ring-0",
+                "ousia-squircle-corners pointer-events-auto relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-0 bg-[var(--ousia-composer-surface)] px-4 pt-4 pb-3 shadow-none focus-within:ring-0",
                 visibleQueuedMessages.length && "-mt-8"
               )}
             >
@@ -1505,7 +1552,7 @@ function ChatAreaComponent({
                           aria-label={t.chat.addAttachment}
                           onClick={() => fileInputRef.current?.click()}
                         >
-                          <Plus size={18} />
+                          <NucleoPlus size={18} />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top">
@@ -1529,7 +1576,7 @@ function ChatAreaComponent({
                               className="size-6"
                               aria-label={t.chat.composerSettings}
                             >
-                              <SlidersHorizontal size={18} />
+                              <NucleoSliders size={18} />
                             </Button>
                           </DropdownMenuTrigger>
                         </TooltipTrigger>
@@ -1607,25 +1654,6 @@ function ChatAreaComponent({
                             ))}
                         </TooltipProvider>
                       </DropdownMenuRadioGroup>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuRadioGroup
-                        value={sendDuringRunMode}
-                        onValueChange={(value) =>
-                          updateSendDuringRunMode(
-                            value === "queue" ? "queue" : "steer"
-                          )
-                        }
-                      >
-                        <DropdownMenuLabel>
-                          {t.chat.appendMessages}
-                        </DropdownMenuLabel>
-                        <DropdownMenuRadioItem value="queue">
-                          {t.settings.queue}
-                        </DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="steer">
-                          {t.settings.steer}
-                        </DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
                     </DropdownMenuContent>
                   </DropdownMenu>
                   <DropdownMenu
@@ -1637,10 +1665,7 @@ function ChatAreaComponent({
                       aria-label={t.chat.modelAndThinking}
                       className="flex h-7 max-w-64 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors outline-none hover:bg-accent hover:text-accent-foreground"
                     >
-                      <span className="hidden shrink-0 text-foreground @max-[520px]:inline">
-                        {t.chat.model}
-                      </span>
-                      <span className="min-w-0 truncate text-foreground @max-[520px]:hidden">
+                      <span className="min-w-0 max-w-40 truncate text-foreground">
                         {selectedModelLabel}
                       </span>
                       {selectedModelPreset &&
@@ -1649,7 +1674,7 @@ function ChatAreaComponent({
                           {reasoningEffortLabel(selectedThinkingLevel)}
                         </span>
                       ) : null}
-                      <ChevronDown
+                      <NucleoChevronDown
                         size={18}
                         strokeWidth={1.5}
                         className="shrink-0 text-muted-foreground"
@@ -1781,11 +1806,11 @@ function ChatAreaComponent({
                   <Button
                     type="submit"
                     size="icon-sm"
-                    className="size-6 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_4px_12px_rgba(0,0,0,0.09),0_1px_4px_rgba(0,0,0,0.06)] hover:bg-primary/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.28),0_1px_4px_rgba(0,0,0,0.18)]"
+                    className="size-7 rounded-full border-[0.5px] border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_6px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.05)] hover:bg-primary/90 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_3px_8px_rgba(0,0,0,0.24),0_1px_3px_rgba(0,0,0,0.16)]"
                     disabled={isSending || !hasDraftContent}
                     aria-label={t.app.send}
                   >
-                    <SendArrowUp size={17} strokeWidth={1.9} />
+                    <SendArrowUp size={18} strokeWidth={1.5} />
                   </Button>
                 </div>
               </div>

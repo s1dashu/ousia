@@ -178,7 +178,10 @@ export function createWindowResizeDiagnosticTracker({
       currentSession.manualEdges.add(edge)
       scheduleFinish()
     },
-    resized() {
+    resized(windowButtonPositionApplied = false) {
+      if (session && windowButtonPositionApplied) {
+        session.windowButtonPositionApplyCount += 1
+      }
       finish("resized")
     },
   }

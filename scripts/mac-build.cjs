@@ -537,6 +537,9 @@ async function buildMac(options = {}) {
     requireAppleNotarizationCredentials()
   }
 
+  // Vite must not infer release telemetry from `command === "build"` or from
+  // ignored local env files. This orchestrator is the sole release authority.
+  process.env.OUSIA_SENTRY_RELEASE_BUILD = requireSentry ? "1" : "0"
   const sentryTokenSource = shouldLoadSentryBuildToken({ requireSentry })
     ? loadSentryBuildToken()
     : "unavailable"

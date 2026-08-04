@@ -269,8 +269,8 @@ describe("presentation setting helpers", () => {
   })
 
   it("resolves chat line spacing", () => {
-    expect(resolveOusiaChatLineSpacingValue("compact")).toBe("1.4")
-    expect(resolveOusiaChatLineSpacingValue("standard")).toBe("1.5")
-    expect(resolveOusiaChatLineSpacingValue("relaxed")).toBe("1.65")
+    expect(resolveOusiaChatLineSpacingValue("compact")).toBe("1.5")
+    expect(resolveOusiaChatLineSpacingValue("standard")).toBe("1.65")
+    expect(resolveOusiaChatLineSpacingValue("relaxed")).toBe("1.8")
   })
 })

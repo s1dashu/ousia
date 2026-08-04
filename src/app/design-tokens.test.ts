@@ -42,23 +42,23 @@ describe("design token boundaries", () => {
     expect(css).toContain("--ousia-app-sidebar-accent")
   })
 
-  it("includes Mist as the default sidebar-only palette", () => {
+  it("uses the global neutral Gray as the default sidebar-only palette", () => {
     const settingsPage = readSource("src/features/settings/SettingsPage.tsx")
 
-    expect(OUSIA_APPEARANCE_COLOR_SCALES).toContain("mist")
-    expect(defaultOusiaAppSettings.appearanceColorScale).toBe("mist")
-    expect(settingsPage).toContain('label: "Mist"')
-    expect(settingsPage).toContain('value: "mist"')
+    expect(OUSIA_APPEARANCE_COLOR_SCALES).toContain("gray")
+    expect(defaultOusiaAppSettings.appearanceColorScale).toBe("gray")
+    expect(settingsPage).toContain('label: "Gray"')
+    expect(settingsPage).toContain('value: "gray"')
     expect(settingsPage).toContain("near-white sidebar")
-    expect(css).toContain(':root[data-radix-color-scale="mist"]')
-    expect(css).toContain('.dark[data-radix-color-scale="mist"]')
-    expect(css).toContain("--ousia-app-background: #fdfefe")
-    expect(css).toContain("--ousia-app-sidebar: #f7f9fa")
-    expect(css).toContain("--ousia-app-sidebar-accent: #edf1f4")
-    expect(css).toContain("--ousia-app-sidebar: #15191c")
+    expect(css).toContain(':root[data-radix-color-scale="gray"]')
+    expect(css).toContain('.dark[data-radix-color-scale="gray"]')
+    expect(css).toContain("--ousia-sidebar: oklch(0.985 0 0)")
+    expect(css).toContain("--ousia-sidebar-accent: oklch(0.97 0 0)")
+    expect(css).toContain("--ousia-sidebar: oklch(0.205 0 0)")
   })
 
   it("applies the product palette only to the session sidebar", () => {
+    const app = readSource("src/App.tsx")
     const sidebar = readSource("src/features/sidebar/Sidebar.tsx")
     const chat = readSource("src/features/chat/ChatArea.tsx")
     const settingsSidebar = readSource(
@@ -75,20 +75,46 @@ describe("design token boundaries", () => {
     expect(settingsPage).not.toContain("ousia-chat-theme")
     expect(settingsSidebar).toContain("SETTINGS_SIDEBAR_SURFACE_CLASS")
     expect(css).toContain("--ousia-sidebar:")
+    expect(app).toContain("flex-1 bg-[var(--ousia-sidebar)]")
+    expect(app).not.toContain("flex-1 bg-sidebar")
   })
 
-  it("gives the Composer an explicit surface instead of inheriting Sidebar color", () => {
+  it("uses the Nucleo icon system throughout the Sidebar", () => {
+    const sidebar = readSource("src/features/sidebar/Sidebar.tsx")
+    const sidebarItems = readSource("src/features/sidebar/SidebarItems.tsx")
+    const nucleoIcons = readSource("src/components/icons/nucleo-icons.ts")
+
+    expect(sidebar).toContain("@/components/icons/nucleo-icons")
+    expect(sidebarItems).toContain("@/components/icons/nucleo-icons")
+    expect(sidebar).not.toContain("@/components/icons/huge-icons")
+    expect(sidebarItems).not.toContain("@/components/icons/huge-icons")
+    expect(nucleoIcons).not.toContain("nucleo-ui-essential-outline-18")
+    expect(nucleoIcons).toContain("nucleo-ui-outline-18")
+    expect(nucleoIcons).not.toContain("nucleo-core-essential-outline-24")
+    expect(nucleoIcons).toContain("IconGridOutline18 as ExtensionsGrid")
+    expect(sidebar).toContain("icon: ExtensionsGrid")
+    expect(sidebar).not.toContain("<Keyboard")
+    expect(sidebar).not.toContain("shortcut:")
+  })
+
+  it("matches the borderless Composer surface to the Sidebar", () => {
     const chat = readSource("src/features/chat/ChatArea.tsx")
 
-    expect(css).toContain("--ousia-composer-surface: #fff")
-    expect(css).toContain(".dark .ousia-main-panel")
-    expect(css).toContain("--ousia-composer-surface: oklch(0.205 0 0)")
-    expect(css).toContain("0 20px 44px -18px rgb(0 0 0 / 0.86)")
-    expect(css).toContain("0 24px 52px -18px rgb(0 0 0 / 0.9)")
-    expect(chat).toContain("bg-[var(--ousia-composer-surface)]")
-    expect(chat).not.toContain(
-      "ousia-chat-composer-ring ousia-squircle-corners relative z-10 rounded-[var(--ousia-chat-composer-radius)] border-[0.5px] border-[color:var(--ousia-chat-composer-border)] bg-[var(--ousia-sidebar)]"
+    expect(css).toContain("--ousia-chat-composer-radius: 40px")
+    expect(css).toContain(
+      "--ousia-composer-surface: var(--ousia-sidebar)"
     )
+    expect(css).toContain(".dark .ousia-main-panel")
+    expect(chat).toContain("bg-[var(--ousia-composer-surface)]")
+    expect(chat).toContain("border-0")
+    expect(chat).toContain("shadow-none")
+    expect(chat).not.toContain("ousia-chat-composer-ring")
+    expect(chat).not.toContain("ousia-composer-send-button")
+    expect(chat).toContain("NucleoPlus")
+    expect(chat).toContain("NucleoSliders")
+    expect(chat).toContain("NucleoChevronDown")
+    expect(chat).toContain("SendArrowUp")
+    expect(chat).not.toContain("@/components/icons/huge-icons")
   })
 
   it("slightly lifts only the dark chat panel surface", () => {
@@ -105,22 +131,25 @@ describe("design token boundaries", () => {
     expect(chatHeader).toContain(
       "dark:bg-[var(--ousia-chat-panel-surface)]"
     )
-    expect(chatComposer).toContain(
+    expect(chatComposer).toContain("dark:bg-transparent")
+    expect(chatComposer).not.toContain(
       "dark:bg-[var(--ousia-chat-panel-surface)]"
     )
   })
 
-  it("keeps chat message and Markdown code surfaces on fixed gray steps", () => {
+  it("places user messages one color step above the Sidebar while keeping code surfaces fixed", () => {
     const chatMessages = readSource("src/features/chat/ChatMessageList.tsx")
 
-    expect(css).toContain("--ousia-message-user-surface: oklch(0.955 0 0)")
+    expect(css).toContain(
+      "--ousia-message-user-surface: var(--ousia-sidebar-accent)"
+    )
     expect(css).toContain("--ousia-inline-code-surface: oklch(0.975 0 0)")
     expect(css).toContain("--ousia-code-block-surface: oklch(0.985 0 0)")
     expect(css).toContain(
       '.ousia-chat-markdown [data-streamdown="code-block-body"]'
     )
     expect(chatMessages).toContain("ousia-chat-user-message")
-    expect(css.match(/--ousia-message-user-surface:/g)).toHaveLength(2)
+    expect(css.match(/--ousia-message-user-surface:/g)).toHaveLength(4)
     expect(css.match(/--ousia-inline-code-surface:/g)).toHaveLength(2)
     expect(css.match(/--ousia-code-block-surface:/g)).toHaveLength(2)
   })

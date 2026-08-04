@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import type { OusiaChatEvent } from "@/electron/chat-types"
-import { discardSupersededPendingChatEvents } from "./chat-recovery-state"
+import type { ChatItem } from "@/features/chat/chat-events"
+import {
+  discardSupersededPendingChatEvents,
+  reconcileCompletedChatItems,
+} from "./chat-recovery-state"
 
 describe("chat recovery state", () => {
   it("discards only the completed session events superseded by canonical history", () => {
@@ -66,5 +70,59 @@ describe("chat recovery state", () => {
       eventTypes: [],
     })
     expect(pendingEvents.has("session-other")).toBe(true)
+  })
+
+  it("does not let stale completed history revive a terminated tool", () => {
+    const liveItems: ChatItem[] = [
+      {
+        id: "bash-1",
+        name: "bash",
+        role: "tool",
+        status: "failed",
+        text: "find / -type d",
+      },
+    ]
+    const historyItems: ChatItem[] = [
+      {
+        id: "bash-1",
+        name: "bash",
+        payloadOmitted: true,
+        role: "tool",
+        status: "running",
+        text: "find / -type d",
+      },
+    ]
+
+    expect(reconcileCompletedChatItems(liveItems, historyItems)).toEqual([
+      {
+        ...historyItems[0],
+        status: "failed",
+      },
+    ])
+  })
+
+  it("accepts a terminal state supplied by completed history", () => {
+    const liveItems: ChatItem[] = [
+      {
+        id: "bash-1",
+        name: "bash",
+        role: "tool",
+        status: "running",
+        text: "pwd",
+      },
+    ]
+    const historyItems: ChatItem[] = [
+      {
+        id: "bash-1",
+        name: "bash",
+        role: "tool",
+        status: "finished",
+        text: "pwd",
+      },
+    ]
+
+    expect(reconcileCompletedChatItems(liveItems, historyItems)).toBe(
+      historyItems
+    )
   })
 })

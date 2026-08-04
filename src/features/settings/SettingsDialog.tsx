@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
-import { X } from "@/components/icons/huge-icons"
+import { X } from "@/components/icons/nucleo-icons"
 import { Button } from "@/features/settings/SettingsButton"
 import { cn } from "@/lib/utils"
 

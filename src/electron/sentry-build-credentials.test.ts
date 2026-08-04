@@ -15,7 +15,6 @@ const { loadSentryBuildToken, shouldLoadSentryBuildToken } = require(
     }
   }) => string
   shouldLoadSentryBuildToken: (options: {
-    environment: Record<string, string | undefined>
     requireSentry?: boolean
   }) => boolean
 }
@@ -24,27 +23,14 @@ describe("shouldLoadSentryBuildToken", () => {
   it("does not inject a lone keychain token into ordinary local packages", () => {
     expect(
       shouldLoadSentryBuildToken({
-        environment: {
-          OUSIA_SENTRY_DSN: "https://public@example.ingest.sentry.io/123",
-        },
+        requireSentry: false,
       })
     ).toBe(false)
   })
 
-  it("loads a token for required releases or explicit upload metadata", () => {
-    expect(
-      shouldLoadSentryBuildToken({ environment: {}, requireSentry: true })
-    ).toBe(true)
-    expect(
-      shouldLoadSentryBuildToken({
-        environment: { SENTRY_ORG: "example" },
-      })
-    ).toBe(true)
-    expect(
-      shouldLoadSentryBuildToken({
-        environment: { OUSIA_SENTRY_PROJECT: "desktop" },
-      })
-    ).toBe(true)
+  it("loads a token only for a required formal release", () => {
+    expect(shouldLoadSentryBuildToken({ requireSentry: true })).toBe(true)
+    expect(shouldLoadSentryBuildToken({ requireSentry: false })).toBe(false)
   })
 })
 

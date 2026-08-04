@@ -8,7 +8,7 @@ import {
   ArrowUp,
   Tick,
   UnfoldMore,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 import { cn } from "@/lib/utils"
 
 function Select<Value, Multiple extends boolean | undefined = false>(

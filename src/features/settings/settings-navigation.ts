@@ -4,13 +4,14 @@ import {
   Code,
   PaintBrush,
   Settings,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 import type { OusiaAgentProvider } from "@/electron/chat-types"
 
 export type SettingsSectionId =
   | "general"
   | "appearance"
   | "conversation"
+  | "systemPrompt"
   | "provider"
   | "archivedSessions"
 
@@ -18,6 +19,7 @@ type SettingsNavigationCopy = {
   appearance: string
   codexSettings: string
   conversationSettings: string
+  systemPrompt: string
   general: string
   piSettings: string
   archivedSessions: string
@@ -39,6 +41,11 @@ export function getSettingsNavigationItems(
       icon: Code,
       id: "provider" as const,
       label: agentProvider === "pi" ? copy.piSettings : copy.codexSettings,
+    },
+    {
+      icon: Code,
+      id: "systemPrompt" as const,
+      label: copy.systemPrompt,
     },
     {
       icon: Archive,

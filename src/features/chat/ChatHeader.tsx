@@ -3,7 +3,7 @@ import {
   Check,
   Copy,
   MoreHorizontal,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 
 import type { SessionRecord } from "@/app/app-state"
 import { Button } from "@/components/ui/button"

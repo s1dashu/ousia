@@ -1,5 +1,7 @@
 import type {
   OusiaAppState,
+  OusiaAgentConfigurationReloadResult,
+  OusiaBuiltinSystemPromptResult,
   OusiaAppStateCreateProjectPayload,
   OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
@@ -37,6 +39,8 @@ import type {
   OusiaChatToolPayloadResult,
   OusiaChatSendPayload,
   OusiaChatSendResult,
+  OusiaChatSearchPayload,
+  OusiaChatSearchResult,
   OusiaSequencedChatEvent,
   OusiaCodexAuthResult,
   OusiaCodexEnvironmentStatus,
@@ -46,9 +50,15 @@ import type {
   OusiaOpenDirectoryResult,
   OusiaOpenProjectResult,
   OusiaPiEnvironmentStatus,
+  OusiaPiPackageActivationResult,
+  OusiaPiPackageMutationPayload,
+  OusiaPiPackageMutationResult,
+  OusiaPiPackageReloadPayload,
+  OusiaPiPackageStatus,
   OusiaPiProviderCredentialPayload,
   OusiaPiProviderCredentialRemovalPayload,
   OusiaPiProviderCredentialResult,
+  OusiaInstalledSkillsResult,
   OusiaPiRetrySettingsPayload,
   OusiaPiRetrySettingsResult,
   OusiaSelectDirectoryResult,
@@ -116,12 +126,17 @@ declare global {
       sendChatMessage(
         payload: OusiaChatSendPayload
       ): Promise<OusiaChatSendResult>
+      reloadAgentConfiguration(): Promise<OusiaAgentConfigurationReloadResult>
+      getBuiltinSystemPrompt(): Promise<OusiaBuiltinSystemPromptResult>
       generateChatTitle(
         payload: OusiaChatGenerateTitlePayload
       ): Promise<OusiaChatGenerateTitleResult>
       getChatHistory(
         payload: OusiaChatHistoryPayload
       ): Promise<OusiaChatHistoryResult>
+      searchChats(
+        payload: OusiaChatSearchPayload
+      ): Promise<OusiaChatSearchResult>
       getActiveChatEvents(): Promise<OusiaChatEventReplaySnapshot>
       getChatToolPayload(
         payload: OusiaChatToolPayloadPayload
@@ -149,6 +164,17 @@ declare global {
       ): Promise<OusiaChatCompactResult>
       listModels(): Promise<OusiaModelRegistryResult>
       checkPiEnvironment(): Promise<OusiaPiEnvironmentStatus>
+      listPiPackages(): Promise<OusiaPiPackageStatus>
+      listInstalledSkills(): Promise<OusiaInstalledSkillsResult>
+      installPiPackage(
+        payload: OusiaPiPackageMutationPayload
+      ): Promise<OusiaPiPackageMutationResult>
+      removePiPackage(
+        payload: OusiaPiPackageMutationPayload
+      ): Promise<OusiaPiPackageMutationResult>
+      reloadPiPackages(
+        payload: OusiaPiPackageReloadPayload
+      ): Promise<OusiaPiPackageActivationResult>
       checkCodexEnvironment(): Promise<OusiaCodexEnvironmentStatus>
       loginCodexWithChatGPT(): Promise<OusiaCodexAuthResult>
       logoutCodex(): Promise<OusiaCodexAuthResult>

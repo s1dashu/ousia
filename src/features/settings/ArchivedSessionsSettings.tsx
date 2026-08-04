@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 
 import { getMessages } from "@/app/i18n"
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
-import { ArchiveRestore, Trash2 } from "@/components/icons/huge-icons"
+import { ArchiveRestore, Trash2 } from "@/components/icons/nucleo-icons"
 import {
   Table,
   TableBody,

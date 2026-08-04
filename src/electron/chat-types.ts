@@ -131,6 +131,7 @@ export type OusiaAppSettings = {
   autoRetryOnFailure: boolean
   showContextUsage: boolean
   continueQueuedMessagesAfterInterrupt: boolean
+  systemPrompt: string
   thinkingLevel: OusiaPiThinkingLevel
   modelProvider: string
   modelId: string
@@ -191,6 +192,40 @@ export type OusiaPiEnvironmentStatus = {
   modelCount: number
   modelsJsonExists: boolean
   runtime: "bundled"
+}
+
+export type OusiaPiPackageMutationPayload = {
+  packageName: string
+}
+
+export type OusiaPiPackageStatus = {
+  installedPackageNames: string[]
+  missingPackageNames: string[]
+}
+
+export type OusiaInstalledSkill = {
+  description: string
+  enabled: boolean
+  id: string
+  name: string
+  source: "global" | "pi" | "pi-package"
+}
+
+export type OusiaInstalledSkillsResult = {
+  skills: OusiaInstalledSkill[]
+}
+
+export type OusiaPiPackageActivationResult =
+  | { status: "reloaded" }
+  | { status: "agent-running" }
+  | { status: "failed"; error: string }
+
+export type OusiaPiPackageMutationResult = OusiaPiPackageStatus & {
+  activation: OusiaPiPackageActivationResult
+}
+
+export type OusiaPiPackageReloadPayload = {
+  force: boolean
 }
 
 export type OusiaCodexAccount =
@@ -418,7 +453,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   defaultAgentProvider: "pi",
   codexModelId: "",
   codexReasoningEffort: null,
-  appearanceColorScale: "mist",
+  appearanceColorScale: "gray",
   theme: "light",
   appFontFamily: "system",
   chatFontFamily: "system",
@@ -436,6 +471,7 @@ export const defaultOusiaAppSettings: OusiaAppSettings = {
   autoRetryOnFailure: true,
   showContextUsage: false,
   continueQueuedMessagesAfterInterrupt: true,
+  systemPrompt: "",
   thinkingLevel: "medium",
   modelProvider: "deepseek",
   modelId: "deepseek-v4-flash",
@@ -650,6 +686,10 @@ export function normalizeOusiaAppSettings(
       typeof merged.continueQueuedMessagesAfterInterrupt === "boolean"
         ? merged.continueQueuedMessagesAfterInterrupt
         : defaultOusiaAppSettings.continueQueuedMessagesAfterInterrupt,
+    systemPrompt:
+      typeof merged.systemPrompt === "string"
+        ? merged.systemPrompt
+        : defaultOusiaAppSettings.systemPrompt,
     thinkingLevel,
     modelProvider,
     modelId: merged.modelId.trim() || defaultOusiaAppSettings.modelId,
@@ -700,12 +740,12 @@ export function resolveOusiaChatLineSpacingValue(
   chatLineSpacing: OusiaChatLineSpacing
 ) {
   if (chatLineSpacing === "compact") {
-    return "1.4"
+    return "1.5"
   }
   if (chatLineSpacing === "relaxed") {
-    return "1.65"
+    return "1.8"
   }
-  return "1.5"
+  return "1.65"
 }
 
 export function createOusiaId(prefix: string) {
@@ -1047,6 +1087,7 @@ export type OusiaChatCompactPayload = OusiaChatContext & {
   autoRetryOnFailure?: boolean
   thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
+  systemPrompt?: string
 }
 
 export type OusiaChatCompactResult = {
@@ -1065,6 +1106,7 @@ export type OusiaChatSendPayload = OusiaChatContext & {
   autoRetryOnFailure?: boolean
   thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
+  systemPrompt?: string
 }
 
 export function summarizeOusiaChatAttachments(
@@ -1117,6 +1159,26 @@ export type OusiaChatHistoryResult = {
   items: OusiaChatHistoryItem[]
   nextCursor?: string
   totalItems?: number
+}
+
+export type OusiaChatSearchPayload = {
+  query: string
+  sessionId?: string
+}
+
+export type OusiaChatSearchResultItem = {
+  match: "content" | "title"
+  itemId?: string
+  projectName?: string
+  role?: "assistant" | "user"
+  sessionId: string
+  snippet?: string
+  time: string
+  title: string
+}
+
+export type OusiaChatSearchResult = {
+  items: OusiaChatSearchResultItem[]
 }
 
 export type OusiaChatToolPayloadPayload = OusiaChatContext & {
@@ -1177,7 +1239,23 @@ export type OusiaChatExportPayload = OusiaChatContext & {
   autoRetryOnFailure?: boolean
   thinkingLevel: OusiaReasoningEffort
   model: OusiaModelSettings
+  systemPrompt?: string
 }
+
+export type OusiaAgentConfigurationReloadResult =
+  | { ok: true }
+  | { ok: false; error: string }
+
+export type OusiaBuiltinSystemPromptOptions = {
+  agentMode?: OusiaAgentMode
+  customAgentTools?: OusiaAgentToolName[]
+  modelId: string
+  projectPath: string
+}
+
+export type OusiaBuiltinSystemPromptResult =
+  | { ok: true; prompt: string }
+  | { ok: false; error: string }
 
 export type OusiaChatExportResult =
   | {

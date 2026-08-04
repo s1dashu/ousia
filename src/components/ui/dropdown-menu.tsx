@@ -1,6 +1,6 @@
 import * as React from "react"
 import { Menu as DropdownMenuPrimitive } from "@base-ui/react/menu"
-import { Check, ChevronRight } from "@/components/icons/huge-icons"
+import { Check, ChevronRight } from "@/components/icons/nucleo-icons"
 
 import { cn } from "@/lib/utils"
 

@@ -12,7 +12,7 @@ import {
 } from "react"
 
 import type { getMessages } from "@/app/i18n"
-import { FolderOpen, SendArrowDown } from "@/components/icons/huge-icons"
+import { FolderOpen, SendArrowDown } from "@/components/icons/nucleo-icons"
 import { useTheme, type ResolvedTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import {
@@ -47,11 +47,15 @@ const wrapFillUnsafeCSS = `
   }
 
   [data-diffs-header] {
-    background-color: var(--ousia-diff-card-bg);
+    box-sizing: border-box;
+    min-height: 30px;
+    border-block-end: 0.5px solid color-mix(in srgb, var(--diffs-fg) 15%, transparent);
+    background-color: var(--diffs-bg);
+    padding-inline: 10px;
   }
 
   [data-diffs-header][data-sticky] {
-    background-color: var(--ousia-diff-card-bg);
+    background-color: var(--diffs-bg);
     z-index: 6;
   }
 
@@ -117,22 +121,18 @@ const fileOptionsByTheme = {
   },
 } as const
 
-const previewCardBackground = "var(--ousia-diff-card-bg)"
-
 const previewFrameStyle = {
-  backgroundColor: previewCardBackground,
   borderRadius: "14px",
   display: "block",
   maxHeight: "48dvh",
   overflowX: "hidden",
 } satisfies CSSProperties
 
-type PierreSurfaceStyle = CSSProperties & Record<`--${string}`, string>
 type HeaderMetadataRenderer = () => ReactNode
 
 const pierreSurfaceStyle = {
   display: "block",
-} satisfies PierreSurfaceStyle
+} satisfies CSSProperties
 
 function revealablePreviewPath(preview: OusiaChatToolFilePreview) {
   if (preview.kind !== "diff" && preview.kind !== "patch") {
@@ -508,7 +508,7 @@ export function ToolFilePreviewView({
     <div className="relative mt-1.5">
       <div
         ref={frameRef}
-        className="ousia-diff-preview-frame ousia-squircle-corners"
+        className="ousia-diff-preview-frame ousia-squircle-corners border-[0.5px] border-foreground/15"
         onScroll={(event) => {
           syncFollowState(event.currentTarget)
         }}

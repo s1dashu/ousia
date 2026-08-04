@@ -33,23 +33,36 @@ afterEach(() => {
 })
 
 function renderSidebar({
+  activeSidebarUtilityDestination = null,
+  expandedProjectIds = [],
+  language = "en",
   projects = [],
   sessions = [session],
   sessionRunStatusById = {},
+  sidebarSectionOrder = ["sessions", "projects"],
   updateStatus = { phase: "idle", currentVersion: "0.1.21" },
 }: {
+  activeSidebarUtilityDestination?: React.ComponentProps<
+    typeof Sidebar
+  >["activeSidebarUtilityDestination"]
+  expandedProjectIds?: string[]
+  language?: React.ComponentProps<typeof Sidebar>["language"]
   projects?: ProjectRecord[]
   sessions?: SessionRecord[]
   sessionRunStatusById?: Record<string, "idle" | "working">
+  sidebarSectionOrder?: React.ComponentProps<
+    typeof Sidebar
+  >["sidebarSectionOrder"]
   updateStatus?: OusiaUpdateStatus
 } = {}) {
   vi.stubGlobal("document", { body: {} })
 
   return renderToStaticMarkup(
     <Sidebar
+      activeSidebarUtilityDestination={activeSidebarUtilityDestination}
       onArchiveProject={vi.fn()}
-      expandedProjectIds={[]}
-      language="en"
+      expandedProjectIds={expandedProjectIds}
+      language={language}
       onCreateProjectSession={vi.fn()}
       onCreateSession={vi.fn()}
       onDeleteProject={vi.fn()}
@@ -58,6 +71,7 @@ function renderSidebar({
       onMoveSession={vi.fn()}
       onOpenProject={vi.fn()}
       onOpenSettings={vi.fn()}
+      onSelectSidebarUtilityDestination={vi.fn()}
       onShowDefaultSessionInFolder={vi.fn()}
       onShowProjectInFolder={vi.fn()}
       onUpdateAction={vi.fn()}
@@ -72,7 +86,7 @@ function renderSidebar({
       selectedSessionId={session.id}
       sessionRunStatusById={sessionRunStatusById}
       sessions={sessions}
-      sidebarSectionOrder={["sessions", "projects"]}
+      sidebarSectionOrder={sidebarSectionOrder}
       style={{ width: 256 }}
       updateStatus={updateStatus}
       unreadCompletedSessionIds={new Set()}
@@ -81,6 +95,72 @@ function renderSidebar({
 }
 
 describe("Sidebar running actions", () => {
+  it("keeps projects and conversations in the same scroll region", () => {
+    const html = renderSidebar({
+      sidebarSectionOrder: ["projects", "sessions"],
+    })
+
+    expect(html).toContain('data-sidebar-section-id="projects"')
+    expect(html).toContain('data-sidebar-section-id="sessions"')
+    expect(html.match(/overflow-auto/g)).toHaveLength(1)
+    expect(html).not.toContain(
+      "sticky bottom-0 z-10 max-h-full overflow-auto bg-sidebar"
+    )
+  })
+
+  it("renders the visible utility entries before the project and conversation lists", () => {
+    const html = renderSidebar()
+
+    const brandIndex = html.indexOf('aria-label="Ousia"')
+    const primaryLabelIndex = html.indexOf(">Search<")
+    expect(brandIndex).toBeGreaterThan(-1)
+    expect(html).toContain(">Ousia</span>")
+    expect(brandIndex).toBeLessThan(primaryLabelIndex)
+    expect(html).toContain('aria-label="Ousia features"')
+    expect(html.match(/pl-\[7px\] pr-\[7px\]/g)).toHaveLength(1)
+    expect(html).toContain("pl-[7px] pr-[6px]")
+    expect(html).toContain("pt-0.5 pr-3 pb-1.5 pl-4")
+    expect(html).toContain("pl-[6px] pr-[7px]")
+    expect(html).not.toContain("utility-new-task-button")
+    expect(html).not.toContain("<kbd")
+    const buttonForLabel = (label: string) => {
+      const labelIndex = html.indexOf(`>${label}<`)
+      const buttonStart = html.lastIndexOf("<button", labelIndex)
+      return html.slice(buttonStart, html.indexOf(">", buttonStart) + 1)
+    }
+    const primaryButtonStart = html.lastIndexOf("<button", primaryLabelIndex)
+    const primaryButton = buttonForLabel("Search")
+    const searchButton = buttonForLabel("Search")
+    expect(primaryButtonStart).toBeGreaterThan(-1)
+    expect(primaryButton).toContain("ousia-squircle-corners")
+    expect(primaryButton.match(/class="([^"]*)"/)?.[1]).toBe(
+      searchButton.match(/class="([^"]*)"/)?.[1]
+    )
+    expect(html).not.toContain(">New task<")
+    expect(html).toContain(">Search<")
+    expect(html).toContain(">Extensions<")
+    expect(html).not.toContain(">Scheduled tasks<")
+    expect(html).not.toContain(">Connect phone<")
+    expect(html).not.toContain(">Remote control<")
+  })
+
+  it("uses the same stable selected surface for utility entries and conversations", () => {
+    const html = renderSidebar({ activeSidebarUtilityDestination: "extensions" })
+
+    expect(html).toContain('aria-current="page"')
+    expect(html).toContain("ousia-squircle-corners")
+    expect(html).toContain("h-[30px]")
+    expect(html).toContain("mr-1")
+    expect(html).toContain("border-0")
+    expect(html).toContain("bg-clip-border")
+    expect(html).toContain("hover:bg-white")
+    expect(html).toContain("dark:hover:bg-secondary")
+  })
+
+  it("localizes Extensions in Chinese", () => {
+    expect(renderSidebar({ language: "zh" })).toContain(">扩展与技能<")
+  })
+
   it("shows the default-session folder menu only for a selected non-project chat", () => {
     expect(renderSidebar()).toContain('aria-label="Non-project chat actions"')
     expect(
@@ -140,16 +220,29 @@ describe("Sidebar running actions", () => {
     expect(html).toContain(">Update failed. Click to retry.</button>")
   })
 
-  it("insets session surfaces while keeping actions close to the right edge", () => {
-    const html = renderSidebar()
+  it("aligns top-level sessions with their section-title axis", () => {
+    const html = renderSidebar({
+      sessions: [session, { ...session, id: "session-2", title: "Second task" }],
+    })
 
-    expect(html).toContain("mr-1 pl-3 pr-1")
+    expect(html).toContain("w-full pl-2 pr-1")
+    expect(html.match(/mx-px !w-\[calc\(100%-2px\)\]/g)).toHaveLength(2)
+    expect(html).not.toContain("w-full pl-3 pr-1")
   })
 
-  it("aligns section and project actions on the same right-hand axis", () => {
-    const html = renderSidebar({ projects: [project] })
+  it("aligns section titles, project labels, and project sessions on the compact axis", () => {
+    const html = renderSidebar({
+      expandedProjectIds: [project.id],
+      projects: [project],
+      sessions: [{ ...session, projectId: project.id }],
+    })
 
-    expect(html.match(/w-full pl-3 pr-1/g)).toHaveLength(3)
+    expect(html).not.toContain("w-full pl-3 pr-1")
+    expect(html.match(/w-full pl-2 pr-1/g)).toHaveLength(5)
+    expect(html).not.toContain("mr-1 pl-2 pr-1")
+    expect(html).toContain(
+      "group/section-header grid cursor-pointer items-center gap-1 pt-2 pb-0.5"
+    )
   })
 
   it("renders only the running indicator for a working session", () => {

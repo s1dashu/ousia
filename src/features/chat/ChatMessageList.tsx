@@ -6,7 +6,7 @@ import {
   GitBranchPlus,
   LoaderCircle,
   Paperclip,
-} from "@/components/icons/huge-icons"
+} from "@/components/icons/nucleo-icons"
 import { Streamdown } from "streamdown"
 import "streamdown/styles.css"
 
@@ -17,8 +17,11 @@ import { formatBytes } from "@/features/chat/chat-format"
 import { CHAT_CONTENT_MAX_WIDTH_CLASS } from "@/features/chat/chat-layout"
 import { ToolCallGroupView, ToolCallView } from "@/features/chat/ChatToolCall"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/components/ui/toast"
+import { writeTextToClipboard } from "@/features/chat/chat-history-clipboard"
 
 type ChatMessageListProps = {
+  highlightedItemId: string
   items: ChatItem[]
   isAgentWorking: boolean
   onBranchFromMessage: (itemId: string) => void
@@ -37,6 +40,7 @@ const ASSISTANT_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
 })
 
 export const ChatMessageList = memo(function ChatMessageList({
+  highlightedItemId,
   items,
   isAgentWorking,
   onBranchFromMessage,
@@ -67,8 +71,14 @@ export const ChatMessageList = memo(function ChatMessageList({
             <div
               className={cn(
                 "ousia-chat-message-contain",
-                chatRenderItemSpacingClass(item, renderItems[index - 1])
+                chatRenderItemSpacingClass(item, renderItems[index - 1]),
+                item.kind === "single" && item.item.id === highlightedItemId
+                  ? "rounded-xl outline-2 outline-primary/20"
+                  : ""
               )}
+              data-chat-message-id={
+                item.kind === "single" ? item.item.id : undefined
+              }
               data-chat-message-role={chatRenderItemRole(item)}
               key={chatRenderItemId(item)}
             >
@@ -430,6 +440,7 @@ function AssistantMessageFooter({
   onBranchFromMessage: (itemId: string) => void
   t: ReturnType<typeof getMessages>
 }) {
+  const toast = useToast()
   if (item.role !== "assistant") {
     return null
   }
@@ -445,7 +456,10 @@ function AssistantMessageFooter({
         aria-label={t.chat.copyMessage}
         title={t.chat.copyMessage}
         onClick={() => {
-          void navigator.clipboard?.writeText(item.text)
+          void writeTextToClipboard(item.text).then(
+            () => toast(t.chat.copiedToClipboard),
+            () => toast(t.chat.copyMessageFailed, { variant: "error" })
+          )
         }}
       >
         <Copy size={14} strokeWidth={1.5} />

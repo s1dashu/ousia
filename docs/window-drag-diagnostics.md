@@ -54,12 +54,16 @@ presence of the two known drag classes.
 Ousia does not call `setWindowButtonPosition` from the live `resize` handler.
 The traffic-light position depends on renderer zoom rather than window bounds,
 and repeatedly mutating the native title bar during resize can leave native
-draggable-region hit testing stale. The position is still applied during
-window creation and renderer load, after zoom changes, after unmaximize, and
-after leaving fullscreen.
+draggable-region hit testing stale. Instead, it reapplies the position exactly
+once from the macOS `resized` event, after the live resize has finished. That
+post-resize native title-bar update rebuilds Chromium's hit-test map for CSS
+draggable regions. The position is also applied during window creation and
+renderer load, after zoom changes, after unmaximize, and after leaving
+fullscreen.
 
-After a resize, `window.resize.finish` should therefore report
-`windowButtonPositionApplyCount: 0`. If a failed drag still produces
-`renderer-received-pointerdown-for-drag-region` with that count at zero, the
+After a completed macOS resize, `window.resize.finish` should therefore report
+`windowButtonPositionApplyCount: 1`; values above one indicate that the native
+title bar was mutated during the live resize. If a failed drag still produces
+`renderer-received-pointerdown-for-drag-region` with that count at one, the
 next isolation target is Electron's native draggable-region handling rather
 than renderer layout or traffic-light updates.

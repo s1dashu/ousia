@@ -1,7 +1,7 @@
 "use client"
 
 import { Select as SelectPrimitive } from "@base-ui/react/select"
-import { Check, ChevronDown, ChevronUp } from "@/components/icons/huge-icons"
+import { Check, ChevronDown, ChevronUp } from "@/components/icons/nucleo-icons"
 
 import { cn } from "@/lib/utils"
 

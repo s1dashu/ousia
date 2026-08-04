@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   Select,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -49,12 +50,16 @@ describe("Base UI migration adapters", () => {
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
-        <SelectItem value="pi">Pi</SelectItem>
+        <SelectGroup>
+          <SelectItem value="pi">Pi</SelectItem>
+        </SelectGroup>
       </Select>
     )
     const switchHtml = renderToStaticMarkup(<Switch checked={false} />)
 
     expect(selectHtml).toContain('data-slot="select-trigger"')
+    expect(selectHtml).toContain('data-slot="select-group"')
+    expect(selectHtml).toContain("scroll-my-1 p-1")
     expect(selectHtml).toContain("Pi")
     expect(switchHtml).toContain('data-slot="settings-switch"')
     expect(switchHtml).toContain("data-unchecked")

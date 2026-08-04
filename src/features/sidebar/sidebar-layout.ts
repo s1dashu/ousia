@@ -7,11 +7,12 @@ export function handleTextButtonMouseDown(
 }
 
 export const sidebarAddIconSize = 18
-export const sidebarFolderIconSize = 18
+export const sidebarFolderIconSize = 16
 export const sidebarMenuIconSize = 18
 export const sidebarMenuIconXClass = "-translate-x-0.5"
 export const sidebarSectionIconSize = 14
 export const sidebarIconStrokeWidth = 1.5
+export const sidebarRowHeightClass = "h-[30px]"
 export const sidebarActionButtonClass = "size-6 justify-self-end"
 export const sidebarSingleActionGridClass = "grid-cols-[minmax(0,1fr)_24px]"
 export const sidebarProjectActionButtonClass = "size-6 justify-self-end"
@@ -19,18 +20,22 @@ export const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 export const sidebarProjectSessionGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px]"
-export const sidebarScrollPaddingXClass = "px-2"
-export const sidebarFooterPaddingXClass = "px-[7px]"
+export const sidebarNavigationPaddingXClass = "pl-[7px] pr-[6px]"
+export const sidebarScrollPaddingXClass = "pl-[7px] pr-[7px]"
+export const sidebarFooterPaddingXClass = "pl-[6px] pr-[7px]"
 export const sidebarRowFrameXClass = "w-full"
 export const sidebarRowLeadingInsetClass = "pl-3"
+export const sidebarProjectLeadingInsetClass = "pl-2"
 export const sidebarRowContentXClass = `${sidebarRowLeadingInsetClass} pr-2`
 export const sidebarRowXClass = `${sidebarRowFrameXClass} ${sidebarRowContentXClass}`
-export const sidebarSessionRowXClass = `mr-1 ${sidebarRowLeadingInsetClass} pr-1`
-export const sidebarSessionDragPreviewXClass = "px-3"
+export const sidebarSessionRowXClass = `${sidebarRowFrameXClass} ${sidebarProjectLeadingInsetClass} pr-1`
+export const sidebarProjectSessionRowXClass = `${sidebarRowFrameXClass} ${sidebarProjectLeadingInsetClass} pr-1`
+export const sidebarSessionDragPreviewXClass = "pl-2 pr-3"
+export const sidebarProjectSessionDragPreviewXClass = "pl-2 pr-3"
 export const sidebarRightActionRowXClass = `${sidebarRowFrameXClass} ${sidebarRowLeadingInsetClass} pr-1`
-export const sidebarProjectRowXClass = sidebarRightActionRowXClass
+export const sidebarProjectRowXClass = `${sidebarRowFrameXClass} ${sidebarProjectLeadingInsetClass} pr-1`
 export const sidebarListGapClass = "flex flex-col gap-0.5"
-export const sidebarSectionHeaderXClass = sidebarRightActionRowXClass
+export const sidebarSectionHeaderXClass = sidebarProjectRowXClass
 export const sidebarEmptySectionRowXClass = sidebarSessionRowXClass
 export const sidebarDefaultSessionPreviewCount = 10
 export const sidebarProjectSessionCompactCount = 5
@@ -41,7 +46,8 @@ export const sidebarRowStateClass =
 export const sidebarProjectRowStateClass =
   "relative text-sidebar-accent-foreground before:pointer-events-none before:absolute before:inset-0 before:rounded-md before:bg-transparent hover:before:bg-[var(--sidebar-accent)] focus-within:before:bg-[var(--sidebar-accent)] [&>*]:relative [&>*]:z-[1]"
 export const sidebarSelectedRowClass =
-  "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] dark:bg-card"
+  "bg-white text-sidebar-accent-foreground shadow-[var(--ousia-sidebar-selected-shadow)] hover:bg-white dark:bg-secondary dark:hover:bg-secondary"
+export const sidebarSessionFrameClass = "mx-px !w-[calc(100%-2px)]"
 export const sidebarActionHoverClass =
   "hover:bg-muted hover:text-sidebar-accent-foreground"
 export const sidebarDragPlaceholderClass =

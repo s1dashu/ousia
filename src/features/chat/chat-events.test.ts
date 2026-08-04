@@ -574,6 +574,31 @@ describe("applyChatEvent", () => {
     ])
   })
 
+  it("marks running tools failed when the run errors", () => {
+    const items: ChatItem[] = [
+      {
+        id: "tool-1",
+        name: "bash",
+        role: "tool",
+        status: "running",
+        text: "find / -type d",
+      },
+    ]
+
+    expect(
+      applyChatEvent(items, {
+        status: "error",
+        timestamp: "2026-08-04T15:32:34.507Z",
+        type: "run_status",
+      })
+    ).toEqual([
+      {
+        ...items[0],
+        status: "failed",
+      },
+    ])
+  })
+
   it("upserts status messages", () => {
     const first = applyChatEvent([], {
       id: "status-1",

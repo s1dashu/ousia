@@ -5,7 +5,6 @@ const { notarizeExistingDmg, runMacBuild } = require("./mac-build.cjs")
 async function main() {
   const { dmgPath } = await runMacBuild({
     makeDmg: true,
-    requireSentry: true,
     sign: true,
   })
   await notarizeExistingDmg({ dmgPath })

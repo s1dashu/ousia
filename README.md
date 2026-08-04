@@ -164,6 +164,8 @@ the request to Pi or Codex, so renderer paths cannot expand an Agent's workspace
 npm run typecheck    # Type-check all TypeScript targets
 npm run lint         # ESLint across the project
 npm run check        # Both of the above
+npx eslint src/path/to/changed-file.tsx  # Routine fast feedback
+npm run verify:full  # Before commit: tests, checks, and app build
 
 npm run package      # Production app bundle → out/
 npm run make         # Local unsigned DMG (fast iteration)

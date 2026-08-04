@@ -104,6 +104,7 @@ module.exports = {
         `${piCodingAgentPackagePath}/dist`,
         `${piCodingAgentPackagePath}/docs`,
         `${piCodingAgentPackagePath}/examples`,
+        `${piCodingAgentPackagePath}/node_modules`,
       ]
 
       if (includedFiles.includes(file)) {

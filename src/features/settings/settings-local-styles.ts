@@ -7,4 +7,4 @@ export const SETTINGS_NAVIGATION_IDLE_CLASS =
 export const SETTINGS_NAVIGATION_ACTIVE_CLASS =
   `${sidebarSelectedRowClass} font-normal`
 export const SETTINGS_PANEL_SURFACE_CLASS =
-  "border-[0.5px] border-l-0 border-border/60 bg-background text-foreground shadow-[var(--ousia-main-panel-shadow)]"
+  "bg-background text-foreground shadow-[var(--ousia-main-panel-shadow)]"

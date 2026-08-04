@@ -10,10 +10,10 @@ import {
 
 const ENVIRONMENT_NAMES = [
   "OUSIA_SENTRY_DSN",
-  "OUSIA_SENTRY_ENABLE_IN_DEVELOPMENT",
   "OUSIA_SENTRY_ENABLE_NATIVE_CRASH_REPORTS",
   "OUSIA_SENTRY_ENVIRONMENT",
   "OUSIA_SENTRY_PROJECT",
+  "OUSIA_SENTRY_RELEASE_BUILD",
   "SENTRY_AUTH_TOKEN",
   "SENTRY_ORG",
 ] as const
@@ -101,17 +101,51 @@ describe("desktopSentryVite", () => {
     })
   })
 
-  it("requires source-map credentials for an enabled production build", () => {
+  it("keeps ordinary production builds disabled even when local Sentry values exist", () => {
+    process.env.OUSIA_SENTRY_DSN = "https://public@example.ingest.sentry.io/123"
+    process.env.SENTRY_ORG = "example"
+
+    const config = JSON.parse(
+      String(build("build").define.__DESKTOP_SENTRY_CONFIG__)
+    )
+
+    expect(config).toMatchObject({ dsn: "", enabled: false })
+  })
+
+  it("requires complete credentials only when the release workflow opts in", () => {
+    process.env.OUSIA_SENTRY_RELEASE_BUILD = "1"
     process.env.OUSIA_SENTRY_DSN = "https://public@example.ingest.sentry.io/123"
     expect(() => build("build")).toThrow(
-      "A Sentry-enabled production build requires source-map upload credentials"
+      "A Sentry release build requires SENTRY_AUTH_TOKEN, SENTRY_ORG, and OUSIA_SENTRY_PROJECT"
     )
   })
 
-  it("rejects partial source-map credentials", () => {
+  it("enables Sentry when the formal release supplies complete credentials", () => {
+    process.env.OUSIA_SENTRY_RELEASE_BUILD = "1"
+    process.env.OUSIA_SENTRY_DSN =
+      "https://public@example.ingest.sentry.io/123"
+    process.env.SENTRY_AUTH_TOKEN = "secret"
     process.env.SENTRY_ORG = "example"
+    process.env.OUSIA_SENTRY_PROJECT = "desktop"
+
+    const result = build("build")
+    const config = JSON.parse(
+      String(result.define.__DESKTOP_SENTRY_CONFIG__)
+    )
+
+    expect(config).toMatchObject({
+      dsn: "https://public@example.ingest.sentry.io/123",
+      enabled: true,
+      environment: "production",
+    })
+    expect(result.sourcemap).toBe("hidden")
+    expect(result.plugins).toHaveLength(1)
+  })
+
+  it("rejects the release-only switch during development", () => {
+    process.env.OUSIA_SENTRY_RELEASE_BUILD = "1"
     expect(() => build("serve")).toThrow(
-      "Source-map upload requires SENTRY_AUTH_TOKEN, SENTRY_ORG, and OUSIA_SENTRY_PROJECT together"
+      "OUSIA_SENTRY_RELEASE_BUILD is only valid for production builds"
     )
   })
 })

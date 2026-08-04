@@ -623,7 +623,12 @@ export function createWindowHost({
       scheduleWindowStateSave()
     })
     mainWindow.on("resized", () => {
-      resizeDiagnosticTracker.resized()
+      // Reapply once after macOS finishes its native resize. Chromium can leave
+      // the native hit-test map for CSS draggable regions stale after resizing;
+      // updating the title-bar button position rebuilds that map. Doing this on
+      // `resized` avoids mutating the native title bar during the live resize.
+      const windowButtonPositionApplied = applyWindowButtonPosition(mainWindow)
+      resizeDiagnosticTracker.resized(windowButtonPositionApplied)
     })
     mainWindow.on("maximize", scheduleWindowStateSave)
     mainWindow.on("unmaximize", () => {

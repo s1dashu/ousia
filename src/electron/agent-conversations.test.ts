@@ -20,12 +20,45 @@ vi.mock("./pi-package-dir.js", () => ({
 }))
 
 import {
+  activePiToolsForAgentMode,
   createAgentConversationModule,
   disposePiSessionBundle,
+  includePiExtensionTools,
+  preparePiSessionsForConfigurationReload,
+  stripPiSystemPromptRuntimeDirectory,
 } from "./agent-conversations.js"
 import { historyItemsFromActivePiSession } from "./agent-conversation-history.js"
 
 describe("Pi agent conversation boundaries", () => {
+  it("loads Pi's generated built-in prompt for the editor", async () => {
+    const conversations = createAgentConversationModule({
+      enabledTools: ["read", "write", "edit", "bash", "grep", "find", "ls"],
+      emitChatEvent: vi.fn(),
+    })
+
+    const prompt = await conversations.getBuiltinSystemPrompt({
+      agentMode: "standard",
+      modelId: "",
+      projectPath: "/tmp/ousia-builtin-prompt-test",
+    })
+
+    expect(prompt).toContain("You are an expert coding assistant")
+    expect(prompt).toContain("Available tools:")
+    expect(prompt).not.toContain("Current working directory:")
+  })
+
+  it("removes only Pi's dynamic cwd suffix from the editable built-in prompt", () => {
+    expect(
+      stripPiSystemPromptRuntimeDirectory(
+        "Built-in prompt\nCurrent working directory: /tmp/project",
+        "/tmp/project"
+      )
+    ).toBe("Built-in prompt")
+    expect(() =>
+      stripPiSystemPromptRuntimeDirectory("Built-in prompt", "/tmp/project")
+    ).toThrow("missing its runtime directory suffix")
+  })
+
   it("unsubscribes and disposes a released Pi session even if unsubscribe fails", () => {
     const dispose = vi.fn()
     const unsubscribe = vi.fn(() => {
@@ -40,6 +73,98 @@ describe("Pi agent conversation boundaries", () => {
     ).toThrow("unsubscribe failed")
     expect(unsubscribe).toHaveBeenCalledOnce()
     expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it("defers configuration reload while an agent is running", async () => {
+    const session = {
+      abort: vi.fn(async () => {}),
+      clearQueue: vi.fn(),
+      isBashRunning: false,
+      isStreaming: true,
+      pendingMessageCount: 0,
+    }
+
+    await expect(
+      preparePiSessionsForConfigurationReload([session], false)
+    ).resolves.toEqual({ busySessionCount: 1, status: "agent-running" })
+    expect(session.abort).not.toHaveBeenCalled()
+    expect(session.clearQueue).not.toHaveBeenCalled()
+  })
+
+  it("stops active work before a forced configuration reload", async () => {
+    const session = {
+      abort: vi.fn(async () => {}),
+      clearQueue: vi.fn(),
+      isBashRunning: true,
+      isStreaming: false,
+      pendingMessageCount: 1,
+    }
+
+    await expect(
+      preparePiSessionsForConfigurationReload([session], true)
+    ).resolves.toEqual({ busySessionCount: 1, status: "reloaded" })
+    expect(session.clearQueue).toHaveBeenCalledOnce()
+    expect(session.abort).toHaveBeenCalledOnce()
+  })
+
+  it("includes installed extension tools in standard agent sessions", () => {
+    const extensionTools = new Map([
+      ["web_search", {}],
+      ["fetch_content", {}],
+    ])
+
+    expect(
+      includePiExtensionTools(["read", "bash"], "standard", {
+        errors: [],
+        extensions: [{ tools: extensionTools }],
+      } as never)
+    ).toEqual(["read", "bash", "web_search", "fetch_content"])
+  })
+
+  it("does not silently broaden restricted agent modes with extension tools", () => {
+    expect(
+      includePiExtensionTools(["read"], "readOnly", {
+        errors: [],
+        extensions: [{ tools: new Map([["write_anywhere", {}]]) }],
+      } as never)
+    ).toEqual(["read"])
+  })
+
+  it("keeps extension tools active when standard sessions are reconfigured", () => {
+    const session = {
+      getAllTools: () => [
+        {
+          name: "read",
+          sourceInfo: { source: "builtin" },
+        },
+        {
+          name: "web_search",
+          sourceInfo: { source: "npm:pi-web-access" },
+        },
+      ],
+    }
+
+    expect(activePiToolsForAgentMode(session as never, "standard")).toEqual([
+      "read",
+      "write",
+      "edit",
+      "bash",
+      "grep",
+      "find",
+      "ls",
+      "web_search",
+    ])
+  })
+
+  it("fails fast when a configured Pi extension cannot load", () => {
+    expect(() =>
+      includePiExtensionTools(["read"], "standard", {
+        errors: [{ error: "module failed", path: "/extension/index.ts" }],
+        extensions: [],
+      } as never)
+    ).toThrow(
+      "Failed to load 1 Pi extension(s): /extension/index.ts: module failed"
+    )
   })
 
   it("reads unflushed history from an active Pi session manager", () => {
