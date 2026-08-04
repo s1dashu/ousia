@@ -27,7 +27,7 @@
 
 <p align="center">
   <a href="https://github.com/s1dashu/ousia/releases/download/v0.3.1/Ousia-0.3.1-arm64.dmg">
-    <img src="./assets/download-electron-button.svg" alt="Download the Electron version for macOS" width="280" height="48">
+    <img src="./assets/download-electron-button.svg?v=2" alt="Download the Electron version for macOS" width="280" height="48">
   </a>
 </p>
 
