@@ -34,15 +34,18 @@ import {
   useVelocity,
   type MotionValue,
 } from "framer-motion"
-import ousiaLogo from "../../../docs/media/ousia-logo.png"
 import {
+  GlassExtensions,
+  GlassNewTask,
+  GlassSearch,
+  GlassSettings,
+} from "@/components/icons/glass-icons"
+import {
+  ChevronDown,
   ChevronRight,
-  ExtensionsGrid,
   FolderOpen,
   Plus,
-  Search,
   SidebarActions,
-  Settings,
 } from "@/components/icons/nucleo-icons"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
@@ -109,11 +112,20 @@ import {
   sidebarSingleActionGridClass,
   sidebarSelectedRowClass,
 } from "@/features/sidebar/sidebar-layout"
+import {
+  getSidebarDockInlineMetrics,
+  getSidebarSectionDockState,
+} from "@/features/sidebar/sidebar-section-dock"
 
 type SidebarMoveSessionTarget = {
   sessionId: string
   targetProjectId?: string
   targetSessionId?: string
+}
+
+type SidebarDockInlineMetrics = {
+  left: number
+  width: number
 }
 
 export type SidebarUtilityDestination =
@@ -123,7 +135,6 @@ export type SidebarUtilityDestination =
 
 const sidebarDragTiltAt = 800
 const sidebarDragTiltMax = 2.5
-const sidebarDockedSectionHeaderHeight = 34
 
 type SidebarProps = {
   activeSidebarUtilityDestination: SidebarUtilityDestination | null
@@ -260,7 +271,12 @@ function SidebarComponent({
   const [collapsedSectionIds, setCollapsedSectionIds] = useState<
     OusiaSidebarSectionId[]
   >([])
+  const [isProjectsDocked, setIsProjectsDocked] = useState(false)
+  const [isProjectsDockCollapsed, setIsProjectsDockCollapsed] =
+    useState(false)
   const [isSessionsDocked, setIsSessionsDocked] = useState(false)
+  const [dockInlineMetrics, setDockInlineMetrics] =
+    useState<SidebarDockInlineMetrics | null>(null)
   const [dragPreview, setDragPreview] = useState<SidebarDragPreview | null>(
     null
   )
@@ -283,32 +299,31 @@ function SidebarComponent({
       : defaultSessions
   const visibleSidebarSectionOrder =
     normalizeOusiaSidebarSectionOrder(sidebarSectionOrder)
+  const canDockProjectsToTop = visibleSidebarSectionOrder.at(0) === "projects"
   const canDockSessionsToBottom =
     visibleSidebarSectionOrder.at(-1) === "sessions"
   const utilityDestinations = [
     {
       id: "new-task",
-      icon: Plus,
+      icon: GlassNewTask,
       label: t.sidebar.utilityNewTask,
     },
     {
       id: "search",
-      icon: Search,
+      icon: GlassSearch,
       label: t.sidebar.utilitySearch,
     },
     {
       id: "extensions",
-      icon: ExtensionsGrid,
+      icon: GlassExtensions,
       label: t.sidebar.utilityExtensions,
     },
   ] satisfies Array<{
     id: SidebarUtilityDestination
-    icon: typeof Plus
+    icon: typeof GlassNewTask
     label: string
   }>
-  const visibleUtilityDestinations = utilityDestinations.filter(
-    (destination) => destination.id !== "new-task"
-  )
+  const visibleUtilityDestinations = utilityDestinations
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -338,45 +353,76 @@ function SidebarComponent({
     editingInputRef.current?.select()
   }, [editingSessionId])
 
-  const updateSessionsDocked = useCallback(() => {
+  const updateDockedSections = useCallback(() => {
     const container = scrollContainerRef.current
+    const projectsSection = container?.querySelector<HTMLElement>(
+      '[data-sidebar-section-id="projects"]'
+    )
     const sessionsSection = container?.querySelector<HTMLElement>(
       '[data-sidebar-section-id="sessions"]'
     )
 
-    if (!canDockSessionsToBottom || !container || !sessionsSection) {
+    if (!container || !projectsSection || !sessionsSection) {
+      setIsProjectsDocked(false)
       setIsSessionsDocked(false)
       return
     }
 
     const containerRect = container.getBoundingClientRect()
+    const projectsRect = projectsSection.getBoundingClientRect()
     const sessionsRect = sessionsSection.getBoundingClientRect()
-    const shouldDock =
-      sessionsRect.top >
-      containerRect.bottom - sidebarDockedSectionHeaderHeight
+    const nextDockInlineMetrics = getSidebarDockInlineMetrics({
+      sectionLeft: projectsRect.left,
+      sectionWidth: projectsRect.width,
+      viewportLeft: containerRect.left,
+    })
+    const dockState = getSidebarSectionDockState({
+      canDockProjectsToTop,
+      canDockSessionsToBottom,
+      projectsBottom: projectsRect.bottom,
+      projectsTop: projectsRect.top,
+      sessionsTop: sessionsRect.top,
+      viewportBottom: containerRect.bottom,
+      viewportTop: containerRect.top,
+    })
 
-    setIsSessionsDocked((current) =>
-      current === shouldDock ? current : shouldDock
+    setIsProjectsDocked((current) =>
+      current === dockState.projects ? current : dockState.projects
     )
-  }, [canDockSessionsToBottom])
+    setIsProjectsDockCollapsed((current) =>
+      current === dockState.projectsCollapsed
+        ? current
+        : dockState.projectsCollapsed
+    )
+    setIsSessionsDocked((current) =>
+      current === dockState.sessions ? current : dockState.sessions
+    )
+    setDockInlineMetrics((current) =>
+      current?.left === nextDockInlineMetrics.left &&
+      current.width === nextDockInlineMetrics.width
+        ? current
+        : nextDockInlineMetrics
+    )
+  }, [canDockProjectsToTop, canDockSessionsToBottom])
 
   useEffect(() => {
     const animationFrameId = window.requestAnimationFrame(
-      updateSessionsDocked
+      updateDockedSections
     )
-    window.addEventListener("resize", updateSessionsDocked)
+    window.addEventListener("resize", updateDockedSections)
 
     return () => {
       window.cancelAnimationFrame(animationFrameId)
-      window.removeEventListener("resize", updateSessionsDocked)
+      window.removeEventListener("resize", updateDockedSections)
     }
   }, [
+    canDockProjectsToTop,
     canDockSessionsToBottom,
     collapsedSectionIds,
     expandedProjectIds,
     projects,
     sessions,
-    updateSessionsDocked,
+    updateDockedSections,
   ])
 
   useEffect(() => {
@@ -479,19 +525,19 @@ function SidebarComponent({
     )
   }
 
-  function revealSessionsSection() {
+  function revealSidebarSection(sectionId: OusiaSidebarSectionId) {
     const container = scrollContainerRef.current
-    const sessionsSection = container?.querySelector<HTMLElement>(
-      '[data-sidebar-section-id="sessions"]'
+    const section = container?.querySelector<HTMLElement>(
+      `[data-sidebar-section-id="${sectionId}"]`
     )
-    if (!container || !sessionsSection) {
-      throw new Error("Cannot reveal the conversations sidebar section")
+    if (!container || !section) {
+      throw new Error(`Cannot reveal the ${sectionId} sidebar section`)
     }
 
     const containerRect = container.getBoundingClientRect()
-    const sessionsRect = sessionsSection.getBoundingClientRect()
+    const sectionRect = section.getBoundingClientRect()
     container.scrollTo({
-      top: container.scrollTop + sessionsRect.top - containerRect.top,
+      top: container.scrollTop + sectionRect.top - containerRect.top,
       behavior: "smooth",
     })
   }
@@ -882,28 +928,9 @@ function SidebarComponent({
     >
       <div className="window-drag h-[var(--ousia-titlebar-height)] shrink-0" />
 
-      <header
-        aria-label="Ousia"
-        className="flex h-8 shrink-0 items-center gap-2 pt-0.5 pr-3 pb-1.5 pl-4"
-      >
-        <span
-          aria-hidden="true"
-          className="flex size-[18px] shrink-0 -translate-x-[3px] items-center justify-center"
-        >
-          <img
-            src={ousiaLogo}
-            alt=""
-            className="size-[18px] rounded-[5px]"
-          />
-        </span>
-        <span className="-ml-[3px] truncate pt-px text-[18px] leading-[18px] font-semibold tracking-[-0.01em]">
-          Ousia
-        </span>
-      </header>
-
       <nav
         aria-label={t.sidebar.utilityNavigation}
-        className={`${sidebarNavigationPaddingXClass} shrink-0 pb-3`}
+        className={`${sidebarNavigationPaddingXClass} shrink-0 pb-1`}
       >
         <div className="flex flex-col gap-0.5">
           {visibleUtilityDestinations.map((destination) => {
@@ -923,9 +950,10 @@ function SidebarComponent({
                 onClick={() => onSelectSidebarUtilityDestination(destination.id)}
               >
                 <Icon
-                  className="-ml-1"
+                  aria-hidden="true"
+                  className="ousia-glass-icon -ml-1"
                   size={18}
-                  strokeWidth={sidebarIconStrokeWidth}
+                  uniqueId={`sidebar-${destination.id}-`}
                 />
                 <span className="min-w-0 flex-1 truncate text-left">
                   {destination.label}
@@ -939,31 +967,90 @@ function SidebarComponent({
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollContainerRef}
-          className={`ousia-hover-scrollbar ousia-sidebar-scrollbar-gutter h-full min-h-0 overflow-auto ${sidebarScrollPaddingXClass} pb-2`}
-          onScroll={updateSessionsDocked}
+          className={`ousia-hover-scrollbar ousia-sidebar-scrollbar h-full min-h-0 overflow-x-hidden overflow-y-auto ${sidebarScrollPaddingXClass} pb-2`}
+          onScroll={updateDockedSections}
         >
-          <DndContext
-            sensors={sensors}
-            collisionDetection={sidebarCollisionDetection}
-            onDragAbort={handleDragCancel}
-            onDragStart={handleDragStart}
-            onDragMove={handleDragMove}
-            onDragEnd={handleDragEnd}
-            onDragCancel={handleDragCancel}
-          >
-            <SortableContext
-              items={visibleSidebarSectionOrder}
-              strategy={verticalListSortingStrategy}
+          <div className="ousia-sidebar-scrollbar-content">
+            <DndContext
+              sensors={sensors}
+              collisionDetection={sidebarCollisionDetection}
+              onDragAbort={handleDragCancel}
+              onDragStart={handleDragStart}
+              onDragMove={handleDragMove}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
             >
-              {visibleSidebarSectionOrder.map(renderSidebarSection)}
-            </SortableContext>
-            {createPortal(dragOverlay, document.body)}
-          </DndContext>
+              <SortableContext
+                items={visibleSidebarSectionOrder}
+                strategy={verticalListSortingStrategy}
+              >
+                {visibleSidebarSectionOrder.map(renderSidebarSection)}
+              </SortableContext>
+              {createPortal(dragOverlay, document.body)}
+            </DndContext>
+          </div>
         </div>
 
-        {isSessionsDocked ? (
+        {isProjectsDocked && dockInlineMetrics ? (
           <div
-            className={`absolute inset-x-0 bottom-0 z-10 bg-sidebar ${sidebarScrollPaddingXClass}`}
+            className="absolute top-0 z-10 bg-sidebar"
+            style={dockInlineMetrics}
+          >
+            <div
+              className={`grid cursor-pointer items-center gap-1 bg-sidebar pt-2 pb-0.5 ${sidebarSingleActionGridClass} ${sidebarSectionHeaderXClass}`}
+              aria-expanded={!isProjectsDockCollapsed}
+              onClick={() => revealSidebarSection("projects")}
+            >
+              <div className="flex min-w-0 items-center gap-1">
+                <div className="font-radix-regular min-w-0 truncate text-sm text-muted-foreground">
+                  {t.sidebar.projects}
+                </div>
+                {isProjectsDockCollapsed ? (
+                  <ChevronRight
+                    aria-hidden="true"
+                    className="shrink-0 text-muted-foreground"
+                    size={sidebarSectionIconSize}
+                    strokeWidth={sidebarIconStrokeWidth}
+                  />
+                ) : (
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="shrink-0 text-muted-foreground"
+                    size={sidebarSectionIconSize}
+                    strokeWidth={sidebarIconStrokeWidth}
+                  />
+                )}
+                <span className="sr-only">
+                  {t.sidebar.toggleSection(t.sidebar.projects)}
+                </span>
+              </div>
+              <SidebarActionTooltip label={t.sidebar.createProject}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className={`${sidebarActionButtonClass} ${sidebarActionHoverClass}`}
+                  aria-label={t.sidebar.createProject}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onOpenProject()
+                  }}
+                >
+                  <Plus
+                    className="text-sidebar-accent-foreground"
+                    size={sidebarSectionIconSize}
+                    strokeWidth={sidebarIconStrokeWidth}
+                  />
+                </Button>
+              </SidebarActionTooltip>
+            </div>
+          </div>
+        ) : null}
+
+        {isSessionsDocked && dockInlineMetrics ? (
+          <div
+            className="absolute bottom-0 z-10 bg-sidebar"
+            style={dockInlineMetrics}
           >
             <div
               className={[
@@ -974,7 +1061,7 @@ function SidebarComponent({
                 sidebarSectionHeaderXClass,
               ].join(" ")}
               aria-expanded="false"
-              onClick={revealSessionsSection}
+              onClick={() => revealSidebarSection("sessions")}
             >
               <div className="flex min-w-0 items-center gap-1">
                 <div className="font-radix-regular min-w-0 truncate text-sm text-muted-foreground">
@@ -1004,7 +1091,7 @@ function SidebarComponent({
                   }}
                 >
                   <Plus
-                    className="text-muted-foreground"
+                    className="text-sidebar-accent-foreground"
                     size={sidebarSectionIconSize}
                     strokeWidth={sidebarIconStrokeWidth}
                   />
@@ -1024,7 +1111,12 @@ function SidebarComponent({
           className={`font-radix-regular ${sidebarRowHeightClass} min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
-          <Settings size={18} strokeWidth={sidebarIconStrokeWidth} />
+          <GlassSettings
+            aria-hidden="true"
+            className="ousia-glass-icon"
+            size={18}
+            uniqueId="sidebar-settings-"
+          />
           <span>{t.sidebar.settings}</span>
         </Button>
         {updateStatus.phase === "available" ||

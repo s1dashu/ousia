@@ -18,6 +18,12 @@ import { CHAT_CONTENT_MAX_WIDTH_CLASS } from "@/features/chat/chat-layout"
 import { ToolCallGroupView, ToolCallView } from "@/features/chat/ChatToolCall"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/components/ui/toast"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { writeTextToClipboard } from "@/features/chat/chat-history-clipboard"
 
 type ChatMessageListProps = {
@@ -450,29 +456,41 @@ function AssistantMessageFooter({
 
   return (
     <div className="mt-2 flex h-5 items-center gap-1 text-muted-foreground/70 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100">
-      <button
-        type="button"
-        className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
-        aria-label={t.chat.copyMessage}
-        title={t.chat.copyMessage}
-        onClick={() => {
-          void writeTextToClipboard(item.text).then(
-            () => toast(t.chat.copiedToClipboard),
-            () => toast(t.chat.copyMessageFailed, { variant: "error" })
-          )
-        }}
-      >
-        <Copy size={14} strokeWidth={1.5} />
-      </button>
-      <button
-        type="button"
-        className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
-        aria-label={t.chat.branchFromMessage}
-        title={t.chat.branchFromMessage}
-        onClick={() => onBranchFromMessage(item.id)}
-      >
-        <GitBranchPlus size={14} strokeWidth={1.5} />
-      </button>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
+              aria-label={t.chat.copyMessage}
+              onClick={() => {
+                void writeTextToClipboard(item.text).then(
+                  () => toast(t.chat.copiedToClipboard),
+                  () => toast(t.chat.copyMessageFailed, { variant: "error" })
+                )
+              }}
+            >
+              <Copy size={14} strokeWidth={1.5} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t.chat.copyMessage}</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              className="flex size-4.5 items-center justify-center rounded-md hover:bg-muted/60 hover:text-foreground"
+              aria-label={t.chat.branchFromMessage}
+              onClick={() => onBranchFromMessage(item.id)}
+            >
+              <GitBranchPlus size={14} strokeWidth={1.5} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {t.chat.branchFromMessage}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
       {timeLabel ? (
         <span
           className="ml-1 text-xs leading-none tabular-nums"

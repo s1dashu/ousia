@@ -70,6 +70,9 @@ import type {
   OusiaChatSearchPayload,
   OusiaChatToolPayloadPayload,
   OusiaDirectoryPickerOptions,
+  OusiaGitBranchMutationPayload,
+  OusiaGitBranchResult,
+  OusiaGitBranchStatePayload,
   OusiaOpenDirectoryPayload,
   OusiaOpenDirectoryResult,
   OusiaPiProviderCredentialPayload,
@@ -77,6 +80,7 @@ import type {
   OusiaPiPackageActivationResult,
   OusiaPiPackageMutationPayload,
   OusiaPiPackageMutationResult,
+  OusiaPiPackageOperationProgress,
   OusiaPiPackageReloadPayload,
   OusiaPiRetrySettingsPayload,
   OusiaSelectDirectoryResult,
@@ -88,6 +92,11 @@ import type {
   OusiaWindowThemePayload,
 } from "./chat-types.js"
 import { expandHomePath, resolveProjectFilePath } from "./host-paths.js"
+import {
+  checkoutGitBranch,
+  createAndCheckoutGitBranch,
+  readGitBranchState,
+} from "./git-branches.js"
 import {
   installRuntimeLogger,
   OUSIA_DESKTOP_LOG_PATH,
@@ -628,15 +637,26 @@ ipcMain.handle("ousia:skills:installed:list", async () => {
 ipcMain.handle(
   "ousia:pi:packages:install",
   async (
-    _event,
+    event,
     payload: OusiaPiPackageMutationPayload
   ): Promise<OusiaPiPackageMutationResult> => {
     await shellEnvironmentReady
     const { piPackageService } = await import("./pi-package-service.js")
     const status = await piPackageService.installPackage(payload)
+    const progress: OusiaPiPackageOperationProgress = {
+      operation: "install",
+      packageName: payload.packageName,
+      phase: "reloading",
+    }
+    writeRuntimeLog("pi.packages", "info", {
+      event: "runtime-reload-started",
+      operation: progress.operation,
+      packageName: progress.packageName,
+    })
+    event.sender.send("ousia:pi:packages:operation-progress", progress)
     return {
       ...status,
-      activation: await reloadPiPackageConfiguration(false),
+      activation: await reloadPiPackageConfiguration(true),
     }
   }
 )
@@ -644,15 +664,26 @@ ipcMain.handle(
 ipcMain.handle(
   "ousia:pi:packages:remove",
   async (
-    _event,
+    event,
     payload: OusiaPiPackageMutationPayload
   ): Promise<OusiaPiPackageMutationResult> => {
     await shellEnvironmentReady
     const { piPackageService } = await import("./pi-package-service.js")
     const status = await piPackageService.removePackage(payload)
+    const progress: OusiaPiPackageOperationProgress = {
+      operation: "remove",
+      packageName: payload.packageName,
+      phase: "reloading",
+    }
+    writeRuntimeLog("pi.packages", "info", {
+      event: "runtime-reload-started",
+      operation: progress.operation,
+      packageName: progress.packageName,
+    })
+    event.sender.send("ousia:pi:packages:operation-progress", progress)
     return {
       ...status,
-      activation: await reloadPiPackageConfiguration(false),
+      activation: await reloadPiPackageConfiguration(true),
     }
   }
 )
@@ -1020,6 +1051,74 @@ ipcMain.handle(
   "ousia:app-state:project:create",
   (_event, payload: OusiaAppStateCreateProjectPayload) =>
     createAppStateProject(payload)
+)
+
+async function canonicalGitProjectPath(projectId: string) {
+  if (!projectId?.trim()) {
+    throw new Error("Project ID is required.")
+  }
+  const state = await loadAppState()
+  const project = state.projects.find((candidate) => candidate.id === projectId)
+  if (!project) {
+    throw new Error(`Unknown project: ${projectId}`)
+  }
+  return expandHomePath(project.path)
+}
+
+async function gitBranchResult(
+  operation: "create" | "read" | "switch",
+  payload: OusiaGitBranchStatePayload | OusiaGitBranchMutationPayload
+): Promise<OusiaGitBranchResult> {
+  try {
+    const projectPath = await canonicalGitProjectPath(payload.projectId)
+    const state =
+      operation === "read"
+        ? await readGitBranchState(projectPath)
+        : operation === "switch"
+          ? await checkoutGitBranch(
+              projectPath,
+              (payload as OusiaGitBranchMutationPayload).branchName
+            )
+          : await createAndCheckoutGitBranch(
+              projectPath,
+              (payload as OusiaGitBranchMutationPayload).branchName
+            )
+    writeRuntimeLog("git.branch", "info", {
+      branchCount: state.branches.length,
+      isRepository: state.isRepository,
+      operation,
+      projectId: payload.projectId,
+    })
+    return { ok: true, state }
+  } catch (error) {
+    writeRuntimeLog("git.branch", "error", {
+      message: "Git branch operation failed",
+      operation,
+      projectId: payload.projectId,
+    })
+    return {
+      error: error instanceof Error ? error.message : String(error),
+      ok: false,
+    }
+  }
+}
+
+ipcMain.handle(
+  "ousia:git:branches:read",
+  (_event, payload: OusiaGitBranchStatePayload) =>
+    gitBranchResult("read", payload)
+)
+
+ipcMain.handle(
+  "ousia:git:branches:switch",
+  (_event, payload: OusiaGitBranchMutationPayload) =>
+    gitBranchResult("switch", payload)
+)
+
+ipcMain.handle(
+  "ousia:git:branches:create",
+  (_event, payload: OusiaGitBranchMutationPayload) =>
+    gitBranchResult("create", payload)
 )
 
 ipcMain.handle(

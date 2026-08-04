@@ -13,12 +13,18 @@ import {
   type KeyboardEvent,
 } from "react"
 import {
+  GlassAddAttachment,
+  GlassComposerSettings,
+} from "@/components/icons/glass-icons"
+import {
+  Check,
   ChevronDown as NucleoChevronDown,
+  Folder,
   LoaderCircle,
   Plus as NucleoPlus,
+  Search,
   SendArrowDown,
   SendArrowUp,
-  SlidersHorizontal as NucleoSliders,
   X,
 } from "@/components/icons/nucleo-icons"
 
@@ -46,6 +52,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -95,6 +102,7 @@ import {
   getContextUsagePercent,
 } from "@/features/chat/chat-context-usage"
 import { ChatMessageList } from "@/features/chat/ChatMessageList"
+import { NewTaskGitBranchSelector } from "@/features/chat/NewTaskGitBranchSelector"
 import {
   chatAttachmentFromFile,
   filesFromDataTransfer,
@@ -155,12 +163,16 @@ type ChatAreaProps = {
   isLoadingOlderHistory: boolean
   isSidebarCollapsed: boolean
   isWindowFullscreen: boolean
+  isNewTask?: boolean
   language: OusiaLanguage
   modelRegistry: OusiaModelRegistryResult | undefined
   onLocalEvent: (event: OusiaChatEvent) => void
   onGenerateSessionTitle: (sessionId: string, firstPrompt: string) => void
   onBranchFromMessage: (messageId: string) => void
   onLoadOlderHistory: () => Promise<void> | void
+  onNewTaskCreateProject?: () => void
+  onNewTaskDestinationChange?: (projectId?: string) => void
+  onNewTaskSubmitted?: () => void
   onScrollTargetHandled: () => void
   onRefreshModelRegistry: () => Promise<OusiaModelRegistryResult | undefined>
   onSessionCompletionVisibility: (
@@ -174,8 +186,176 @@ type ChatAreaProps = {
     followUp: string[]
   }
   settings: AppSettings
+  projects?: ProjectRecord[]
   scrollTargetItemId: string
   style: CSSProperties
+}
+
+function NewTaskProjectSelector({
+  currentProjectId,
+  onCreateProject,
+  onDestinationChange,
+  projects,
+  t,
+}: {
+  currentProjectId: string | undefined
+  onCreateProject: () => void
+  onDestinationChange: (projectId?: string) => void
+  projects: ProjectRecord[]
+  t: ReturnType<typeof getMessages>
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [activeProjectIndex, setActiveProjectIndex] = useState(0)
+  const projectListRef = useRef<HTMLDivElement>(null)
+  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const visibleProjects = projects.filter((project) =>
+    `${project.name} ${project.path}`
+      .toLocaleLowerCase()
+      .includes(normalizedQuery)
+  )
+  const selectedProject = projects.find(
+    (project) => project.id === currentProjectId
+  )
+  const effectiveActiveProjectIndex = visibleProjects.length
+    ? Math.min(activeProjectIndex, visibleProjects.length - 1)
+    : -1
+
+  useEffect(() => {
+    if (!open || effectiveActiveProjectIndex < 0) {
+      return
+    }
+    projectListRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-project-index="${effectiveActiveProjectIndex}"]`
+      )
+      ?.scrollIntoView({ block: "nearest" })
+  }, [effectiveActiveProjectIndex, open])
+
+  function selectProject(project: ProjectRecord) {
+    setOpen(false)
+    onDestinationChange(project.id)
+  }
+
+  function handleSearchKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    event.stopPropagation()
+    if (!visibleProjects.length) {
+      return
+    }
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      setActiveProjectIndex(
+        (effectiveActiveProjectIndex + 1) % visibleProjects.length
+      )
+      return
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault()
+      setActiveProjectIndex(
+        (effectiveActiveProjectIndex - 1 + visibleProjects.length) %
+          visibleProjects.length
+      )
+      return
+    }
+    if (event.key === "Enter" && effectiveActiveProjectIndex >= 0) {
+      event.preventDefault()
+      selectProject(visibleProjects[effectiveActiveProjectIndex])
+    }
+  }
+
+  return (
+    <DropdownMenu
+      modal={false}
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        if (nextOpen) {
+          setActiveProjectIndex(
+            Math.max(
+              0,
+              projects.findIndex((project) => project.id === currentProjectId)
+            )
+          )
+        } else {
+          setQuery("")
+          setActiveProjectIndex(0)
+        }
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 max-w-full gap-2 bg-transparent px-2 text-xs font-normal hover:bg-accent"
+          aria-label={t.sidebar.newTaskLocation}
+        >
+          <Folder className="size-4 shrink-0" />
+          <span className="truncate">
+            {selectedProject?.name ?? t.sidebar.newTaskChat}
+          </span>
+          <NucleoChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        sideOffset={8}
+        align="start"
+        className="w-[min(288px,calc(100vw-3rem))]"
+      >
+        <div
+          className="flex h-9 items-center gap-2 px-2"
+        >
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+          <Input
+            autoFocus
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value)
+              setActiveProjectIndex(0)
+            }}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={t.sidebar.newTaskProjectSearch}
+            className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+          />
+        </div>
+        <div
+          ref={projectListRef}
+          className="ousia-hover-scrollbar max-h-64 overflow-y-auto"
+        >
+          {visibleProjects.map((project, index) => (
+            <DropdownMenuItem
+              key={project.id}
+              data-project-index={index}
+              className={cn(
+                "py-1.5",
+                index === effectiveActiveProjectIndex && "bg-accent"
+              )}
+              onClick={() => selectProject(project)}
+              onPointerMove={() => setActiveProjectIndex(index)}
+            >
+              <Folder className="size-4" />
+              <span className="min-w-0 flex-1 truncate">{project.name}</span>
+              {project.id === currentProjectId ? (
+                <Check className="size-4" />
+              ) : null}
+            </DropdownMenuItem>
+          ))}
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onCreateProject}>
+          <NucleoPlus className="size-4" />
+          {t.sidebar.newTaskCreateProject}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => onDestinationChange(undefined)}
+        >
+          <Folder className="size-4" />
+          <span className="flex-1">{t.sidebar.newTaskChat}</span>
+          {!currentProjectId ? <Check className="size-4" /> : null}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
 
 function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
@@ -198,18 +378,23 @@ function ChatAreaComponent({
   isLoadingOlderHistory,
   isSidebarCollapsed,
   isWindowFullscreen,
+  isNewTask = false,
   language,
   modelRegistry,
   onLocalEvent,
   onGenerateSessionTitle,
   onBranchFromMessage,
   onLoadOlderHistory,
+  onNewTaskCreateProject,
+  onNewTaskDestinationChange,
+  onNewTaskSubmitted,
   onScrollTargetHandled,
   onRefreshModelRegistry,
   onSessionCompletionVisibility,
   onSessionViewed,
   onSettingsChange,
   queuedChatState,
+  projects = [],
   settings,
   scrollTargetItemId,
   style,
@@ -951,6 +1136,7 @@ function ChatAreaComponent({
       return
     }
 
+    onNewTaskSubmitted?.()
     await sendMessage({
       text,
       attachments: outgoingAttachments,
@@ -1466,6 +1652,26 @@ function ChatAreaComponent({
         onSubmit={handleSubmit}
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
+          {isNewTask &&
+          onNewTaskCreateProject &&
+          onNewTaskDestinationChange ? (
+            <div className="pointer-events-auto mb-1 ml-1 flex justify-start gap-1">
+              <NewTaskProjectSelector
+                currentProjectId={currentSession?.projectId}
+                onCreateProject={onNewTaskCreateProject}
+                onDestinationChange={onNewTaskDestinationChange}
+                projects={projects}
+                t={t}
+              />
+              {currentSession?.projectId ? (
+                <NewTaskGitBranchSelector
+                  key={currentSession.projectId}
+                  language={language}
+                  projectId={currentSession.projectId}
+                />
+              ) : null}
+            </div>
+          ) : null}
           <div className="relative">
             {visibleQueuedMessages.length ? (
               <QueuedMessageList
@@ -1552,7 +1758,12 @@ function ChatAreaComponent({
                           aria-label={t.chat.addAttachment}
                           onClick={() => fileInputRef.current?.click()}
                         >
-                          <NucleoPlus size={18} />
+                          <GlassAddAttachment
+                            aria-hidden="true"
+                            className="ousia-glass-icon"
+                            size={18}
+                            uniqueId="composer-add-attachment-"
+                          />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="top">
@@ -1576,7 +1787,12 @@ function ChatAreaComponent({
                               className="size-6"
                               aria-label={t.chat.composerSettings}
                             >
-                              <NucleoSliders size={18} />
+                              <GlassComposerSettings
+                                aria-hidden="true"
+                                className="ousia-glass-icon"
+                                size={18}
+                                uniqueId="composer-settings-"
+                              />
                             </Button>
                           </DropdownMenuTrigger>
                         </TooltipTrigger>

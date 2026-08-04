@@ -12,6 +12,7 @@ describe("ExtensionsPage", () => {
     expect(html).toContain(">Explore<")
     expect(html).toContain(">Installed<")
     expect(html).toContain('data-slot="tabs-list"')
+    expect(html).toContain('data-variant="default"')
     expect(html).toContain("max-w-[var(--ousia-chat-content-max-width)]")
     expect(html).toContain(">All types<")
     expect(html.match(/data-slot="card"/g)).toHaveLength(20)

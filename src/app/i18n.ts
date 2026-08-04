@@ -293,9 +293,31 @@ export const messages = {
       toolGroupEdited: (count: number) => `编辑 ${count} 个文件`,
       toolGroupUsedTools: (count: number) => `使用 ${count} 个工具`,
     },
+    git: {
+      unavailable: "当前环境无法读取 Git 状态。",
+      readFailed: "读取 Git 分支失败。",
+      statusFailed: "Git 状态不可用",
+      branchSelector: "选择 Git 分支",
+      detachedHead: "游离 HEAD",
+      searchBranches: "搜索分支",
+      branches: "分支",
+      dirtyFiles: (count: number) => `未提交：${count} 个文件`,
+      switchFailed: "检出分支失败。",
+      createFailed: "创建分支失败。",
+      createAndCheckout: "创建并检出新分支…",
+      createAndCheckoutTitle: "创建并检出分支",
+      createAndCheckoutHelp: "从当前 HEAD 创建一个本地分支并立即检出。",
+      branchName: "分支名称",
+      invalidBranchName: "请输入有效的分支名称，且不能以“/”结尾。",
+      createAndCheckoutAction: "创建并检出",
+    },
     sidebar: {
       utilityNavigation: "Ousia 功能",
       utilityNewTask: "新建任务",
+      newTaskProjectSearch: "搜索项目",
+      newTaskCreateProject: "新建项目",
+      newTaskChat: "一般会话（Chat）",
+      newTaskLocation: "会话位置",
       utilitySearch: "搜索",
       utilityExtensions: "扩展与技能",
       utilityScheduledTasks: "定时任务",
@@ -357,22 +379,19 @@ export const messages = {
       page: (page: number, total: number) => `第 ${page} 页，共 ${total} 页`,
       install: "安装",
       installing: "安装中",
-      remove: "移除",
-      removing: "移除中",
+      reloading: "重新加载中",
+      remove: "卸载",
+      removing: "卸载中",
       retry: "重试",
       packagesUnavailable: "当前环境无法读取扩展与技能。",
       statusLoadFailed: (error: string) => `无法读取扩展与技能状态：${error}`,
       installFailed: (name: string, error: string) =>
         `安装 ${name} 失败：${error}`,
       removeFailed: (name: string, error: string) =>
-        `移除 ${name} 失败：${error}`,
+        `卸载 ${name} 失败：${error}`,
       activationFailed: (error: string) =>
         `扩展已更新，但重新加载 Agent 失败：${error}`,
-      restartAgentTitle: "重启 Agent？",
-      restartAgentDescription:
-        "Agent 正在运行中，是否仍然重启？进行中的任务将会停止。",
-      restartAgent: "仍然重启",
-      restartingAgent: "正在重启",
+      activationDeferred: "扩展已更新，但 Pi 重启被意外延后。",
       missingPackages: (names: string) =>
         `以下扩展已配置但文件缺失，请重新安装：${names}`,
     },
@@ -710,9 +729,34 @@ export const messages = {
       toolGroupUsedTools: (count: number) =>
         `Used ${count} tool${count === 1 ? "" : "s"}`,
     },
+    git: {
+      unavailable: "Git status is unavailable in this environment.",
+      readFailed: "Failed to read Git branches.",
+      statusFailed: "Git status unavailable",
+      branchSelector: "Select Git branch",
+      detachedHead: "Detached HEAD",
+      searchBranches: "Search branches",
+      branches: "Branches",
+      dirtyFiles: (count: number) =>
+        `${count} uncommitted file${count === 1 ? "" : "s"}`,
+      switchFailed: "Failed to check out branch.",
+      createFailed: "Failed to create branch.",
+      createAndCheckout: "Create and check out new branch…",
+      createAndCheckoutTitle: "Create and check out branch",
+      createAndCheckoutHelp:
+        "Create a local branch from the current HEAD and check it out immediately.",
+      branchName: "Branch name",
+      invalidBranchName:
+        "Enter a valid branch name that does not end with “/”.",
+      createAndCheckoutAction: "Create and check out",
+    },
     sidebar: {
       utilityNavigation: "Ousia features",
       utilityNewTask: "New task",
+      newTaskProjectSearch: "Search projects",
+      newTaskCreateProject: "New project",
+      newTaskChat: "Chat",
+      newTaskLocation: "Chat location",
       utilitySearch: "Search",
       utilityExtensions: "Extensions",
       utilityScheduledTasks: "Scheduled tasks",
@@ -775,8 +819,9 @@ export const messages = {
       page: (page: number, total: number) => `Page ${page} of ${total}`,
       install: "Install",
       installing: "Installing",
-      remove: "Remove",
-      removing: "Removing",
+      reloading: "Reloading",
+      remove: "Uninstall",
+      removing: "Uninstalling",
       retry: "Retry",
       packagesUnavailable: "Extension and skill discovery is unavailable.",
       statusLoadFailed: (error: string) =>
@@ -784,14 +829,11 @@ export const messages = {
       installFailed: (name: string, error: string) =>
         `Failed to install ${name}: ${error}`,
       removeFailed: (name: string, error: string) =>
-        `Failed to remove ${name}: ${error}`,
+        `Failed to uninstall ${name}: ${error}`,
       activationFailed: (error: string) =>
         `The extension was updated, but the Agent could not be reloaded: ${error}`,
-      restartAgentTitle: "Restart Agent?",
-      restartAgentDescription:
-        "The Agent is currently running. Restart anyway? The task in progress will stop.",
-      restartAgent: "Restart anyway",
-      restartingAgent: "Restarting",
+      activationDeferred:
+        "The extension was updated, but the Pi restart was unexpectedly deferred.",
       missingPackages: (names: string) =>
         `These configured extensions are missing from disk. Install them again to repair: ${names}`,
     },

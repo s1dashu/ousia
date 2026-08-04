@@ -20,9 +20,9 @@ export const sidebarProjectLeadGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px_24px]"
 export const sidebarProjectSessionGridClass =
   "grid-cols-[24px_minmax(0,1fr)_24px]"
-export const sidebarNavigationPaddingXClass = "pl-[7px] pr-[6px]"
-export const sidebarScrollPaddingXClass = "pl-[7px] pr-[7px]"
-export const sidebarFooterPaddingXClass = "pl-[6px] pr-[7px]"
+export const sidebarNavigationPaddingXClass = "pl-[5px] pr-[8px]"
+export const sidebarScrollPaddingXClass = "pl-[5px] pr-[9px]"
+export const sidebarFooterPaddingXClass = "pl-[4px] pr-[9px]"
 export const sidebarRowFrameXClass = "w-full"
 export const sidebarRowLeadingInsetClass = "pl-3"
 export const sidebarProjectLeadingInsetClass = "pl-2"

@@ -115,13 +115,14 @@ function renderSystemPromptSettings() {
 }
 
 describe("SettingsPage provider isolation", () => {
-  it("renders the persisted system prompt in a read-only editor", () => {
+  it("renders the persisted system prompt in the CodeMirror editor", () => {
     const t = getMessages("zh")
     const html = renderSystemPromptSettings()
 
     expect(html).toContain(t.settings.systemPrompt)
     expect(html).toContain("始终简洁回答。")
-    expect(html).toContain('readOnly=""')
+    expect(html).toContain("data-system-prompt-editor")
+    expect(html).not.toContain('data-slot="textarea"')
     expect(html).toContain(t.settings.restoreDefaultSystemPrompt)
     expect(html).toContain(t.app.edit)
   })

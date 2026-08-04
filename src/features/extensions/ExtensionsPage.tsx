@@ -6,14 +6,6 @@ import { ArrowLeft, ChevronRight, Link } from "@/components/icons/nucleo-icons"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import {
   Select,
   SelectContent,
   SelectGroup,
@@ -42,6 +34,11 @@ const ALLOWED_PACKAGE_TYPES = new Set<PiPackageType>([
 type PiPackageType = "extension" | "package" | "prompt" | "skill" | "theme"
 type PiPackageFilter = "all" | PiPackageType
 type ExtensionsView = "explore" | "installed"
+type PendingPackageOperation = {
+  operation: "install" | "remove"
+  packageName: string
+  phase: "installing" | "reloading" | "removing"
+}
 
 type PiPackageCatalogItem = {
   rank: number
@@ -181,6 +178,23 @@ function skillSourceLabel(
   }
 }
 
+function packageActionLabel(
+  packageName: string,
+  isInstalled: boolean,
+  pending: PendingPackageOperation | null,
+  t: ReturnType<typeof getMessages>
+) {
+  if (!pending || pending.packageName !== packageName) {
+    return isInstalled ? t.extensions.remove : t.extensions.install
+  }
+  if (pending.phase === "reloading") {
+    return t.extensions.reloading
+  }
+  return pending.operation === "remove"
+    ? t.extensions.removing
+    : t.extensions.installing
+}
+
 export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
   const t = getMessages(language)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -199,12 +213,8 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
   )
   const [statusError, setStatusError] = useState<string | null>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
-  const [pendingPackageName, setPendingPackageName] = useState<string | null>(
-    null
-  )
-  const [isReloadConfirmationOpen, setIsReloadConfirmationOpen] =
-    useState(false)
-  const [isForcingReload, setIsForcingReload] = useState(false)
+  const [pendingPackageOperation, setPendingPackageOperation] =
+    useState<PendingPackageOperation | null>(null)
   const locale = language === "zh" ? "zh-CN" : "en"
   const downloadFormatter = useMemo(
     () => new Intl.NumberFormat(locale),
@@ -293,33 +303,6 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
     }
   }
 
-  async function forceReloadPackages() {
-    if (!window.ousia) {
-      throw new Error(t.extensions.packagesUnavailable)
-    }
-    setIsForcingReload(true)
-    setOperationError(null)
-    try {
-      const result = await window.ousia.reloadPiPackages({ force: true })
-      if (result.status === "reloaded") {
-        setIsReloadConfirmationOpen(false)
-        return
-      }
-      if (result.status === "failed") {
-        setIsReloadConfirmationOpen(false)
-        setOperationError(t.extensions.activationFailed(result.error))
-        return
-      }
-      throw new Error("Forced Pi package reload left the Agent running")
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      setIsReloadConfirmationOpen(false)
-      setOperationError(t.extensions.activationFailed(message))
-    } finally {
-      setIsForcingReload(false)
-    }
-  }
-
   useEffect(() => {
     let cancelled = false
     const api = window.ousia
@@ -355,6 +338,23 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
     }
   }, [language])
 
+  useEffect(() => {
+    const api = window.ousia
+    if (!api) return
+    return api.onPiPackageOperationProgress((progress) => {
+      setPendingPackageOperation((current) => {
+        if (
+          !current ||
+          current.packageName !== progress.packageName ||
+          current.operation !== progress.operation
+        ) {
+          return current
+        }
+        return { ...current, phase: progress.phase }
+      })
+    })
+  }, [])
+
   function selectPage(page: number) {
     if (!Number.isInteger(page) || page < 1 || page > pageCount) {
       throw new RangeError(`Invalid extensions page: ${page}`)
@@ -382,11 +382,16 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
   }
 
   async function togglePackage(item: PiPackageDisplayItem) {
-    if (!window.ousia || statusPhase !== "ready" || pendingPackageName) {
+    if (!window.ousia || statusPhase !== "ready" || pendingPackageOperation) {
       throw new Error(`Pi package action is unavailable: ${item.name}`)
     }
     const isInstalled = installedPackageNames.has(item.name)
-    setPendingPackageName(item.name)
+    const operation = isInstalled ? "remove" : "install"
+    setPendingPackageOperation({
+      operation,
+      packageName: item.name,
+      phase: isInstalled ? "removing" : "installing",
+    })
     setOperationError(null)
     try {
       const status = isInstalled
@@ -402,7 +407,7 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
         }
       )
       if (status.activation.status === "agent-running") {
-        setIsReloadConfirmationOpen(true)
+        setOperationError(t.extensions.activationDeferred)
       } else if (status.activation.status === "failed") {
         setOperationError(
           t.extensions.activationFailed(status.activation.error)
@@ -416,7 +421,7 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
           : t.extensions.installFailed(item.name, message)
       )
     } finally {
-      setPendingPackageName(null)
+      setPendingPackageOperation(null)
     }
   }
 
@@ -442,7 +447,7 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
 
           <Tabs value={activeView} onValueChange={selectView} className="gap-4">
             <div className="flex items-center justify-between gap-4 px-1">
-              <TabsList variant="line" aria-label={t.extensions.viewLabel}>
+              <TabsList aria-label={t.extensions.viewLabel}>
                 <TabsTrigger value="explore">
                   {t.extensions.explore}
                 </TabsTrigger>
@@ -650,17 +655,16 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
                             className="min-w-14 shrink-0"
                             disabled={
                               statusPhase !== "ready" ||
-                              pendingPackageName !== null
+                              pendingPackageOperation !== null
                             }
                             onClick={() => void togglePackage(item)}
                           >
-                            {pendingPackageName === item.name
-                              ? installedPackageNames.has(item.name)
-                                ? t.extensions.removing
-                                : t.extensions.installing
-                              : installedPackageNames.has(item.name)
-                                ? t.extensions.remove
-                                : t.extensions.install}
+                            {packageActionLabel(
+                              item.name,
+                              installedPackageNames.has(item.name),
+                              pendingPackageOperation,
+                              t
+                            )}
                           </Button>
                         )}
                       </div>
@@ -716,43 +720,6 @@ export function ExtensionsPage({ language }: { language: OusiaLanguage }) {
           </Tabs>
         </div>
       </div>
-      <Dialog
-        open={isReloadConfirmationOpen}
-        onOpenChange={(open) => {
-          if (!isForcingReload) {
-            setIsReloadConfirmationOpen(open)
-          }
-        }}
-      >
-        <DialogContent showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle>{t.extensions.restartAgentTitle}</DialogTitle>
-            <DialogDescription>
-              {t.extensions.restartAgentDescription}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isForcingReload}
-              onClick={() => setIsReloadConfirmationOpen(false)}
-            >
-              {t.app.cancel}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isForcingReload}
-              onClick={() => void forceReloadPackages()}
-            >
-              {isForcingReload
-                ? t.extensions.restartingAgent
-                : t.extensions.restartAgent}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </section>
   )
 }

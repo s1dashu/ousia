@@ -45,6 +45,9 @@ import type {
   OusiaCodexAuthResult,
   OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
+  OusiaGitBranchMutationPayload,
+  OusiaGitBranchResult,
+  OusiaGitBranchStatePayload,
   OusiaInstalledSkillsResult,
   OusiaModelRegistryResult,
   OusiaOpenDirectoryPayload,
@@ -54,6 +57,7 @@ import type {
   OusiaPiPackageActivationResult,
   OusiaPiPackageMutationPayload,
   OusiaPiPackageMutationResult,
+  OusiaPiPackageOperationProgress,
   OusiaPiPackageReloadPayload,
   OusiaPiPackageStatus,
   OusiaPiProviderCredentialPayload,
@@ -200,6 +204,21 @@ const api = {
   ): Promise<OusiaAppStateTransactionResult> {
     return ipcRenderer.invoke("ousia:app-state:project:create", payload)
   },
+  getGitBranches(
+    payload: OusiaGitBranchStatePayload
+  ): Promise<OusiaGitBranchResult> {
+    return ipcRenderer.invoke("ousia:git:branches:read", payload)
+  },
+  switchGitBranch(
+    payload: OusiaGitBranchMutationPayload
+  ): Promise<OusiaGitBranchResult> {
+    return ipcRenderer.invoke("ousia:git:branches:switch", payload)
+  },
+  createGitBranch(
+    payload: OusiaGitBranchMutationPayload
+  ): Promise<OusiaGitBranchResult> {
+    return ipcRenderer.invoke("ousia:git:branches:create", payload)
+  },
   deleteProject(
     payload: OusiaAppStateDeleteProjectPayload
   ): Promise<OusiaAppStateTransactionResult> {
@@ -295,6 +314,18 @@ const api = {
     payload: OusiaPiPackageReloadPayload
   ): Promise<OusiaPiPackageActivationResult> {
     return ipcRenderer.invoke("ousia:pi:packages:reload", payload)
+  },
+  onPiPackageOperationProgress(
+    callback: (progress: OusiaPiPackageOperationProgress) => void
+  ): () => void {
+    const listener = (
+      _event: IpcRendererEvent,
+      progress: OusiaPiPackageOperationProgress
+    ) => callback(progress)
+    ipcRenderer.on("ousia:pi:packages:operation-progress", listener)
+    return () => {
+      ipcRenderer.off("ousia:pi:packages:operation-progress", listener)
+    }
   },
   checkCodexEnvironment(): Promise<OusiaCodexEnvironmentStatus> {
     return ipcRenderer.invoke("ousia:codex:environment")

@@ -33,6 +33,7 @@
 - Desktop host and preload: Electron under `src/electron/`.
 - Packaging: Electron Forge plus the scripts in `scripts/`.
 - The preload bridge is the renderer trust boundary. Keep context isolation and validate IPC inputs in the host.
+- Git branch reads and mutations are main-process-owned. The renderer passes a persisted project ID; the host resolves the canonical project path and executes Git without a shell.
 - Pi and Codex integrations are explicit agent providers. Do not silently route a failed provider to another provider.
 - The main process owns sequenced replay snapshots for active chat streams. Renderer reloads must subscribe before replay hydration, then reconcile provider history when a run finishes.
 - Pi history reads must use the active `SessionManager` branch while a session is running; the on-disk JSONL file is not authoritative until Pi flushes the turn.

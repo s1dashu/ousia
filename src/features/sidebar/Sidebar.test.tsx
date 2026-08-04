@@ -5,7 +5,13 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages } from "@/app/i18n"
 import type { OusiaUpdateStatus } from "@/electron/chat-types"
-import { Sidebar } from "@/features/sidebar/Sidebar"
+import {
+  Sidebar,
+} from "@/features/sidebar/Sidebar"
+import {
+  getSidebarDockInlineMetrics,
+  getSidebarSectionDockState,
+} from "@/features/sidebar/sidebar-section-dock"
 
 vi.mock("react-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-dom")>()
@@ -95,6 +101,66 @@ function renderSidebar({
 }
 
 describe("Sidebar running actions", () => {
+  it("aligns docked section actions with the scroll viewport content width", () => {
+    expect(
+      getSidebarDockInlineMetrics({
+        sectionLeft: 7,
+        sectionWidth: 238,
+        viewportLeft: 0,
+      })
+    ).toEqual({ left: 7, width: 238 })
+  })
+
+  it("docks projects at the top symmetrically with conversations at the bottom", () => {
+    expect(
+      getSidebarSectionDockState({
+        canDockProjectsToTop: true,
+        canDockSessionsToBottom: true,
+        projectsBottom: 0,
+        projectsTop: -200,
+        sessionsTop: 900,
+        viewportBottom: 800,
+        viewportTop: 0,
+      })
+    ).toEqual({
+      projects: true,
+      projectsCollapsed: true,
+      sessions: true,
+    })
+
+    expect(
+      getSidebarSectionDockState({
+        canDockProjectsToTop: true,
+        canDockSessionsToBottom: true,
+        projectsBottom: 1,
+        projectsTop: 0,
+        sessionsTop: 799,
+        viewportBottom: 800,
+        viewportTop: 0,
+      })
+    ).toEqual({
+      projects: false,
+      projectsCollapsed: false,
+      sessions: false,
+    })
+
+    expect(
+      getSidebarSectionDockState({
+        canDockProjectsToTop: true,
+        canDockSessionsToBottom: true,
+        projectsBottom: 400,
+        projectsTop: -20,
+        sessionsTop: 600,
+        viewportBottom: 800,
+        viewportTop: 0,
+      })
+    ).toEqual({
+      projects: true,
+      projectsCollapsed: false,
+      sessions: false,
+    })
+  })
+
   it("keeps projects and conversations in the same scroll region", () => {
     const html = renderSidebar({
       sidebarSectionOrder: ["projects", "sessions"],
@@ -102,25 +168,23 @@ describe("Sidebar running actions", () => {
 
     expect(html).toContain('data-sidebar-section-id="projects"')
     expect(html).toContain('data-sidebar-section-id="sessions"')
-    expect(html.match(/overflow-auto/g)).toHaveLength(1)
+    expect(html.match(/overflow-y-auto/g)).toHaveLength(1)
     expect(html).not.toContain(
       "sticky bottom-0 z-10 max-h-full overflow-auto bg-sidebar"
     )
   })
 
-  it("renders the visible utility entries before the project and conversation lists", () => {
+  it("renders the visible utility entries without sidebar branding", () => {
     const html = renderSidebar()
 
-    const brandIndex = html.indexOf('aria-label="Ousia"')
     const primaryLabelIndex = html.indexOf(">Search<")
-    expect(brandIndex).toBeGreaterThan(-1)
-    expect(html).toContain(">Ousia</span>")
-    expect(brandIndex).toBeLessThan(primaryLabelIndex)
+    expect(primaryLabelIndex).toBeGreaterThan(-1)
+    expect(html).not.toContain('aria-label="Ousia"')
+    expect(html).not.toContain(">Ousia</span>")
     expect(html).toContain('aria-label="Ousia features"')
-    expect(html.match(/pl-\[7px\] pr-\[7px\]/g)).toHaveLength(1)
-    expect(html).toContain("pl-[7px] pr-[6px]")
-    expect(html).toContain("pt-0.5 pr-3 pb-1.5 pl-4")
-    expect(html).toContain("pl-[6px] pr-[7px]")
+    expect(html.match(/pl-\[5px\] pr-\[9px\]/g)).toHaveLength(1)
+    expect(html).toContain("pl-[5px] pr-[8px]")
+    expect(html).toContain("pl-[4px] pr-[9px]")
     expect(html).not.toContain("utility-new-task-button")
     expect(html).not.toContain("<kbd")
     const buttonForLabel = (label: string) => {
@@ -136,7 +200,7 @@ describe("Sidebar running actions", () => {
     expect(primaryButton.match(/class="([^"]*)"/)?.[1]).toBe(
       searchButton.match(/class="([^"]*)"/)?.[1]
     )
-    expect(html).not.toContain(">New task<")
+    expect(html).toContain(">New task<")
     expect(html).toContain(">Search<")
     expect(html).toContain(">Extensions<")
     expect(html).not.toContain(">Scheduled tasks<")

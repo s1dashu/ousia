@@ -187,6 +187,7 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [activeSidebarUtilityDestination, setActiveSidebarUtilityDestination] =
     useState<SidebarUtilityDestination | null>(null)
+  const [isNewTaskComposer, setIsNewTaskComposer] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchScope, setSearchScope] = useState<"all" | "current">("all")
   const [composerFocusRequest, setComposerFocusRequest] = useState(0)
@@ -1437,16 +1438,14 @@ export function App() {
     selectedSession,
   ])
 
-  async function handleOpenProject() {
+  async function chooseProjectDirectory() {
     setIsSearchOpen(false)
-    setActiveSidebarUtilityDestination(null)
     if (!window.ousia) {
       const rawPath = window.prompt(t.shell.projectPathPrompt)
       if (!rawPath) {
         return
       }
-      await addProject(rawPath, projectNameFromPath(rawPath))
-      return
+      return { path: rawPath, name: projectNameFromPath(rawPath) }
     }
     const result = await window.ousia.openProjectDirectory({
       defaultPath: settings.defaultProjectCreationDir,
@@ -1454,7 +1453,46 @@ export function App() {
     if (result.canceled) {
       return
     }
-    await addProject(result.path, result.name)
+    return { path: result.path, name: result.name }
+  }
+
+  async function handleOpenProject() {
+    setActiveSidebarUtilityDestination(null)
+    setIsNewTaskComposer(false)
+    const selection = await chooseProjectDirectory()
+    if (!selection) {
+      return
+    }
+    const existingProject = projects.find(
+      (project) => project.path === selection.path
+    )
+    const session = existingProject
+      ? await createProjectSession(existingProject.id)
+      : await addProject(selection.path, selection.name)
+    if (session) {
+      setIsNewTaskComposer(true)
+    }
+  }
+
+  async function handleOpenNewTaskProject() {
+    const keepUtilityActive =
+      activeSidebarUtilityDestination === "new-task"
+    const selection = await chooseProjectDirectory()
+    if (!selection) {
+      return
+    }
+    const existingProject = projects.find(
+      (project) => project.path === selection.path
+    )
+    const session = existingProject
+      ? await createProjectSession(existingProject.id)
+      : await addProject(selection.path, selection.name)
+    if (session) {
+      setIsNewTaskComposer(true)
+      setActiveSidebarUtilityDestination(
+        keepUtilityActive ? "new-task" : null
+      )
+    }
   }
 
   async function addProject(path: string, name: string) {
@@ -1494,25 +1532,27 @@ export function App() {
         setSidebarScrollTargetSessionId(result.session.id)
       }
       setIsSettingsOpen(false)
-      return
+      return result.session
     }
 
     const existing = projects.find((project) => project.path === path)
     if (existing) {
-      await selectOrCreateProjectSession(existing)
+      const session = await selectOrCreateProjectSession(existing)
       setIsSettingsOpen(false)
-      return
+      return session
     }
     const project = createProject(path, name)
     setProjects((current) => [...current, project])
     setExpandedProjectIds((current) => [...current, project.id])
-    await createProjectSession(project.id, project.path)
+    const session = await createProjectSession(project.id, project.path)
     setIsSettingsOpen(false)
+    return session
   }
 
   async function handleCreateSession() {
     setIsSearchOpen(false)
     setActiveSidebarUtilityDestination(null)
+    setIsNewTaskComposer(false)
     if (window.ousia) {
       const result = await window.ousia.createSession({
         agentProvider: settings.defaultAgentProvider,
@@ -1543,7 +1583,7 @@ export function App() {
       })
       setSidebarScrollTargetSessionId(result.session.id)
       setIsSettingsOpen(false)
-      return
+      return result.session
     }
 
     const session = createSession(
@@ -1566,6 +1606,7 @@ export function App() {
     setSelectedSessionId(session.id)
     setSidebarScrollTargetSessionId(session.id)
     setIsSettingsOpen(false)
+    return session
   }
 
   async function createProjectSession(
@@ -1573,6 +1614,7 @@ export function App() {
     explicitProjectPath?: string
   ) {
     setActiveSidebarUtilityDestination(null)
+    setIsNewTaskComposer(false)
     if (window.ousia) {
       const result = await window.ousia.createSession({
         agentProvider: settings.defaultAgentProvider,
@@ -1603,7 +1645,7 @@ export function App() {
         return next
       })
       setSidebarScrollTargetSessionId(result.session.id)
-      return
+      return result.session
     }
 
     const session = {
@@ -1632,6 +1674,7 @@ export function App() {
     )
     setSelectedSessionId(session.id)
     setSidebarScrollTargetSessionId(session.id)
+    return session
   }
 
   async function selectOrCreateProjectSession(project: ProjectRecord) {
@@ -1643,9 +1686,9 @@ export function App() {
         current.includes(project.id) ? current : [...current, project.id]
       )
       setSelectedSessionId(existingSession.id)
-      return
+      return existingSession
     }
-    await createProjectSession(project.id)
+    return createProjectSession(project.id)
   }
 
   async function handleDeleteProject(projectId: string) {
@@ -1892,6 +1935,7 @@ export function App() {
     setSelectedSessionId(sessionId)
     setIsSettingsOpen(false)
     setIsSearchOpen(false)
+    setIsNewTaskComposer(false)
     setActiveSidebarUtilityDestination(null)
   }
 
@@ -1899,6 +1943,7 @@ export function App() {
     setActiveSettingsSection("general")
     setIsSettingsOpen(true)
     setIsSearchOpen(false)
+    setIsNewTaskComposer(false)
     setActiveSidebarUtilityDestination(null)
   }
 
@@ -1913,6 +1958,9 @@ export function App() {
   function handleSearchOpenChange(open: boolean) {
     setIsSearchOpen(open)
     setIsSettingsOpen(false)
+    if (open) {
+      setIsNewTaskComposer(false)
+    }
     setActiveSidebarUtilityDestination(open ? "search" : null)
   }
 
@@ -1923,6 +1971,7 @@ export function App() {
     setSearchScope(scope)
     setIsSearchOpen(true)
     setIsSettingsOpen(false)
+    setIsNewTaskComposer(false)
     setActiveSidebarUtilityDestination("search")
   }
 
@@ -1991,19 +2040,53 @@ export function App() {
     }
   }
 
+  async function handleCreateNewTask() {
+    setIsSearchOpen(false)
+    setIsSettingsOpen(false)
+    const session = selectedSession?.projectId
+      ? await createProjectSession(selectedSession.projectId)
+      : await handleCreateSession()
+    if (session) {
+      setIsNewTaskComposer(true)
+      setActiveSidebarUtilityDestination("new-task")
+    }
+  }
+
+  async function handleCreateProjectNewTask(projectId: string) {
+    setIsSearchOpen(false)
+    setIsSettingsOpen(false)
+    const session = await createProjectSession(projectId)
+    if (session) {
+      setIsNewTaskComposer(true)
+      setActiveSidebarUtilityDestination(null)
+    }
+  }
+
+  async function handleNewTaskDestinationChange(projectId?: string) {
+    if (!selectedSession || selectedSession.projectId === projectId) {
+      return
+    }
+    await handleMoveSession({
+      sessionId: selectedSession.id,
+      targetProjectId: projectId,
+    })
+  }
+
   function handleSelectSidebarUtilityDestination(
     destination: SidebarUtilityDestination
   ) {
     if (destination === "new-task") {
-      void handleCreateSession()
+      void handleCreateNewTask()
       return
     }
     if (destination === "search") {
+      setIsNewTaskComposer(false)
       handleOpenSearch("all")
       return
     }
     setIsSearchOpen(false)
     setIsSettingsOpen(false)
+    setIsNewTaskComposer(false)
     setActiveSidebarUtilityDestination(destination)
   }
 
@@ -2579,8 +2662,13 @@ export function App() {
     setIsSidebarCollapsed((current) => !current)
   }, [])
 
-  const stableCreateProjectSession = useStableEvent(createProjectSession)
+  const stableCreateProjectNewTask = useStableEvent(handleCreateProjectNewTask)
   const stableCreateSession = useStableEvent(handleCreateSession)
+  const stableCreateNewTask = useStableEvent(handleCreateNewTask)
+  const stableOpenNewTaskProject = useStableEvent(handleOpenNewTaskProject)
+  const stableNewTaskDestinationChange = useStableEvent(
+    handleNewTaskDestinationChange
+  )
   const stableArchiveProject = useStableEvent(handleArchiveProject)
   const stableDeleteProject = useStableEvent(handleDeleteProject)
   const stableArchiveSession = useStableEvent(handleArchiveSession)
@@ -2642,7 +2730,7 @@ export function App() {
         }
         if (key === "n") {
           event.preventDefault()
-          void stableCreateSession()
+          void stableCreateNewTask()
           return
         }
         if (event.key === ",") {
@@ -2700,7 +2788,7 @@ export function App() {
     window.addEventListener("keydown", handleGlobalKeyDown)
     return () => window.removeEventListener("keydown", handleGlobalKeyDown)
   }, [
-    stableCreateSession,
+    stableCreateNewTask,
     stableFocusComposer,
     stableNavigateRecentSession,
     stableOpenProject,
@@ -2770,7 +2858,7 @@ export function App() {
               <Sidebar
                 activeSidebarUtilityDestination={activeSidebarUtilityDestination}
                 onArchiveProject={stableArchiveProject}
-                onCreateProjectSession={stableCreateProjectSession}
+                onCreateProjectSession={stableCreateProjectNewTask}
                 onCreateSession={stableCreateSession}
                 onDeleteProject={stableDeleteProject}
                 onArchiveSession={stableArchiveSession}
@@ -2841,7 +2929,8 @@ export function App() {
               />
             ) : activeSidebarUtilityDestination === "extensions" ? (
               <ExtensionsPage language={settings.language} />
-            ) : activeSidebarUtilityDestination ? (
+            ) : activeSidebarUtilityDestination &&
+              activeSidebarUtilityDestination !== "new-task" ? (
               <section
                 aria-label={t.sidebar.utilityNavigation}
                 className={`ousia-main-panel relative z-20 flex min-w-0 flex-1 flex-col overflow-hidden bg-white shadow-[var(--ousia-main-panel-shadow)] dark:bg-[var(--ousia-chat-panel-surface)] ${MAIN_PANEL_LEFT_CORNERS_CLASS}`}
@@ -2865,10 +2954,19 @@ export function App() {
                 }
                 isSidebarCollapsed={isSidebarCollapsed}
                 isWindowFullscreen={isWindowFullscreen}
+                isNewTask={isNewTaskComposer}
                 onLocalEvent={stableAppendLocalEvent}
                 onGenerateSessionTitle={stableGenerateSessionTitle}
                 onBranchFromMessage={stableBranchFromMessage}
                 onLoadOlderHistory={handleLoadOlderHistory}
+                onNewTaskCreateProject={stableOpenNewTaskProject}
+                onNewTaskDestinationChange={stableNewTaskDestinationChange}
+                onNewTaskSubmitted={() =>
+                  startTransition(() => {
+                    setIsNewTaskComposer(false)
+                    setActiveSidebarUtilityDestination(null)
+                  })
+                }
                 onScrollTargetHandled={() => setChatScrollTargetItemId("")}
                 onRefreshModelRegistry={refreshModelRegistry}
                 onSessionCompletionVisibility={markSessionCompletionVisibility}
@@ -2884,6 +2982,7 @@ export function App() {
                 onSettingsChange={handleSettingsChange}
                 modelRegistry={modelRegistry}
                 queuedChatState={selectedQueuedChatState}
+                projects={projects}
                 settings={settings}
                 scrollTargetItemId={chatScrollTargetItemId}
                 language={settings.language}

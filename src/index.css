@@ -6,6 +6,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.ousia-glass-icon {
+  --nc-gradient-1-color-1: oklch(0.42 0 0);
+  --nc-gradient-1-color-2: oklch(0.16 0 0);
+  --nc-gradient-2-color-1: oklch(0.94 0 0 / 70%);
+  --nc-gradient-2-color-2: oklch(0.76 0 0 / 58%);
+  --nc-light: white;
+}
+
+.dark .ousia-glass-icon {
+  --nc-gradient-1-color-1: oklch(0.96 0 0);
+  --nc-gradient-1-color-2: oklch(0.62 0 0);
+  --nc-gradient-2-color-1: oklch(0.78 0 0 / 58%);
+  --nc-gradient-2-color-2: oklch(0.46 0 0 / 48%);
+}
+
 @font-face {
   font-family: "Ousia LXGW WenKai";
   font-style: normal;
@@ -1580,10 +1595,21 @@
   scrollbar-gutter: stable both-edges;
 }
 
-.ousia-sidebar-scrollbar-gutter {
-  /* Sidebar spacing is explicit. Reserve only the scrollbar edge so classic
-   * scrollbars cannot add a second, input-device-dependent left gutter. */
-  scrollbar-gutter: stable;
+/*
+ * Chromium subtracts a classic scrollbar from the scrollport even without a
+ * stable gutter. Let sidebar content reclaim that width so the 6px scrollbar
+ * sits inside the explicit right padding instead of narrowing every row.
+ */
+.ousia-sidebar-scrollbar {
+  --ousia-sidebar-scrollbar-width: 6px;
+}
+
+.ousia-sidebar-scrollbar-content {
+  width: calc(100% + var(--ousia-sidebar-scrollbar-width));
+}
+
+.ousia-sidebar-scrollbar::-webkit-scrollbar {
+  width: var(--ousia-sidebar-scrollbar-width);
 }
 
 /*

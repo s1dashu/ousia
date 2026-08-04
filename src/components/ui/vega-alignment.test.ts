@@ -48,7 +48,16 @@ describe("Vega component alignment", () => {
 
   it("retains the business separator while using the standard recipe", () => {
     const chatArea = readSource("src/features/chat/ChatArea.tsx")
-    const separators = chatArea.match(/<DropdownMenuSeparator \/>/g) ?? []
+    const modelMenuStart = chatArea.indexOf("open={isModelMenuOpen}")
+    const modelMenuEnd = chatArea.indexOf(
+      "</DropdownMenuContent>",
+      modelMenuStart
+    )
+    expect(modelMenuStart).toBeGreaterThan(-1)
+    expect(modelMenuEnd).toBeGreaterThan(modelMenuStart)
+
+    const modelMenu = chatArea.slice(modelMenuStart, modelMenuEnd)
+    const separators = modelMenu.match(/<DropdownMenuSeparator \/>/g) ?? []
 
     expect(separators).toHaveLength(1)
   })

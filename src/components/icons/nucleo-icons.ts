@@ -35,7 +35,7 @@ export {
   IconLaptopMobileOutline18 as Smartphone,
   IconSlidersOutline18 as SlidersHorizontal,
   IconSparkle3Outline18 as Sparkles,
-  IconComputerOutline18 as Terminal,
+  IconSquareTerminalOutline18 as Terminal,
   IconCheckOutline18 as Tick,
   IconTrashOutline18 as Trash2,
   IconChevronExpandYOutline18 as UnfoldMore,

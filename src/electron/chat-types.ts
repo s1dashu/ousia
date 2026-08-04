@@ -224,6 +224,12 @@ export type OusiaPiPackageMutationResult = OusiaPiPackageStatus & {
   activation: OusiaPiPackageActivationResult
 }
 
+export type OusiaPiPackageOperationProgress = {
+  operation: "install" | "remove"
+  packageName: string
+  phase: "reloading"
+}
+
 export type OusiaPiPackageReloadPayload = {
   force: boolean
 }
@@ -422,6 +428,32 @@ export type OusiaAppStateMoveSessionPayload = {
 export type OusiaAppStateReorderSessionsPayload = {
   sourceSessionId: string
   targetSessionId: string
+}
+
+export type OusiaGitBranch = {
+  name: string
+}
+
+export type OusiaGitBranchState = {
+  branches: OusiaGitBranch[]
+  currentBranch?: string
+  dirtyFileCount: number
+  isRepository: boolean
+}
+
+export type OusiaGitBranchStatePayload = {
+  projectId: string
+}
+
+export type OusiaGitBranchMutationPayload = {
+  branchName: string
+  projectId: string
+}
+
+export type OusiaGitBranchResult = {
+  error?: string
+  ok: boolean
+  state?: OusiaGitBranchState
 }
 
 export type OusiaAppStateTouchSessionPayload = {

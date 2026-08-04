@@ -13,7 +13,6 @@ import { join } from "node:path"
 
 import type {
   OusiaLanguage,
-  OusiaResolvedTheme,
   OusiaThemePreference,
   OusiaUpdateStatus,
   OusiaWindowThemePayload,
@@ -48,25 +47,6 @@ function isExternalUrl(url: string) {
   } catch {
     return false
   }
-}
-
-const WINDOW_BACKGROUND_BY_THEME: Record<OusiaResolvedTheme, string> = {
-  dark: "#111110",
-  light: "#fffefb",
-}
-
-function resolveThemePreference(
-  theme: OusiaThemePreference
-): OusiaResolvedTheme {
-  if (theme === "system") {
-    return nativeTheme.shouldUseDarkColors ? "dark" : "light"
-  }
-
-  return theme
-}
-
-function windowBackgroundForTheme(theme: OusiaResolvedTheme) {
-  return WINDOW_BACKGROUND_BY_THEME[theme]
 }
 
 function applyNativeThemePreference(theme: OusiaThemePreference) {
@@ -490,9 +470,6 @@ export function createWindowHost({
       ...(platform === "darwin"
         ? { trafficLightPosition: resolveMacTrafficLightPosition() }
         : {}),
-      backgroundColor: windowBackgroundForTheme(
-        resolveThemePreference(appState.settings.theme)
-      ),
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -690,12 +667,8 @@ export function createWindowHost({
 
   return {
     createWindow,
-    setWindowTheme({ theme, resolvedTheme }: OusiaWindowThemePayload) {
+    setWindowTheme({ theme }: OusiaWindowThemePayload) {
       applyNativeThemePreference(theme)
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        return
-      }
-      mainWindow.setBackgroundColor(windowBackgroundForTheme(resolvedTheme))
     },
     getWindowFullscreenState,
     getWindowZoomState,

@@ -3,9 +3,12 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
 import {
+  GlassFolder,
+  GlassFolderOpen,
+} from "@/components/icons/glass-icons"
+import {
   ArchiveAction,
   ChevronDown,
-  Folder,
   FolderOpen,
   Plus,
   SidebarActions,
@@ -39,7 +42,6 @@ import {
   sidebarFolderIconSize,
   sidebarIconStrokeWidth,
   sidebarMenuIconSize,
-  sidebarMenuIconXClass,
   sidebarProjectActionButtonClass,
   sidebarProjectLeadGridClass,
   sidebarProjectRowStateClass,
@@ -158,7 +160,7 @@ export function DragPreview({ preview }: { preview: SidebarDragPreview }) {
         </div>
         <div
           aria-hidden="true"
-          className="pointer-events-none flex size-6 items-center justify-center rounded-lg text-sidebar-accent-foreground/75"
+          className="pointer-events-none flex size-6 items-center justify-center rounded-lg text-sidebar-accent-foreground"
         >
           <ChevronDown
             size={sidebarSectionIconSize}
@@ -419,16 +421,18 @@ export function SortableProjectSection({
         {...listeners}
       >
         {isExpanded ? (
-          <FolderOpen
-            className="shrink-0 justify-self-start"
+          <GlassFolderOpen
+            aria-hidden="true"
+            className="ousia-glass-icon shrink-0 justify-self-start"
             size={sidebarFolderIconSize}
-            strokeWidth={sidebarIconStrokeWidth}
+            uniqueId={`sidebar-project-open-${project.id}-`}
           />
         ) : (
-          <Folder
-            className="shrink-0 justify-self-start"
+          <GlassFolder
+            aria-hidden="true"
+            className="ousia-glass-icon shrink-0 justify-self-start"
             size={sidebarFolderIconSize}
-            strokeWidth={sidebarIconStrokeWidth}
+            uniqueId={`sidebar-project-closed-${project.id}-`}
           />
         )}
         <button
@@ -454,7 +458,7 @@ export function SortableProjectSection({
                 onPointerDown={(event) => event.stopPropagation()}
               >
                 <SidebarActions
-                  className={`${sidebarMenuIconXClass} text-sidebar-accent-foreground`}
+                  className="text-sidebar-accent-foreground"
                   size={sidebarMenuIconSize}
                   strokeWidth={sidebarIconStrokeWidth}
                 />
@@ -601,7 +605,7 @@ export function SortableSidebarSection({
             onPointerDown={(event) => event.stopPropagation()}
           >
             <Plus
-              className="text-muted-foreground"
+              className="text-sidebar-accent-foreground"
               size={sidebarSectionIconSize}
               strokeWidth={sidebarIconStrokeWidth}
             />

@@ -1,7 +1,9 @@
 import {
   Children,
   Fragment,
+  lazy,
   memo,
+  Suspense,
   useEffect,
   useRef,
   useState,
@@ -23,7 +25,6 @@ import { getConfiguredModelPresets, providerLabel } from "@/app/model-presets"
 import type { AppSettings } from "@/app/app-state"
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { useTheme, type Theme } from "@/components/theme-provider"
-import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/toast"
 import {
   Tooltip,
@@ -116,6 +117,16 @@ type SettingsPageProps = {
 
 const settingsContentClass = "mx-auto grid w-full max-w-[52rem] gap-6 pb-12"
 const settingsSelectTriggerClass = "w-full @min-[720px]:w-52"
+
+const LazySystemPromptEditor = lazy(async () => {
+  const { SystemPromptEditor } = await import(
+    "@/features/settings/SystemPromptEditor"
+  )
+
+  return {
+    default: SystemPromptEditor,
+  }
+})
 
 function SettingsGroup({
   children,
@@ -1416,21 +1427,37 @@ function SettingsPageComponent({
                 </p>
               </div>
               <div className="grid gap-3">
-                <Textarea
-                  aria-label={t.settings.systemPrompt}
-                  className="field-sizing-fixed h-[32rem] min-h-64 max-h-[60vh] resize-y overflow-y-auto font-mono text-sm leading-6"
-                  disabled={isLoadingSystemPrompt}
-                  placeholder={t.settings.systemPromptPlaceholder}
-                  readOnly={
-                    !isEditingSystemPrompt ||
-                    isSavingSystemPrompt ||
-                    isRestoringSystemPrompt
+                <Suspense
+                  fallback={
+                    <div
+                      aria-label={t.settings.systemPrompt}
+                      className="h-[32rem] min-h-64 max-h-[60vh] overflow-y-auto rounded-md border border-input bg-transparent shadow-xs dark:bg-input/30"
+                      data-system-prompt-editor
+                      role="region"
+                    >
+                      <pre className="m-0 whitespace-pre-wrap px-2.5 py-2 font-mono text-sm leading-6 text-foreground">
+                        {isLoadingSystemPrompt
+                          ? t.settings.systemPromptPlaceholder
+                          : draft.systemPrompt}
+                      </pre>
+                    </div>
                   }
-                  value={draft.systemPrompt}
-                  onChange={(event) =>
-                    updateDraft({ systemPrompt: event.target.value })
-                  }
-                />
+                >
+                  <LazySystemPromptEditor
+                    ariaLabel={t.settings.systemPrompt}
+                    disabled={
+                      isLoadingSystemPrompt ||
+                      isSavingSystemPrompt ||
+                      isRestoringSystemPrompt
+                    }
+                    editable={isEditingSystemPrompt}
+                    onChange={(systemPrompt) =>
+                      updateDraft({ systemPrompt })
+                    }
+                    placeholder={t.settings.systemPromptPlaceholder}
+                    value={draft.systemPrompt}
+                  />
+                </Suspense>
                 {systemPromptLoadError ? (
                   <p className="text-sm text-destructive" role="alert">
                     {systemPromptLoadError}

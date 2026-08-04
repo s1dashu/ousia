@@ -45,6 +45,9 @@ import type {
   OusiaCodexAuthResult,
   OusiaCodexEnvironmentStatus,
   OusiaDirectoryPickerOptions,
+  OusiaGitBranchMutationPayload,
+  OusiaGitBranchResult,
+  OusiaGitBranchStatePayload,
   OusiaModelRegistryResult,
   OusiaOpenDirectoryPayload,
   OusiaOpenDirectoryResult,
@@ -53,6 +56,7 @@ import type {
   OusiaPiPackageActivationResult,
   OusiaPiPackageMutationPayload,
   OusiaPiPackageMutationResult,
+  OusiaPiPackageOperationProgress,
   OusiaPiPackageReloadPayload,
   OusiaPiPackageStatus,
   OusiaPiProviderCredentialPayload,
@@ -117,6 +121,15 @@ declare global {
       createProject(
         payload: OusiaAppStateCreateProjectPayload
       ): Promise<OusiaAppStateTransactionResult>
+      getGitBranches(
+        payload: OusiaGitBranchStatePayload
+      ): Promise<OusiaGitBranchResult>
+      switchGitBranch(
+        payload: OusiaGitBranchMutationPayload
+      ): Promise<OusiaGitBranchResult>
+      createGitBranch(
+        payload: OusiaGitBranchMutationPayload
+      ): Promise<OusiaGitBranchResult>
       deleteProject(
         payload: OusiaAppStateDeleteProjectPayload
       ): Promise<OusiaAppStateTransactionResult>
@@ -172,6 +185,9 @@ declare global {
       removePiPackage(
         payload: OusiaPiPackageMutationPayload
       ): Promise<OusiaPiPackageMutationResult>
+      onPiPackageOperationProgress(
+        callback: (progress: OusiaPiPackageOperationProgress) => void
+      ): () => void
       reloadPiPackages(
         payload: OusiaPiPackageReloadPayload
       ): Promise<OusiaPiPackageActivationResult>
