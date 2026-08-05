@@ -138,7 +138,6 @@ const sidebarDragTiltMax = 2.5
 
 type SidebarProps = {
   activeSidebarUtilityDestination: SidebarUtilityDestination | null
-  onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onCreateSession: () => void
   onDeleteProject: (projectId: string) => void
@@ -229,7 +228,6 @@ function AnimatedDragPreview({
 
 function SidebarComponent({
   activeSidebarUtilityDestination,
-  onArchiveProject,
   onCreateProjectSession,
   onCreateSession,
   onDeleteProject,
@@ -821,7 +819,6 @@ function SidebarComponent({
                     (session) => sessionRunStatusById[session.id] === "working"
                   )}
                   isExpanded={isExpanded}
-                  onArchiveProject={onArchiveProject}
                   onCreateProjectSession={onCreateProjectSession}
                   onDeleteProject={onDeleteProject}
                   onShowProjectInFolder={onShowProjectInFolder}
@@ -1113,7 +1110,7 @@ function SidebarComponent({
         >
           <GlassSettings
             aria-hidden="true"
-            className="ousia-glass-icon"
+            className="ousia-glass-icon -translate-x-px"
             size={18}
             uniqueId="sidebar-settings-"
           />

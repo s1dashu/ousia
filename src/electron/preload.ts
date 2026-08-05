@@ -1,7 +1,6 @@
 import type {
   OusiaAppState,
   OusiaAppStateCreateProjectPayload,
-  OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
   OusiaAppStateDeleteProjectPayload,
   OusiaAppStateDeleteSessionPayload,
@@ -163,11 +162,6 @@ const api = {
     payload: OusiaAppStateSessionIdsPayload
   ): Promise<OusiaAppStateTransactionResult> {
     return ipcRenderer.invoke("ousia:app-state:sessions:archive", payload)
-  },
-  archiveProjectSessions(
-    payload: OusiaAppStateArchiveProjectPayload
-  ): Promise<OusiaAppStateTransactionResult> {
-    return ipcRenderer.invoke("ousia:app-state:project:archive", payload)
   },
   restoreSessions(
     payload: OusiaAppStateSessionIdsPayload

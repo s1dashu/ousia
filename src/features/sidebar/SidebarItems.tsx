@@ -87,7 +87,6 @@ type SortableProjectSectionProps = {
   children: React.ReactNode
   hasWorkingSession: boolean
   isExpanded: boolean
-  onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
   onShowProjectInFolder: (projectId: string) => void
@@ -380,7 +379,6 @@ export function SortableProjectSection({
   children,
   hasWorkingSession,
   isExpanded,
-  onArchiveProject,
   onCreateProjectSession,
   onDeleteProject,
   onShowProjectInFolder,
@@ -469,13 +467,6 @@ export function SortableProjectSection({
             <DropdownMenuItem onClick={() => onShowProjectInFolder(project.id)}>
               <FolderOpen className="text-muted-foreground" />
               {t.sidebar.showProjectInFolder}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={hasWorkingSession}
-              onClick={() => onArchiveProject(project.id)}
-            >
-              <ArchiveAction className="text-muted-foreground" />
-              {t.sidebar.archiveProject}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

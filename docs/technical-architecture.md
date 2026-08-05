@@ -164,8 +164,7 @@ synchronizes Pi's retry preference, preventing environment/package-path races.
 - `loadAppState()`
 - App-state transactions such as `saveAppSettings(payload)`,
   `saveShellLayout(payload)`, `saveAppSelection(payload)`, `createSession(payload)`,
-  `archiveSessions(payload)`, `archiveProjectSessions(payload)`,
-  `restoreSessions(payload)`, `deleteSessions(payload)`,
+  `archiveSessions(payload)`, `restoreSessions(payload)`, `deleteSessions(payload)`,
   `deleteSession(payload)`, `renameSession(payload)`, `moveSession(payload)`,
   `reorderSessions(payload)`, `touchSession(payload)`, `createProject(payload)`,
   `deleteProject(payload)`, and `reorderProjects(payload)`
@@ -235,10 +234,8 @@ Codex calls the pinned app-server `thread/delete` RPC. Only after provider data
 deletion succeeds is that session removed from canonical Ousia app state. Batch
 failures retain the failed and unattempted records while already completed
 items remain deleted, and every phase is recorded in the runtime log.
-The project-row archive action uses one project-scoped transaction to archive
-all of that project's active sessions together; the project registration and
-directory remain available in the sidebar. Project menu folder reveal reuses
-the validated main-process directory-opening boundary.
+Project menu folder reveal reuses the validated main-process directory-opening
+boundary.
 
 Retryable Pi transport failures remain provisional until Pi decides whether the
 turn will retry. While retrying, the renderer shows one transient reconnecting

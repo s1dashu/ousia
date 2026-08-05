@@ -121,9 +121,7 @@ desktop agent client:
   deletion also removes the provider-owned local session data: Pi JSONL through
   an exact SDK session lookup and Codex threads through app-server
   `thread/delete`; a provider failure keeps the corresponding Ousia record.
-- Project rows expose a `...` menu for folder reveal, project archival, and
-  deletion. Project archival atomically archives every active session in the
-  project while keeping the project itself registered.
+- Project rows expose a `...` menu for folder reveal and deletion.
 
 - App state persists settings, sessions, projects, shell layout, window state,
   expanded project ids, and current selection.

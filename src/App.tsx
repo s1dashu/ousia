@@ -1816,70 +1816,6 @@ export function App() {
     }
   }
 
-  async function handleArchiveProject(projectId: string) {
-    const project = projects.find((item) => item.id === projectId)
-    if (!project) {
-      return
-    }
-    const projectSessions = sessionsRef.current.filter(
-      (session) => session.projectId === projectId && !session.archivedAt
-    )
-    const workingSession = findWorkingChatSession(
-      projectSessions,
-      project.path,
-      runStatusBySessionRef.current
-    )
-    if (workingSession) {
-      console.warn(
-        `[app-state.archive] Blocked project archival because a session is running: ${JSON.stringify(
-          { projectId, sessionId: workingSession.id }
-        )}`
-      )
-      return
-    }
-    if (!projectSessions.length) {
-      return
-    }
-
-    if (window.ousia) {
-      const result = await window.ousia.archiveProjectSessions({ projectId })
-      applyAppStateTransaction(result)
-      if (result.ok) {
-        setUnreadCompletedSessionIds((current) => {
-          const next = new Set(current)
-          for (const session of projectSessions) next.delete(session.id)
-          return next
-        })
-      }
-      return
-    }
-
-    const archivedIds = new Set(projectSessions.map((session) => session.id))
-    const archivedAt = new Date().toISOString()
-    let nextSessions = sessionsRef.current.map((session) =>
-      archivedIds.has(session.id) ? { ...session, archivedAt } : session
-    )
-    let activeSessions = nextSessions.filter((session) => !session.archivedAt)
-    if (!activeSessions.length) {
-      const replacement = createSession(
-        t.app.newSession,
-        settings.defaultAgentProvider
-      )
-      nextSessions = [replacement, ...nextSessions]
-      activeSessions = [replacement]
-    }
-    sessionsRef.current = nextSessions
-    setSessions(nextSessions)
-    if (selectedSessionId && archivedIds.has(selectedSessionId)) {
-      setSelectedSessionId(activeSessions[0].id)
-    }
-    setUnreadCompletedSessionIds((current) => {
-      const next = new Set(current)
-      for (const session of projectSessions) next.delete(session.id)
-      return next
-    })
-  }
-
   async function handleShowProjectInFolder(projectId: string) {
     const project = projects.find((item) => item.id === projectId)
     if (!project) {
@@ -2669,7 +2605,6 @@ export function App() {
   const stableNewTaskDestinationChange = useStableEvent(
     handleNewTaskDestinationChange
   )
-  const stableArchiveProject = useStableEvent(handleArchiveProject)
   const stableDeleteProject = useStableEvent(handleDeleteProject)
   const stableArchiveSession = useStableEvent(handleArchiveSession)
   const stableRestoreArchivedSessions = useStableEvent(
@@ -2857,7 +2792,6 @@ export function App() {
             <div className={isSettingsOpen ? "hidden" : "flex min-h-0"}>
               <Sidebar
                 activeSidebarUtilityDestination={activeSidebarUtilityDestination}
-                onArchiveProject={stableArchiveProject}
                 onCreateProjectSession={stableCreateProjectNewTask}
                 onCreateSession={stableCreateSession}
                 onDeleteProject={stableDeleteProject}

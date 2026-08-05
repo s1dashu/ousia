@@ -66,7 +66,6 @@ function renderSidebar({
   return renderToStaticMarkup(
     <Sidebar
       activeSidebarUtilityDestination={activeSidebarUtilityDestination}
-      onArchiveProject={vi.fn()}
       expandedProjectIds={expandedProjectIds}
       language={language}
       onCreateProjectSession={vi.fn()}

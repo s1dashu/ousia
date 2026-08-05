@@ -410,10 +410,6 @@ export type OusiaAppStateSessionIdsPayload = {
   sessionIds: string[]
 }
 
-export type OusiaAppStateArchiveProjectPayload = {
-  projectId: string
-}
-
 export type OusiaAppStateRenameSessionPayload = {
   sessionId: string
   title: string
