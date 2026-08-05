@@ -36,7 +36,7 @@
 ## See Ousia in action
 
 <p align="center">
-  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia streaming a coding-agent response in dark mode">
+  <img src="./assets/readme/ousia-dark-mode.gif" width="100%" alt="Ousia running a Pi coding-agent session">
 </p>
 
 ## What is Ousia
