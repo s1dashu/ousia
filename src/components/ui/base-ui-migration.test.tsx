@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -42,6 +44,20 @@ describe("Base UI migration adapters", () => {
     expect(html.match(/<button/g)).toHaveLength(1)
     expect(html).toContain('data-slot="dropdown-menu-trigger"')
     expect(html).toContain('aria-haspopup="menu"')
+  })
+
+  it("provides the required group context for menu labels", () => {
+    const html = renderToStaticMarkup(
+      <DropdownMenu>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Branches</DropdownMenuLabel>
+        </DropdownMenuGroup>
+      </DropdownMenu>
+    )
+
+    expect(html).toContain('data-slot="dropdown-menu-group"')
+    expect(html).toContain('data-slot="dropdown-menu-label"')
+    expect(html).toContain("Branches")
   })
 
   it("renders Select and Switch with Base UI state attributes", () => {

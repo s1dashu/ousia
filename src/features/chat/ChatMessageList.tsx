@@ -3,7 +3,7 @@ import {
   Copy,
   FileImage,
   FileText,
-  GitBranchPlus,
+  GitBranch,
   LoaderCircle,
   Paperclip,
 } from "@/components/icons/nucleo-icons"
@@ -483,7 +483,7 @@ function AssistantMessageFooter({
               aria-label={t.chat.branchFromMessage}
               onClick={() => onBranchFromMessage(item.id)}
             >
-              <GitBranchPlus size={14} strokeWidth={1.5} />
+              <GitBranch size={14} strokeWidth={1.5} />
             </button>
           </TooltipTrigger>
           <TooltipContent side="top">

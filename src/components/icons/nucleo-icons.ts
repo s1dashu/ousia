@@ -19,7 +19,7 @@ export {
   IconImageOutline18 as FileImage,
   IconFolderOutline18 as Folder,
   IconFolderOpenOutline18 as FolderOpen,
-  IconNodesOutline18 as GitBranchPlus,
+  IconCodeBranchOutline18 as GitBranch,
   IconUnorderedListOutline18 as GripVertical,
   IconKeyboardOutline18 as Keyboard,
   IconLinkOutline18 as Link,

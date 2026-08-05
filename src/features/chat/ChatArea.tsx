@@ -164,6 +164,7 @@ type ChatAreaProps = {
   isSidebarCollapsed: boolean
   isWindowFullscreen: boolean
   isNewTask?: boolean
+  canChangeNewTaskDestination?: boolean
   language: OusiaLanguage
   modelRegistry: OusiaModelRegistryResult | undefined
   onLocalEvent: (event: OusiaChatEvent) => void
@@ -366,6 +367,7 @@ function isProviderApiKeyRequiredStatusItem(item: ChatItem) {
 }
 
 function ChatAreaComponent({
+  canChangeNewTaskDestination = false,
   composerFocusRequest,
   codexEnvironment,
   currentProject,
@@ -415,6 +417,7 @@ function ChatAreaComponent({
   )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [isComposerSettingsOpen, setIsComposerSettingsOpen] = useState(false)
+  const [gitBranchRevision, setGitBranchRevision] = useState(0)
   const [isCustomToolsDialogOpen, setIsCustomToolsDialogOpen] = useState(false)
   const [isProviderKeyDialogOpen, setIsProviderKeyDialogOpen] = useState(false)
   const [providerKeyDialogProviderId, setProviderKeyDialogProviderId] =
@@ -442,6 +445,9 @@ function ChatAreaComponent({
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
   const isCodexSession = currentSession?.agentProvider === "codex"
+  const handleGitBranchChange = useCallback(() => {
+    setGitBranchRevision((current) => current + 1)
+  }, [])
   const effectiveAgentMode: OusiaAgentMode =
     isCodexSession &&
     (settings.agentMode === "noTerminal" || settings.agentMode === "custom")
@@ -1573,6 +1579,20 @@ function ChatAreaComponent({
       onPointerDownCapture={markCurrentSessionViewed}
     >
       <ChatHeader
+        branchSelector={
+          currentSession?.projectId ? (
+            <NewTaskGitBranchSelector
+              disabled={isAgentWorking}
+              key={`header-${currentSession.projectId}`}
+              language={language}
+              menuSide="bottom"
+              onBranchChange={handleGitBranchChange}
+              projectId={currentSession.projectId}
+              refreshKey={gitBranchRevision}
+              triggerVariant="icon"
+            />
+          ) : undefined
+        }
         copyStatus={copyStatus}
         currentSession={currentSession}
         isCompacting={isCompacting}
@@ -1653,21 +1673,29 @@ function ChatAreaComponent({
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
           {isNewTask &&
-          onNewTaskCreateProject &&
-          onNewTaskDestinationChange ? (
+          ((canChangeNewTaskDestination &&
+            onNewTaskCreateProject &&
+            onNewTaskDestinationChange) ||
+            currentSession?.projectId) ? (
             <div className="pointer-events-auto mb-1 ml-1 flex justify-start gap-1">
-              <NewTaskProjectSelector
-                currentProjectId={currentSession?.projectId}
-                onCreateProject={onNewTaskCreateProject}
-                onDestinationChange={onNewTaskDestinationChange}
-                projects={projects}
-                t={t}
-              />
+              {canChangeNewTaskDestination &&
+              onNewTaskCreateProject &&
+              onNewTaskDestinationChange ? (
+                <NewTaskProjectSelector
+                  currentProjectId={currentSession?.projectId}
+                  onCreateProject={onNewTaskCreateProject}
+                  onDestinationChange={onNewTaskDestinationChange}
+                  projects={projects}
+                  t={t}
+                />
+              ) : null}
               {currentSession?.projectId ? (
                 <NewTaskGitBranchSelector
-                  key={currentSession.projectId}
+                  key={`composer-${currentSession.projectId}`}
                   language={language}
+                  onBranchChange={handleGitBranchChange}
                   projectId={currentSession.projectId}
+                  refreshKey={gitBranchRevision}
                 />
               ) : null}
             </div>

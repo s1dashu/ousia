@@ -4,6 +4,7 @@ import {
   Copy,
   MoreHorizontal,
 } from "@/components/icons/nucleo-icons"
+import type { ReactNode } from "react"
 
 import type { SessionRecord } from "@/app/app-state"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils"
 export type ChatCopyStatus = "idle" | "copied" | "failed"
 
 type ChatHeaderProps = {
+  branchSelector?: ReactNode
   copyStatus: ChatCopyStatus
   currentSession: SessionRecord | undefined
   isCompacting: boolean
@@ -34,6 +36,7 @@ type ChatHeaderProps = {
 }
 
 export function ChatHeader({
+  branchSelector,
   copyStatus,
   currentSession,
   isCompacting,
@@ -81,6 +84,14 @@ export function ChatHeader({
         </div>
       </div>
       <div className="window-drag relative z-10 flex shrink-0 items-center justify-end gap-1">
+        {branchSelector ? (
+          <div
+            data-slot="chat-header-branch-selector"
+            className="window-no-drag pointer-events-auto shrink-0"
+          >
+            {branchSelector}
+          </div>
+        ) : null}
         <DropdownMenu
           modal={false}
           open={isSessionMenuOpen}

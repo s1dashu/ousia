@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { getMessages } from "@/app/i18n"
 import {
   Check,
-  GitBranchPlus,
+  ChevronDown,
+  GitBranch,
   Plus,
   Search,
 } from "@/components/icons/nucleo-icons"
@@ -19,6 +20,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -37,11 +39,21 @@ type LoadedBranchState = {
 }
 
 export function NewTaskGitBranchSelector({
+  disabled = false,
   language,
+  menuSide = "top",
+  onBranchChange,
   projectId,
+  refreshKey = 0,
+  triggerVariant = "full",
 }: {
+  disabled?: boolean
   language: OusiaLanguage
+  menuSide?: "bottom" | "top"
+  onBranchChange?: () => void
   projectId: string
+  refreshKey?: number
+  triggerVariant?: "full" | "icon"
 }) {
   const t = getMessages(language)
   const [loaded, setLoaded] = useState<LoadedBranchState>()
@@ -55,6 +67,7 @@ export function NewTaskGitBranchSelector({
   const [mutationError, setMutationError] = useState("")
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newBranchName, setNewBranchName] = useState("codex/")
+  const [hasBranchNameBlurred, setHasBranchNameBlurred] = useState(false)
   const [createError, setCreateError] = useState("")
   const branchListRef = useRef<HTMLDivElement>(null)
 
@@ -82,7 +95,7 @@ export function NewTaskGitBranchSelector({
     return () => {
       canceled = true
     }
-  }, [projectId, t.git.readFailed, t.git.unavailable])
+  }, [projectId, refreshKey, t.git.readFailed, t.git.unavailable])
 
   const branchState = loaded?.projectId === projectId ? loaded.state : undefined
   const visibleBranches = useMemo(() => {
@@ -129,6 +142,7 @@ export function NewTaskGitBranchSelector({
       }
       setLoaded({ projectId, state: result.state })
       setOpen(false)
+      onBranchChange?.()
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -161,6 +175,7 @@ export function NewTaskGitBranchSelector({
   function openCreateDialog() {
     setOpen(false)
     setNewBranchName("codex/")
+    setHasBranchNameBlurred(false)
     setCreateError("")
     setIsCreateDialogOpen(true)
   }
@@ -179,6 +194,7 @@ export function NewTaskGitBranchSelector({
       }
       setLoaded({ projectId, state: result.state })
       setIsCreateDialogOpen(false)
+      onBranchChange?.()
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -215,20 +231,29 @@ export function NewTaskGitBranchSelector({
           <Button
             type="button"
             variant="ghost"
+            size={triggerVariant === "icon" ? "icon-sm" : "sm"}
             className={cn(
-              "h-8 min-w-0 max-w-64 gap-2 bg-transparent px-2 text-sm font-normal hover:bg-accent",
+              triggerVariant === "icon"
+                ? "window-no-drag pointer-events-auto shrink-0"
+                : "h-8 min-w-0 max-w-64 gap-2 bg-transparent px-2 text-xs font-normal hover:bg-accent",
               loadError && "text-destructive"
             )}
-            aria-label={t.git.branchSelector}
+            disabled={disabled}
+            aria-label={`${t.git.branchSelector}: ${triggerLabel}`}
           >
-            <GitBranchPlus className="size-[18px] shrink-0" />
-            <span className="truncate">{triggerLabel}</span>
+            <GitBranch className="size-[18px] shrink-0" />
+            {triggerVariant === "full" ? (
+              <>
+                <span className="truncate">{triggerLabel}</span>
+                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+              </>
+            ) : null}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          side="top"
+          side={menuSide}
           sideOffset={8}
-          align="start"
+          align={triggerVariant === "icon" ? "end" : "start"}
           className="w-[min(288px,calc(100vw-3rem))]"
         >
           <div className="flex h-9 items-center gap-2 px-2">
@@ -245,39 +270,41 @@ export function NewTaskGitBranchSelector({
               className="h-8 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
             />
           </div>
-          <DropdownMenuLabel>{t.git.branches}</DropdownMenuLabel>
-          <div
-            ref={branchListRef}
-            className="ousia-hover-scrollbar max-h-64 overflow-y-auto"
-          >
-            {visibleBranches.map((branch, index) => (
-              <DropdownMenuItem
-                key={branch.name}
-                data-branch-index={index}
-                disabled={isMutating}
-                className={cn(
-                  "items-start py-1.5",
-                  index === effectiveActiveIndex && "bg-accent"
-                )}
-                onClick={() => void switchBranch(branch.name)}
-                onPointerMove={() => setActiveIndex(index)}
-              >
-                <GitBranchPlus className="mt-0.5 size-4" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{branch.name}</span>
-                  {branch.name === currentBranch &&
-                  branchState?.dirtyFileCount ? (
-                    <span className="block text-xs text-muted-foreground">
-                      {t.git.dirtyFiles(branchState.dirtyFileCount)}
-                    </span>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t.git.branches}</DropdownMenuLabel>
+            <div
+              ref={branchListRef}
+              className="ousia-hover-scrollbar max-h-64 overflow-y-auto"
+            >
+              {visibleBranches.map((branch, index) => (
+                <DropdownMenuItem
+                  key={branch.name}
+                  data-branch-index={index}
+                  disabled={isMutating}
+                  className={cn(
+                    "items-start py-1.5",
+                    index === effectiveActiveIndex && "bg-accent"
+                  )}
+                  onClick={() => void switchBranch(branch.name)}
+                  onPointerMove={() => setActiveIndex(index)}
+                >
+                  <GitBranch className="mt-0.5 size-4" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{branch.name}</span>
+                    {branch.name === currentBranch &&
+                    branchState?.dirtyFileCount ? (
+                      <span className="block text-xs text-muted-foreground">
+                        {t.git.dirtyFiles(branchState.dirtyFileCount)}
+                      </span>
+                    ) : null}
+                  </span>
+                  {branch.name === currentBranch ? (
+                    <Check className="mt-0.5 size-4" />
                   ) : null}
-                </span>
-                {branch.name === currentBranch ? (
-                  <Check className="mt-0.5 size-4" />
-                ) : null}
-              </DropdownMenuItem>
-            ))}
-          </div>
+                </DropdownMenuItem>
+              ))}
+            </div>
+          </DropdownMenuGroup>
           {loadError || mutationError ? (
             <div className="px-2 py-1.5 text-xs text-destructive">
               {loadError || mutationError}
@@ -309,6 +336,7 @@ export function NewTaskGitBranchSelector({
                 setNewBranchName(event.target.value)
                 setCreateError("")
               }}
+              onBlur={() => setHasBranchNameBlurred(true)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !invalidNewBranchName) {
                   event.preventDefault()
@@ -316,7 +344,7 @@ export function NewTaskGitBranchSelector({
                 }
               }}
             />
-            {invalidNewBranchName || createError ? (
+            {(hasBranchNameBlurred && invalidNewBranchName) || createError ? (
               <p className="text-sm text-destructive">
                 {createError || t.git.invalidBranchName}
               </p>

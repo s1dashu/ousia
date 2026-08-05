@@ -2876,6 +2876,9 @@ export function App() {
               </section>
             ) : (
               <ChatArea
+                canChangeNewTaskDestination={
+                  activeSidebarUtilityDestination === "new-task"
+                }
                 composerFocusRequest={composerFocusRequest}
                 codexEnvironment={codexEnvironment}
                 currentProject={selectedSession ? currentProject : undefined}
