@@ -6,21 +6,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-.ousia-glass-icon {
-  --nc-gradient-1-color-1: oklch(0.42 0 0);
-  --nc-gradient-1-color-2: oklch(0.16 0 0);
-  --nc-gradient-2-color-1: oklch(0.94 0 0 / 70%);
-  --nc-gradient-2-color-2: oklch(0.76 0 0 / 58%);
-  --nc-light: white;
-}
-
-.dark .ousia-glass-icon {
-  --nc-gradient-1-color-1: oklch(0.96 0 0);
-  --nc-gradient-1-color-2: oklch(0.62 0 0);
-  --nc-gradient-2-color-1: oklch(0.78 0 0 / 58%);
-  --nc-gradient-2-color-2: oklch(0.46 0 0 / 48%);
-}
-
 @font-face {
   font-family: "Ousia LXGW WenKai";
   font-style: normal;

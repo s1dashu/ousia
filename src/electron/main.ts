@@ -20,7 +20,6 @@ import {
   createAppStateProject,
   createAppStateSession,
   archiveAppStateSessions,
-  archiveAppStateProjectSessions,
   deleteAppStateProject,
   deleteAppStateSession,
   deleteAppStateSessions,
@@ -41,7 +40,6 @@ import { createChatEventBatcher } from "./chat-event-batcher.js"
 import { createChatEventReplayStore } from "./chat-event-replay.js"
 import type {
   OusiaAppStateCreateProjectPayload,
-  OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
   OusiaAppStateDeleteProjectPayload,
   OusiaAppStateDeleteSessionPayload,
@@ -121,16 +119,9 @@ import {
 } from "./chat-search.js"
 
 configureOusiaAppPaths()
-const hasSingleInstanceLock = app.requestSingleInstanceLock()
-if (hasSingleInstanceLock) {
-  installRuntimeLogger()
-  initializeDesktopSentry(requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__))
-} else {
-  app.quit()
-}
-const shellEnvironmentReady = hasSingleInstanceLock
-  ? hydrateShellEnvironment()
-  : Promise.resolve()
+installRuntimeLogger()
+initializeDesktopSentry(requireDesktopSentryConfig(__DESKTOP_SENTRY_CONFIG__))
+const shellEnvironmentReady = hydrateShellEnvironment()
 
 const enabledTools = ["read", "write", "edit", "bash", "grep", "find", "ls"]
 
@@ -977,20 +968,6 @@ ipcMain.handle(
 )
 
 ipcMain.handle(
-  "ousia:app-state:project:archive",
-  async (_event, payload: OusiaAppStateArchiveProjectPayload) => {
-    const result = await archiveAppStateProjectSessions(payload)
-    if (result.ok) {
-      writeRuntimeLog("app-state.archive", "info", {
-        message: "Archived all active sessions in project",
-        projectId: payload.projectId,
-      })
-    }
-    return result
-  }
-)
-
-ipcMain.handle(
   "ousia:app-state:sessions:restore",
   async (_event, payload: OusiaAppStateSessionIdsPayload) => {
     const result = await restoreAppStateSessions(payload)
@@ -1175,9 +1152,6 @@ ipcMain.on(WINDOW_DRAG_DIAGNOSTIC_CHANNEL, (event, payload: unknown) => {
 })
 
 app.whenReady().then(async () => {
-  if (!hasSingleInstanceLock) {
-    return
-  }
   installSystemProxyFetch()
   writeRuntimeLog("main", "info", `Runtime log path: ${OUSIA_DESKTOP_LOG_PATH}`)
   writeRuntimeLog("main", "info", {
@@ -1187,15 +1161,6 @@ app.whenReady().then(async () => {
   await ensureMainWindow()
   telemetry.record("app_opened")
   updateManagerRef.current!.start()
-})
-
-app.on("second-instance", () => {
-  void ensureMainWindow({ focus: true }).catch((error: unknown) => {
-    writeRuntimeLog("main.instance", "error", {
-      error: error instanceof Error ? error.message : String(error),
-      message: "Failed to restore the main window for a second launch.",
-    })
-  })
 })
 
 app.on("window-all-closed", () => {
@@ -1232,9 +1197,6 @@ app.on("before-quit", () => {
 })
 
 app.on("activate", () => {
-  if (!hasSingleInstanceLock) {
-    return
-  }
   if (BrowserWindow.getAllWindows().length === 0) {
     writeRuntimeLog("main", "info", "Recreating main window after activate")
     void ensureMainWindow({ focus: true }).catch((error: unknown) => {

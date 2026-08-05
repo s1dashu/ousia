@@ -35,18 +35,17 @@ import {
   type MotionValue,
 } from "framer-motion"
 import {
-  GlassExtensions,
-  GlassNewTask,
-  GlassSearch,
-  GlassSettings,
-} from "@/components/icons/glass-icons"
-import {
   ChevronDown,
   ChevronRight,
+  ExtensionsGrid,
   FolderOpen,
   Plus,
+  Search,
+  Settings,
   SidebarActions,
 } from "@/components/icons/nucleo-icons"
+
+import ousiaLogo from "../../../docs/media/ousia-logo.png"
 
 import type { ProjectRecord, SessionRecord } from "@/app/app-state"
 import { getMessages } from "@/app/i18n"
@@ -138,7 +137,6 @@ const sidebarDragTiltMax = 2.5
 
 type SidebarProps = {
   activeSidebarUtilityDestination: SidebarUtilityDestination | null
-  onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onCreateSession: () => void
   onDeleteProject: (projectId: string) => void
@@ -229,7 +227,6 @@ function AnimatedDragPreview({
 
 function SidebarComponent({
   activeSidebarUtilityDestination,
-  onArchiveProject,
   onCreateProjectSession,
   onCreateSession,
   onDeleteProject,
@@ -305,22 +302,22 @@ function SidebarComponent({
   const utilityDestinations = [
     {
       id: "new-task",
-      icon: GlassNewTask,
+      icon: Plus,
       label: t.sidebar.utilityNewTask,
     },
     {
       id: "search",
-      icon: GlassSearch,
+      icon: Search,
       label: t.sidebar.utilitySearch,
     },
     {
       id: "extensions",
-      icon: GlassExtensions,
+      icon: ExtensionsGrid,
       label: t.sidebar.utilityExtensions,
     },
   ] satisfies Array<{
     id: SidebarUtilityDestination
-    icon: typeof GlassNewTask
+    icon: typeof Plus
     label: string
   }>
   const visibleUtilityDestinations = utilityDestinations
@@ -821,7 +818,6 @@ function SidebarComponent({
                     (session) => sessionRunStatusById[session.id] === "working"
                   )}
                   isExpanded={isExpanded}
-                  onArchiveProject={onArchiveProject}
                   onCreateProjectSession={onCreateProjectSession}
                   onDeleteProject={onDeleteProject}
                   onShowProjectInFolder={onShowProjectInFolder}
@@ -928,6 +924,21 @@ function SidebarComponent({
     >
       <div className="window-drag h-[var(--ousia-titlebar-height)] shrink-0" />
 
+      <header
+        aria-label="Ousia"
+        className="flex h-8 shrink-0 items-center gap-2 pt-0.5 pr-3 pb-1.5 pl-4"
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-4 shrink-0 -translate-x-[3px] items-center justify-center"
+        >
+          <img src={ousiaLogo} alt="" className="size-4 rounded-[4px]" />
+        </span>
+        <span className="-ml-[3px] truncate pt-px text-[18px] leading-[18px] font-semibold tracking-[-0.01em]">
+          Ousia
+        </span>
+      </header>
+
       <nav
         aria-label={t.sidebar.utilityNavigation}
         className={`${sidebarNavigationPaddingXClass} shrink-0 pb-1`}
@@ -951,9 +962,9 @@ function SidebarComponent({
               >
                 <Icon
                   aria-hidden="true"
-                  className="ousia-glass-icon -ml-1"
+                  className="-ml-1"
                   size={18}
-                  uniqueId={`sidebar-${destination.id}-`}
+                  strokeWidth={sidebarIconStrokeWidth}
                 />
                 <span className="min-w-0 flex-1 truncate text-left">
                   {destination.label}
@@ -1111,11 +1122,10 @@ function SidebarComponent({
           className={`font-radix-regular ${sidebarRowHeightClass} min-w-0 flex-1 justify-start gap-2 rounded-lg text-sm ${sidebarRowStateClass}`}
           onClick={onOpenSettings}
         >
-          <GlassSettings
+          <Settings
             aria-hidden="true"
-            className="ousia-glass-icon"
             size={18}
-            uniqueId="sidebar-settings-"
+            strokeWidth={sidebarIconStrokeWidth}
           />
           <span>{t.sidebar.settings}</span>
         </Button>

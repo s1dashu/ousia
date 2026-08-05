@@ -66,7 +66,6 @@ function renderSidebar({
   return renderToStaticMarkup(
     <Sidebar
       activeSidebarUtilityDestination={activeSidebarUtilityDestination}
-      onArchiveProject={vi.fn()}
       expandedProjectIds={expandedProjectIds}
       language={language}
       onCreateProjectSession={vi.fn()}
@@ -174,13 +173,14 @@ describe("Sidebar running actions", () => {
     )
   })
 
-  it("renders the visible utility entries without sidebar branding", () => {
+  it("renders the sidebar branding above the visible utility entries", () => {
     const html = renderSidebar()
 
     const primaryLabelIndex = html.indexOf(">Search<")
     expect(primaryLabelIndex).toBeGreaterThan(-1)
-    expect(html).not.toContain('aria-label="Ousia"')
-    expect(html).not.toContain(">Ousia</span>")
+    expect(html).toContain('aria-label="Ousia"')
+    expect(html).toContain(">Ousia</span>")
+    expect(html).toContain('src="/docs/media/ousia-logo.png"')
     expect(html).toContain('aria-label="Ousia features"')
     expect(html.match(/pl-\[5px\] pr-\[9px\]/g)).toHaveLength(1)
     expect(html).toContain("pl-[5px] pr-[8px]")

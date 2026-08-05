@@ -3,12 +3,9 @@ import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 
 import {
-  GlassFolder,
-  GlassFolderOpen,
-} from "@/components/icons/glass-icons"
-import {
   ArchiveAction,
   ChevronDown,
+  Folder,
   FolderOpen,
   Plus,
   SidebarActions,
@@ -87,7 +84,6 @@ type SortableProjectSectionProps = {
   children: React.ReactNode
   hasWorkingSession: boolean
   isExpanded: boolean
-  onArchiveProject: (projectId: string) => void
   onCreateProjectSession: (projectId: string) => void
   onDeleteProject: (projectId: string) => void
   onShowProjectInFolder: (projectId: string) => void
@@ -380,7 +376,6 @@ export function SortableProjectSection({
   children,
   hasWorkingSession,
   isExpanded,
-  onArchiveProject,
   onCreateProjectSession,
   onDeleteProject,
   onShowProjectInFolder,
@@ -421,18 +416,18 @@ export function SortableProjectSection({
         {...listeners}
       >
         {isExpanded ? (
-          <GlassFolderOpen
+          <FolderOpen
             aria-hidden="true"
-            className="ousia-glass-icon shrink-0 justify-self-start"
+            className="shrink-0 justify-self-start"
             size={sidebarFolderIconSize}
-            uniqueId={`sidebar-project-open-${project.id}-`}
+            strokeWidth={sidebarIconStrokeWidth}
           />
         ) : (
-          <GlassFolder
+          <Folder
             aria-hidden="true"
-            className="ousia-glass-icon shrink-0 justify-self-start"
+            className="shrink-0 justify-self-start"
             size={sidebarFolderIconSize}
-            uniqueId={`sidebar-project-closed-${project.id}-`}
+            strokeWidth={sidebarIconStrokeWidth}
           />
         )}
         <button
@@ -469,13 +464,6 @@ export function SortableProjectSection({
             <DropdownMenuItem onClick={() => onShowProjectInFolder(project.id)}>
               <FolderOpen className="text-muted-foreground" />
               {t.sidebar.showProjectInFolder}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={hasWorkingSession}
-              onClick={() => onArchiveProject(project.id)}
-            >
-              <ArchiveAction className="text-muted-foreground" />
-              {t.sidebar.archiveProject}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem

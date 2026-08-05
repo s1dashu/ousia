@@ -3,7 +3,6 @@ import type {
   OusiaAgentConfigurationReloadResult,
   OusiaBuiltinSystemPromptResult,
   OusiaAppStateCreateProjectPayload,
-  OusiaAppStateArchiveProjectPayload,
   OusiaAppStateCreateSessionPayload,
   OusiaAppStateDeleteProjectPayload,
   OusiaAppStateDeleteSessionPayload,
@@ -96,9 +95,6 @@ declare global {
       ): Promise<OusiaAppStateTransactionResult>
       archiveSessions(
         payload: OusiaAppStateSessionIdsPayload
-      ): Promise<OusiaAppStateTransactionResult>
-      archiveProjectSessions(
-        payload: OusiaAppStateArchiveProjectPayload
       ): Promise<OusiaAppStateTransactionResult>
       restoreSessions(
         payload: OusiaAppStateSessionIdsPayload

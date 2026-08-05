@@ -81,7 +81,6 @@ vi.mock("./runtime-logger.js", () => ({
 
 import {
   archiveAppStateSessions,
-  archiveAppStateProjectSessions,
   bindAppStateSessionAgentThread,
   createAppStateProject,
   createAppStateSession,
@@ -1009,37 +1008,6 @@ describe("app state store", () => {
     expect(archivedBottom.ok).toBe(true)
     if (!archivedBottom.ok) return
     expect(archivedBottom.state.selectedSessionId).toBe(topResult.session?.id)
-  })
-
-  it("archives every active session in a project atomically", async () => {
-    const projectResult = await createAppStateProject({
-      path: "/tmp/archive-project",
-      sessionTitle: "First project session",
-    })
-    expect(projectResult.ok).toBe(true)
-    if (!projectResult.ok || !projectResult.project) return
-    const secondSession = await createAppStateSession({
-      projectId: projectResult.project.id,
-      title: "Second project session",
-    })
-    expect(secondSession.ok).toBe(true)
-
-    const archived = await archiveAppStateProjectSessions({
-      projectId: projectResult.project.id,
-    })
-    expect(archived.ok).toBe(true)
-    if (!archived.ok) return
-    const projectSessions = archived.state.sessions.filter(
-      (session) => session.projectId === projectResult.project?.id
-    )
-    expect(projectSessions).toHaveLength(2)
-    expect(projectSessions.every((session) => session.archivedAt)).toBe(true)
-    expect(archived.state.projects).toContainEqual(projectResult.project)
-    expect(
-      archived.state.sessions.find(
-        (session) => session.id === archived.state.selectedSessionId
-      )?.archivedAt
-    ).toBeUndefined()
   })
 
   it("renames, moves, reorders, and touches sessions inside their groups", async () => {

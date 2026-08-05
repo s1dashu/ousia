@@ -26,7 +26,6 @@ import {
   OUSIA_LEGACY_DEFAULT_WORK_DIR,
   OUSIA_APP_STATE_SCHEMA_VERSION,
   type OusiaAppStateCreateProjectPayload,
-  type OusiaAppStateArchiveProjectPayload,
   type OusiaAppStateCreateSessionPayload,
   type OusiaAppStateBindSessionAgentThreadPayload,
   type OusiaAppStateBindSessionAgentThreadResult,
@@ -804,26 +803,6 @@ function archiveSessionsInState(state: OusiaAppState, sessionIds: string[]) {
       sessions,
     },
   }
-}
-
-export async function archiveAppStateProjectSessions(
-  payload: OusiaAppStateArchiveProjectPayload
-): Promise<OusiaAppStateTransactionResult> {
-  return updateAppState((state) => {
-    if (!state.projects.some((project) => project.id === payload.projectId)) {
-      throw new Error(`Unknown project: ${payload.projectId}`)
-    }
-    const sessionIds = state.sessions
-      .filter(
-        (session) =>
-          session.projectId === payload.projectId && !session.archivedAt
-      )
-      .map((session) => session.id)
-    if (!sessionIds.length) {
-      return { state }
-    }
-    return archiveSessionsInState(state, sessionIds)
-  })
 }
 
 export async function restoreAppStateSessions(

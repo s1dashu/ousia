@@ -56,7 +56,6 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "framer-motion": "^12.40.0",
-    "nucleo-glass": "^1.4.0",
     "nucleo-ui-outline-18": "^1.5.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

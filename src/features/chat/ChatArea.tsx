@@ -13,10 +13,6 @@ import {
   type KeyboardEvent,
 } from "react"
 import {
-  GlassAddAttachment,
-  GlassComposerSettings,
-} from "@/components/icons/glass-icons"
-import {
   Check,
   ChevronDown as NucleoChevronDown,
   Folder,
@@ -25,6 +21,7 @@ import {
   Search,
   SendArrowDown,
   SendArrowUp,
+  SlidersHorizontal as NucleoSliders,
   X,
 } from "@/components/icons/nucleo-icons"
 
@@ -1758,11 +1755,9 @@ function ChatAreaComponent({
                           aria-label={t.chat.addAttachment}
                           onClick={() => fileInputRef.current?.click()}
                         >
-                          <GlassAddAttachment
+                          <NucleoPlus
                             aria-hidden="true"
-                            className="ousia-glass-icon"
                             size={18}
-                            uniqueId="composer-add-attachment-"
                           />
                         </Button>
                       </TooltipTrigger>
@@ -1787,11 +1782,9 @@ function ChatAreaComponent({
                               className="size-6"
                               aria-label={t.chat.composerSettings}
                             >
-                              <GlassComposerSettings
+                              <NucleoSliders
                                 aria-hidden="true"
-                                className="ousia-glass-icon"
                                 size={18}
-                                uniqueId="composer-settings-"
                               />
                             </Button>
                           </DropdownMenuTrigger>
