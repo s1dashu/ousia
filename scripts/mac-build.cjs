@@ -31,14 +31,6 @@ const staleMakeDirs = [
 const dmgVolumeName = "Ousia"
 const nativeDmgDependencies = ["macos-alias", "fs-xattr"]
 const forgeBin = join(rootDir, "node_modules", ".bin", "electron-forge")
-const osxSignBin = join(
-  rootDir,
-  "node_modules",
-  "@electron",
-  "osx-sign",
-  "bin",
-  "electron-osx-sign.js"
-)
 const packagedAppPath = join(packagedAppDir, "Ousia.app")
 const buildStartedAt = Date.now()
 const npmExecPath = process.env.npm_execpath
@@ -392,16 +384,17 @@ function requireCodeSigningIdentity() {
   }
 }
 
-function signApp(appPath) {
+async function signApp(appPath) {
   requireCodeSigningIdentity()
   console.log(`Signing app: ${appPath}`)
-  run(process.execPath, [
-    osxSignBin,
-    appPath,
-    `--identity=${process.env.APPLE_SIGN_IDENTITY}`,
-    "--hardened-runtime",
-    "--platform=darwin",
-  ])
+  const { sign } = await import("@electron/osx-sign")
+  await sign({
+    app: appPath,
+    batchCodesignCalls: true,
+    hardenedRuntime: true,
+    identity: process.env.APPLE_SIGN_IDENTITY,
+    platform: "darwin",
+  })
   run("codesign", ["--verify", "--deep", "--strict", "--verbose=2", appPath])
 }
 
@@ -612,7 +605,7 @@ async function buildMac(options = {}) {
   )
 
   if (sign) {
-    signApp(packagedAppPath)
+    await signApp(packagedAppPath)
     if (notarize) {
       await notarizeArtifact(packagedAppPath, "app")
     }

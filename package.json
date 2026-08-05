@@ -72,6 +72,7 @@
     "@electron-forge/maker-squirrel": "^7.11.2",
     "@electron-forge/maker-zip": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
+    "@electron/osx-sign": "^2.6.0",
     "@eslint/js": "^9.39.4",
     "@sentry/vite-plugin": "5.4.0",
     "@tailwindcss/vite": "^4.3.1",
