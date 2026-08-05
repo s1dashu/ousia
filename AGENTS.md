@@ -40,6 +40,12 @@
 - Persistence and session deletion must remain atomic, observable, and covered by tests.
 - Runtime and Sentry diagnostics must not log prompt, response, tool payload, credential, or private file content.
 
+## Window drag-region guardrail
+
+The macOS window becoming impossible to drag after resizing is a recurring, difficult Electron defect and must be treated as highly regression-sensitive.
+Keep every `-webkit-app-region: no-drag` declaration scoped beneath `.window-drag`, because global no-drag selectors can let clipped controls in scroll or overflow containers corrupt Chromium's native hit-test map after relayout.
+Any title-bar, resize, scroll, overflow, or drag-region change must preserve `src/app/window-drag-regions.test.ts` and explicitly verify dragging after repeated resizes; do not restore traffic-light repositioning as a workaround.
+
 ## Validation policy
 
 Keep the normal development loop proportional to the change:

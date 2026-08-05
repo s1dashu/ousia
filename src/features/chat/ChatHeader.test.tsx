@@ -21,7 +21,7 @@ function renderHeader(
         title: "Session title",
       }}
       isCompacting={false}
-      isSessionMenuOpen={false}
+      isSessionMenuOpen={Boolean(branchSelector)}
       isSidebarCollapsed={false}
       isScrolled={false}
       isWindowFullscreen={false}
@@ -46,15 +46,16 @@ describe("ChatHeader provider badge", () => {
     expect(html).toContain(">Codex</span>")
   })
 
-  it("renders the branch selector before the session actions", () => {
+  it("renders the session actions at the end of the header", () => {
     const html = renderHeader(
       "pi",
       <button type="button">Branch selector</button>
     )
-
-    expect(html).toContain('data-slot="chat-header-branch-selector"')
-    expect(html.indexOf("Branch selector")).toBeLessThan(
-      html.indexOf(getMessages("en").chat.moreSessionActions)
+    const sessionActionsIndex = html.indexOf(
+      getMessages("en").chat.moreSessionActions
     )
+
+    expect(html.indexOf("Session title")).toBeLessThan(sessionActionsIndex)
+    expect(html.indexOf("Branch selector")).toBeLessThan(sessionActionsIndex)
   })
 })

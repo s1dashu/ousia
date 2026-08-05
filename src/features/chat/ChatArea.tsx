@@ -417,7 +417,6 @@ function ChatAreaComponent({
   )
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false)
   const [isComposerSettingsOpen, setIsComposerSettingsOpen] = useState(false)
-  const [gitBranchRevision, setGitBranchRevision] = useState(0)
   const [isCustomToolsDialogOpen, setIsCustomToolsDialogOpen] = useState(false)
   const [isProviderKeyDialogOpen, setIsProviderKeyDialogOpen] = useState(false)
   const [providerKeyDialogProviderId, setProviderKeyDialogProviderId] =
@@ -445,9 +444,6 @@ function ChatAreaComponent({
   const currentSessionMenuKey = currentSession?.id ?? "no-session"
   const isSessionMenuOpen = openSessionMenuKey === currentSessionMenuKey
   const isCodexSession = currentSession?.agentProvider === "codex"
-  const handleGitBranchChange = useCallback(() => {
-    setGitBranchRevision((current) => current + 1)
-  }, [])
   const effectiveAgentMode: OusiaAgentMode =
     isCodexSession &&
     (settings.agentMode === "noTerminal" || settings.agentMode === "custom")
@@ -1585,11 +1581,7 @@ function ChatAreaComponent({
               disabled={isAgentWorking}
               key={`header-${currentSession.projectId}`}
               language={language}
-              menuSide="bottom"
-              onBranchChange={handleGitBranchChange}
               projectId={currentSession.projectId}
-              refreshKey={gitBranchRevision}
-              triggerVariant="icon"
             />
           ) : undefined
         }
@@ -1673,31 +1665,17 @@ function ChatAreaComponent({
       >
         <div className={CHAT_CONTENT_MAX_WIDTH_CLASS}>
           {isNewTask &&
-          ((canChangeNewTaskDestination &&
-            onNewTaskCreateProject &&
-            onNewTaskDestinationChange) ||
-            currentSession?.projectId) ? (
+          canChangeNewTaskDestination &&
+          onNewTaskCreateProject &&
+          onNewTaskDestinationChange ? (
             <div className="pointer-events-auto mb-1 ml-1 flex justify-start gap-1">
-              {canChangeNewTaskDestination &&
-              onNewTaskCreateProject &&
-              onNewTaskDestinationChange ? (
-                <NewTaskProjectSelector
-                  currentProjectId={currentSession?.projectId}
-                  onCreateProject={onNewTaskCreateProject}
-                  onDestinationChange={onNewTaskDestinationChange}
-                  projects={projects}
-                  t={t}
-                />
-              ) : null}
-              {currentSession?.projectId ? (
-                <NewTaskGitBranchSelector
-                  key={`composer-${currentSession.projectId}`}
-                  language={language}
-                  onBranchChange={handleGitBranchChange}
-                  projectId={currentSession.projectId}
-                  refreshKey={gitBranchRevision}
-                />
-              ) : null}
+              <NewTaskProjectSelector
+                currentProjectId={currentSession?.projectId}
+                onCreateProject={onNewTaskCreateProject}
+                onDestinationChange={onNewTaskDestinationChange}
+                projects={projects}
+                t={t}
+              />
             </div>
           ) : null}
           <div className="relative">
@@ -1919,7 +1897,7 @@ function ChatAreaComponent({
                         </span>
                       ) : null}
                       <NucleoChevronDown
-                        size={18}
+                        size={14}
                         strokeWidth={1.5}
                         className="shrink-0 text-muted-foreground"
                       />

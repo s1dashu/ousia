@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import { getMessages } from "@/app/i18n"
 import {
   Check,
-  ChevronDown,
   GitBranch,
   Plus,
   Search,
@@ -18,13 +17,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import type {
@@ -41,19 +40,11 @@ type LoadedBranchState = {
 export function NewTaskGitBranchSelector({
   disabled = false,
   language,
-  menuSide = "top",
-  onBranchChange,
   projectId,
-  refreshKey = 0,
-  triggerVariant = "full",
 }: {
   disabled?: boolean
   language: OusiaLanguage
-  menuSide?: "bottom" | "top"
-  onBranchChange?: () => void
   projectId: string
-  refreshKey?: number
-  triggerVariant?: "full" | "icon"
 }) {
   const t = getMessages(language)
   const [loaded, setLoaded] = useState<LoadedBranchState>()
@@ -95,7 +86,7 @@ export function NewTaskGitBranchSelector({
     return () => {
       canceled = true
     }
-  }, [projectId, refreshKey, t.git.readFailed, t.git.unavailable])
+  }, [projectId, t.git.readFailed, t.git.unavailable])
 
   const branchState = loaded?.projectId === projectId ? loaded.state : undefined
   const visibleBranches = useMemo(() => {
@@ -142,7 +133,6 @@ export function NewTaskGitBranchSelector({
       }
       setLoaded({ projectId, state: result.state })
       setOpen(false)
-      onBranchChange?.()
     } catch (error) {
       setMutationError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -194,7 +184,6 @@ export function NewTaskGitBranchSelector({
       }
       setLoaded({ projectId, state: result.state })
       setIsCreateDialogOpen(false)
-      onBranchChange?.()
     } catch (error) {
       setCreateError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -207,8 +196,7 @@ export function NewTaskGitBranchSelector({
 
   return (
     <>
-      <DropdownMenu
-        modal={false}
+      <DropdownMenuSub
         open={open}
         onOpenChange={(nextOpen) => {
           setOpen(nextOpen)
@@ -227,39 +215,20 @@ export function NewTaskGitBranchSelector({
           }
         }}
       >
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size={triggerVariant === "icon" ? "icon-sm" : "sm"}
-            className={cn(
-              triggerVariant === "icon"
-                ? "window-no-drag pointer-events-auto shrink-0"
-                : "h-8 min-w-0 max-w-64 gap-2 bg-transparent px-2 text-xs font-normal hover:bg-accent",
-              loadError && "text-destructive"
-            )}
-            disabled={disabled}
-            aria-label={`${t.git.branchSelector}: ${triggerLabel}`}
-          >
-            <GitBranch className="size-[18px] shrink-0" />
-            {triggerVariant === "full" ? (
-              <>
-                <span className="truncate">{triggerLabel}</span>
-                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
-              </>
-            ) : null}
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          side={menuSide}
-          sideOffset={8}
-          align={triggerVariant === "icon" ? "end" : "start"}
+        <DropdownMenuSubTrigger
+          className={cn(loadError && "text-destructive")}
+          disabled={disabled}
+          aria-label={`${t.git.branchSelector}: ${triggerLabel}`}
+        >
+          <GitBranch className="text-muted-foreground" />
+          <span className="flex-1">{t.git.switchBranch}</span>
+        </DropdownMenuSubTrigger>
+        <DropdownMenuSubContent
           className="w-[min(288px,calc(100vw-3rem))]"
         >
           <div className="flex h-9 items-center gap-2 px-2">
             <Search className="size-4 shrink-0 text-muted-foreground" />
             <Input
-              autoFocus
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value)
@@ -315,8 +284,8 @@ export function NewTaskGitBranchSelector({
             <Plus className="size-4" />
             {t.git.createAndCheckout}
           </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
         <DialogContent className="sm:max-w-md">

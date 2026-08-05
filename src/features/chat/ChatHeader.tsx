@@ -83,15 +83,7 @@ export function ChatHeader({
           ) : null}
         </div>
       </div>
-      <div className="window-drag relative z-10 flex shrink-0 items-center justify-end gap-1">
-        {branchSelector ? (
-          <div
-            data-slot="chat-header-branch-selector"
-            className="window-no-drag pointer-events-auto shrink-0"
-          >
-            {branchSelector}
-          </div>
-        ) : null}
+      <div className="window-drag relative z-10 flex shrink-0 items-center justify-end">
         <DropdownMenu
           modal={false}
           open={isSessionMenuOpen}
@@ -109,6 +101,7 @@ export function ChatHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-auto">
+            {branchSelector}
             <DropdownMenuItem
               disabled={isCompacting || !currentSession}
               onClick={onManualCompact}
