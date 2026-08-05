@@ -57,16 +57,19 @@ BrowserWindow, renderer-load, and total durations.
 
 ## Current Direction
 
-The simplified app removes the Ousia extension system and keeps a smaller
-desktop agent client:
+The product supports Pi only and keeps a focused desktop agent client:
 
 - Sidebar for sessions/projects/settings.
 - Chat as the primary agent surface.
-- Per-session Pi or Codex agent runtime; the default only affects new sessions.
-- No right-side workspace panel, workspace tab strip, extension picker, runtime
-  extension watcher, browser host, editor/PDF host, or extension state store.
+- Pi package, extension, prompt, theme, and skill discovery plus package
+  lifecycle management.
+- No right-side workspace panel, workspace tab strip, renderer extension
+  runtime, browser host, editor/PDF host, or extension-owned state store.
 - No `ousia extension ...` CLI bridge.
 - No Ousia extension usage skill injection into Pi sessions.
+- The Codex UI, runtime, dependency, and persisted-state fields are deprecated
+  implementation debt pending deliberate removal and migration. They are not a
+  supported or marketed product surface.
 
 ## Implemented UI State
 

@@ -1,5 +1,10 @@
 # Codex Provider Integration
 
+> **Deprecated implementation note:** Pi is Ousia's only supported agent. This
+> document records legacy Codex code solely so it can be removed and migrated
+> deliberately. Do not advertise, extend, or treat this provider as a supported
+> product surface.
+
 Ousia integrates Codex through the official `codex app-server` protocol. The
 App Server is the interface intended for rich clients; `codex exec` and the
 TypeScript SDK are optimized for non-interactive automation and do not expose

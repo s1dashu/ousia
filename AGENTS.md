@@ -15,6 +15,10 @@
   continues on `main`. The historical
   `codex/archive-ousia-electron-v0.1.32` branch remains only as ancestry for the
   restored Electron line.
+- Pi is the only supported and marketed agent runtime. Do not expose, advertise,
+  or extend Codex as a product feature. Legacy Codex implementation remains in
+  the tree only until its UI, runtime, dependency, and persisted-state migration
+  can be removed deliberately without losing existing user data.
 - Pi Tauri is frozen at the `v0.2.6` tag and GitHub release. Its source remains
   recoverable from that tag and the merged history; it is no longer the active
   `main` tree except for explicit compatibility, security, or release-transition
@@ -34,7 +38,9 @@
 - Packaging: Electron Forge plus the scripts in `scripts/`.
 - The preload bridge is the renderer trust boundary. Keep context isolation and validate IPC inputs in the host.
 - Git branch reads and mutations are main-process-owned. The renderer passes a persisted project ID; the host resolves the canonical project path and executes Git without a shell.
-- Pi and Codex integrations are explicit agent providers. Do not silently route a failed provider to another provider.
+- Pi is the sole supported agent provider. While the deprecated Codex provider
+  remains in the tree, never route a failed or legacy session to Pi silently;
+  retirement must use an explicit, observable migration.
 - The main process owns sequenced replay snapshots for active chat streams. Renderer reloads must subscribe before replay hydration, then reconcile provider history when a run finishes.
 - Pi history reads must use the active `SessionManager` branch while a session is running; the on-disk JSONL file is not authoritative until Pi flushes the turn.
 - Persistence and session deletion must remain atomic, observable, and covered by tests.

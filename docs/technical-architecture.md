@@ -3,11 +3,17 @@
 Ousia Desktop is an Electron + Vite + React app. The simplified app has no
 Ousia extension runtime. The renderer hosts the sidebar, chat, and settings.
 
+Pi is the only supported agent runtime. Deprecated Codex code is still
+documented below where it describes the current implementation, but it is not a
+supported product surface and remains only for explicit removal and persisted
+session migration.
+
 ## Runtime Stack
 
 - Electron Forge + Vite for main, preload, and renderer builds.
 - React renderer with Tailwind/shadcn UI.
-- Pi coding agent and an on-demand Codex app-server hosted in Electron main.
+- Pi coding agent hosted in Electron main.
+- Deprecated, unsupported Codex app-server code pending controlled removal.
 - Streamdown for assistant Markdown rendering.
 
 Removed from this branch:
